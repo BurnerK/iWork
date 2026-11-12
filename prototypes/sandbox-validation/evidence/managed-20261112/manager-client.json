@@ -1,0 +1,26 @@
+{
+  "timeout" : {
+    "id" : "aa8c2f9f-5722-4b95-b323-afe4bbad366d",
+    "state" : "FAILED",
+    "draft" : "",
+    "cleaned" : true
+  },
+  "cancel" : {
+    "id" : "ba23fad6-ac5c-498c-92e3-6524a9b97886",
+    "state" : "CANCELLED",
+    "draft" : "",
+    "cleaned" : true
+  },
+  "checks" : [ "main has no Docker socket", "main cannot read manager registry", "mock business credentials stay in main", "unauthenticated request denied", "wrong service key denied", "injected field rejected: image", "injected field rejected: command", "injected field rejected: mount", "injected field rejected: network", "injected field rejected: privileged", "injected field rejected: owner", "injected field rejected: timeout", "oversized body denied", "Docker API not forwarded", "path traversal denied", "only controlled SDK tool exposed", "fixed task accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "SDK tool reaches manager and container: {\"type\":\"tool_result\",\"id\":null,\"name\":null,\"output\":[{\"type\":\"text\",\"text\":\"\\\"# Synthetic document\\\\n\\\\nALICE: literal $(id); /etc/passwd\\\"\"}],\"metadata\":{},\"state\":\"running\"}", "fixed task accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "input treated as data and output correct", "fixed task accepted", "fixed task accepted", "cross-task read denied", "cross-task cancellation denied", "missing task capability denied", "cancel returns after verified cleanup", "late publication rejected by main business state", "task capability accepted", "other task remains independent", "fixed task accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "processor failure cannot publish partial output", "fixed task accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "task capability accepted", "execution timeout removes task container", "old version preserved after all failures" ],
+  "sdkReply" : {
+    "type" : "tool_result",
+    "id" : null,
+    "name" : null,
+    "output" : [ {
+      "type" : "text",
+      "text" : "\"# Synthetic document\\n\\nALICE: literal $(id); /etc/passwd\""
+    } ],
+    "metadata" : { },
+    "state" : "running"
+  }
+}

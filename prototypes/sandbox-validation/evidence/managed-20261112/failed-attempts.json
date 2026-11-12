@@ -1,0 +1,41 @@
+[
+  {
+    "attempt": "iwork-managed-6xuq7c35",
+    "cause": "Docker automatic removal has an asynchronous window; fixed by bounded wait for actual absence",
+    "logs": [
+      {
+        "argv": [
+          "docker",
+          "logs",
+          "0a38dca987d7bdfbf03f315c5486e58d97d4f43115cc43b6ff26acd8e3930a8c"
+        ],
+        "returncode": 0,
+        "output": "SLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nException in thread \"main\" java.lang.AssertionError: SDK tool reaches manager and container\n\tat ManagerClientProbe.check(ManagerClientProbe.java:19)\n\tat ManagerClientProbe.suite(ManagerClientProbe.java:77)\n\tat ManagerClientProbe.main(ManagerClientProbe.java:110)\n"
+      }
+    ]
+  },
+  {
+    "attempt": "iwork-managed-0ies6ar6",
+    "cause": "Docker automatic removal has an asynchronous window; fixed by bounded wait for actual absence",
+    "logs": [
+      {
+        "argv": [
+          "docker",
+          "logs",
+          "a848897f205a1b9d586f760f7ba6c7d2f78868a351f9c09b99fba610209f75e8"
+        ],
+        "returncode": 0,
+        "output": "SLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nException in thread \"main\" java.lang.AssertionError: SDK tool reaches manager and container: {\"type\":\"tool_result\",\"id\":null,\"name\":null,\"output\":[{\"type\":\"text\",\"text\":\"Error: Tool execution failed: conversion failed\"}],\"metadata\":{},\"state\":\"error\"}\n\tat ManagerClientProbe.check(ManagerClientProbe.java:19)\n\tat ManagerClientProbe.suite(ManagerClientProbe.java:77)\n\tat ManagerClientProbe.main(ManagerClientProbe.java:110)\n"
+      },
+      {
+        "argv": [
+          "docker",
+          "logs",
+          "fd829335940e66eb3ff1de4401b00baf8c4905f4c5f17aa988229f72a64808f2"
+        ],
+        "returncode": 0,
+        "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 52a03cca-2e7b-4b5e-bd29-73b71bdac7b4 java.lang.AssertionError: SDK shutdown returned with a container still present\n"
+      }
+    ]
+  }
+]

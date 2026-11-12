@@ -1,0 +1,209 @@
+{
+  "run": "iw8m-f5405020b741",
+  "host": "macOS-27.2-arm64-arm-64bit",
+  "sourceHashes": {
+    ".gitignore": "1141064ed2630abfb4a4b52385d7e6c5676a9a51c3c01a4884a7cdaf05609a74",
+    "Dockerfile.app": "fa85500be05a18aa4fb1a48abcfb886d78b7fddc757f86db3d447f9ce22e0d62",
+    "Dockerfile.worker": "fb55da810c191b2e24f0464a15db785babfe7a6eceb6f90d825da900a26a2ccd",
+    "README.md": "a016aea95875a12f6a3f345608f793ead286ad324588024b576531a758075376",
+    "compose.managed.yaml": "f86da42fae22785a04fa963b01b36b4f696df0948583119b2ef0eb6936d67157",
+    "compose.yaml": "2bac82ade22a52d2478f8795b004f8c18289fbd59bde022b16e1d25125dfd38c",
+    "pom.xml": "c12056560c796bd8671894063e6f50ce2689260ce220d2cf30b183c276330545",
+    "settings.xml": "ee6885c097c2a81b59682d70e2f94843103a476345501b1e66f8f5fa0bdf3719",
+    "src/main/java/ManagerClientProbe.java": "32ae914c6d290d6f87ed06edeff0806f741b5401329910ac17438be6f13511b6",
+    "src/main/java/ManagerProbe.java": "6416669a40ede1a947efbee91ed47a1da3a9de906157ba9528283da733efa817",
+    "src/main/java/SandboxProbe.java": "b06fbb25e55c954bd16a73d952ef5080ea329734ec841d94edbdb3fa35a9d570",
+    "task-init.sh": "cc68b1eb10c74d125f74269160942896bd65e081f17f4a9fd09d761193b50a2c",
+    "verify.py": "b0b00a7c37abc2a3e64eadd293632591d96d833d50cb804301e39da32242d42c",
+    "verify_managed.py": "ab85f0f5c10621d0555f29fc453e2767a5b3f57ed2afd60794ce5d8adc962cdb",
+    "worker.py": "adc72c3d2035c9c383104de42b87bcdf62dc1fbf01139c1617f1683d248c904a"
+  },
+  "images": [
+    {
+      "Id": "sha256:2aeafb8fc249698253eb581db2f942814151e411fafdbd01a0c0417c38017dd6",
+      "RepoTags": [
+        "iwork-sandbox-worker:local"
+      ],
+      "RepoDigests": [
+        "iwork-sandbox-worker@sha256:2aeafb8fc249698253eb581db2f942814151e411fafdbd01a0c0417c38017dd6"
+      ],
+      "Comment": "buildkit.dockerfile.v0",
+      "Created": "2026-11-12T21:48:15.006010892+08:00",
+      "Config": {
+        "User": "1000:1000",
+        "Env": [
+          "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "LANG=C.UTF-8",
+          "GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305",
+          "PYTHON_VERSION=3.13.18",
+          "PYTHON_SHA256=abb0102e6d4ae027509bcb82327d9dd85515b44a3ba8ad538cfc5e9847029f68"
+        ],
+        "Cmd": [
+          "python3"
+        ],
+        "WorkingDir": "/"
+      },
+      "Architecture": "arm64",
+      "Os": "linux",
+      "Size": 74354299,
+      "RootFS": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:3d971ddbca237031066ab6609a11ae2e9e5b109da24d5c5d94d2e584dd94bd54",
+          "sha256:867b1974c4f78993069f7ada7359eec2ab64c216d746945db65a5c7aca3bb84a",
+          "sha256:3092cbd873290cdb51fb888686227d0d248e87bef599dfd3e349e180f89dab2b",
+          "sha256:83ca6df93417b05f92ec69d0a818a7317a22533037f7c3c1a055bcb3c1b6ccfd",
+          "sha256:5ee35af5a653d2f4bfc1bf946955bc7011e97ff1206a8a94603b4318dc424b0c",
+          "sha256:2efb865147e6bacee8b861e798ec58ad2a1faa246003448a7affdad7cbee730f"
+        ]
+      },
+      "Metadata": {
+        "LastTagTime": "2026-11-12T13:48:30.092670002Z"
+      },
+      "Descriptor": {
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "digest": "sha256:2aeafb8fc249698253eb581db2f942814151e411fafdbd01a0c0417c38017dd6",
+        "size": 856
+      },
+      "Identity": {
+        "Build": [
+          {
+            "Ref": "ny2jnsg4dhkxhwixlafyfl3xj",
+            "CreatedAt": "2026-11-12T21:48:30.099297317+08:00"
+          }
+        ]
+      }
+    },
+    {
+      "Id": "sha256:1f67f37eb63fbc98bfd64e52253faf75b587f038fd3adce52c89b59d0c8de57c",
+      "RepoTags": [
+        "iwork-sandbox-probe:local"
+      ],
+      "RepoDigests": [
+        "iwork-sandbox-probe@sha256:1f67f37eb63fbc98bfd64e52253faf75b587f038fd3adce52c89b59d0c8de57c"
+      ],
+      "Comment": "buildkit.dockerfile.v0",
+      "Created": "2026-11-12T21:46:16.970709267+08:00",
+      "Config": {
+        "Env": [
+          "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "JAVA_HOME=/opt/java/openjdk",
+          "LANG=en_US.UTF-8",
+          "LANGUAGE=en_US:en",
+          "LC_ALL=en_US.UTF-8",
+          "JAVA_VERSION=jdk-21.0.12.1+1"
+        ],
+        "Entrypoint": [
+          "java",
+          "-Djava.io.tmpdir=/tmp/codex",
+          "-cp",
+          "/app/classes:/app/lib/*",
+          "SandboxProbe"
+        ],
+        "WorkingDir": "/app",
+        "Labels": {
+          "org.opencontainers.image.created": "2026-10-06T20:38:12.175309+00:00",
+          "org.opencontainers.image.description": "The Ubuntu container image maintained by Canonical\n\nUbuntu is a Debian-based Linux operating system that runs from the desktop to the cloud, to all your internet connected things.\nIt is the world's most popular operating system across public clouds and OpenStack clouds.\nIt is the number one platform for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers at scale.\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\n",
+          "org.opencontainers.image.title": "ubuntu",
+          "org.opencontainers.image.version": "26.04"
+        }
+      },
+      "Architecture": "arm64",
+      "Os": "linux",
+      "Size": 596379879,
+      "RootFS": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:862e6cfe4341019f54f4dc7c3325a967558a7102a32ceff4edaadf02796c5c07",
+          "sha256:900b24069e64aca5d65cf951635e7513f7f6d447debcfc1b99f73878cc039f59",
+          "sha256:647119b1a3d842729c88dc491eef41a48f14e41223072e2825057ab2e082c0f9",
+          "sha256:582970787d84b0eae2494cea9a04271fb1b22f0e80b9187e632ad74bf38238e3",
+          "sha256:9a1e1523dd3f347e09c053856bf745113e715f7345e5041e948ca326dbd63889",
+          "sha256:6715ee91c5c2331e67725a2dcb7bb698d287ec4793afd7cb640894744e880f23",
+          "sha256:431b198eab70a81309ebd026e4abadf17819d26279334360aeb9472b2604706f",
+          "sha256:0d9580e37cebde16f3829c9f4d1b8727ca450b23279c80c56c89365899479b73",
+          "sha256:a9498c985118fec9de556c08448b128c8f72a924fa738404c17849aa4a309176",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+        ]
+      },
+      "Metadata": {
+        "LastTagTime": "2026-11-12T13:48:30.702082307Z"
+      },
+      "Descriptor": {
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "digest": "sha256:1f67f37eb63fbc98bfd64e52253faf75b587f038fd3adce52c89b59d0c8de57c",
+        "size": 856
+      },
+      "Identity": {
+        "Build": [
+          {
+            "Ref": "tgvexgj0nf0id7hr23tj76ikb",
+            "CreatedAt": "2026-11-12T21:48:30.710932838+08:00"
+          }
+        ]
+      }
+    }
+  ],
+  "boundary": {
+    "mainMounts": [
+      {
+        "Type": "bind",
+        "Source": "/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-rzixa6ci/app",
+        "Destination": "/evidence",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ],
+    "mainUser": "1000:1000",
+    "managerMounts": [
+      {
+        "Type": "bind",
+        "Source": "/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-rzixa6ci/registry",
+        "Destination": "/registry",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/Users/hekai/.orbstack/run/docker.sock",
+        "Destination": "/var/run/docker.sock",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ],
+    "managerHasBusinessCredentials": false,
+    "internalControlNetwork": true,
+    "hostPorts": []
+  },
+  "mainCrash": {
+    "childBeforeKill": [
+      2,
+      6
+    ],
+    "childAfterKill": [
+      8,
+      12
+    ],
+    "removedAfterSeconds": 4.723756667,
+    "managerState": "FAILED"
+  },
+  "bothCrash": {
+    "childBeforeKill": [
+      2,
+      6
+    ],
+    "childAfterKill": [
+      9,
+      13
+    ],
+    "removedWithoutJavaAfterSeconds": 13.599890791,
+    "hardContainerLifetimeSeconds": 15
+  },
+  "probePassed": true,
+  "productionAccepted": false,
+  "remainingTaskContainers": 0,
+  "scope": "restricted-manager feasibility with synthetic data and fixed fixtures"
+}

@@ -1,0 +1,27 @@
+{
+  "mainExit": 137,
+  "beforeKill": {
+    "before": [
+      4,
+      3
+    ],
+    "after": [
+      9,
+      8
+    ],
+    "top": "PID                 USER                TIME                COMMAND\n2269043             1000                0:00                sh -c trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done\n2269056             1000                0:00                sleep 3600\n2269196             1000                0:00                python /opt/worker.py heartbeat\n2269213             1000                0:00                /usr/local/bin/python /opt/worker.py child"
+  },
+  "afterKill": {
+    "before": [
+      11,
+      9
+    ],
+    "after": [
+      15,
+      15
+    ],
+    "top": "PID                 USER                TIME                COMMAND\n2269043             1000                0:00                sh -c trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done\n2269056             1000                0:00                sleep 3600\n2269196             1000                0:00                python /opt/worker.py heartbeat\n2269213             1000                0:00                /usr/local/bin/python /opt/worker.py child"
+  },
+  "containerSurvivedMain": true,
+  "oldVersionPreserved": true
+}

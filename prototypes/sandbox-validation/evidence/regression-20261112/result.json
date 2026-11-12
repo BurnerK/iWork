@@ -1,0 +1,6 @@
+{
+  "probePassed": true,
+  "productionAccepted": false,
+  "conclusion": "requires management-permission decision and explicit lifecycle cleanup",
+  "remainingTaskContainers": 0
+}

@@ -1,0 +1,80 @@
+{
+  "run": "iw8-a3edf9f43f04",
+  "host": "macOS-27.2-arm64-arm-64bit",
+  "compose": "Docker Compose version v5.5.0",
+  "docker": "Client:\n Version:           29.8.2\n API version:       1.56\n Go version:        go1.26.8\n Git commit:        7fc2dff\n Built:             Sun Oct 11 12:42:20 2026\n OS/Arch:           darwin/arm64\n Context:           orbstack\n\nServer: Docker Engine - Community\n Engine:\n  Version:          29.8.2\n  API version:      1.56 (minimum version 1.40)\n  Go version:       go1.26.8\n  Git commit:       8af9fe3\n  Built:            Wed Sep 30 19:32:49 2026\n  OS/Arch:          linux/arm64\n  Experimental:     true\n containerd:\n  Version:          v2.3.6\n  GitCommit:        ee2735368117d2eb259779949d5e75cdafec9761\n runc:\n  Version:          1.5.2\n  GitCommit:        29dd3dc2b13b4123162e5fe132504bb4b15569f1\n docker-init:\n  Version:          0.19.0\n  GitCommit:        de40ad0",
+  "images": [
+    {
+      "Id": "sha256:7c5c447db4e92be778c35faae3d76969af7d012d22bed9151c5df8edcb5c50bd",
+      "RepoTags": [
+        "iwork-sandbox-worker:local"
+      ],
+      "RepoDigests": [
+        "iwork-sandbox-worker@sha256:7c5c447db4e92be778c35faae3d76969af7d012d22bed9151c5df8edcb5c50bd"
+      ],
+      "Architecture": "arm64",
+      "Os": "linux"
+    },
+    {
+      "Id": "sha256:b6bb4ecdab05eb126816e47e70609145f223e71ed3c6191510e2ce83a9f16218",
+      "RepoTags": [
+        "iwork-sandbox-probe:local"
+      ],
+      "RepoDigests": [
+        "iwork-sandbox-probe@sha256:b6bb4ecdab05eb126816e47e70609145f223e71ed3c6191510e2ce83a9f16218"
+      ],
+      "Architecture": "arm64",
+      "Os": "linux"
+    },
+    {
+      "Id": "sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e",
+      "RepoTags": [
+        "python:3.13-alpine"
+      ],
+      "RepoDigests": [
+        "python@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e"
+      ],
+      "Architecture": "arm64",
+      "Os": "linux"
+    },
+    {
+      "Id": "sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d",
+      "RepoTags": [
+        "docker:29-cli"
+      ],
+      "RepoDigests": [
+        "docker@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d"
+      ],
+      "Architecture": "arm64",
+      "Os": "linux"
+    },
+    {
+      "Id": "sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99",
+      "RepoTags": [
+        "eclipse-temurin:21-jre"
+      ],
+      "RepoDigests": [
+        "eclipse-temurin@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99"
+      ],
+      "Architecture": "arm64",
+      "Os": "linux"
+    }
+  ],
+  "sourceHashes": {
+    ".gitignore": "1141064ed2630abfb4a4b52385d7e6c5676a9a51c3c01a4884a7cdaf05609a74",
+    "Dockerfile.app": "fa85500be05a18aa4fb1a48abcfb886d78b7fddc757f86db3d447f9ce22e0d62",
+    "Dockerfile.worker": "fb55da810c191b2e24f0464a15db785babfe7a6eceb6f90d825da900a26a2ccd",
+    "README.md": "a016aea95875a12f6a3f345608f793ead286ad324588024b576531a758075376",
+    "compose.managed.yaml": "f86da42fae22785a04fa963b01b36b4f696df0948583119b2ef0eb6936d67157",
+    "compose.yaml": "2bac82ade22a52d2478f8795b004f8c18289fbd59bde022b16e1d25125dfd38c",
+    "pom.xml": "c12056560c796bd8671894063e6f50ce2689260ce220d2cf30b183c276330545",
+    "settings.xml": "ee6885c097c2a81b59682d70e2f94843103a476345501b1e66f8f5fa0bdf3719",
+    "src/main/java/ManagerClientProbe.java": "32ae914c6d290d6f87ed06edeff0806f741b5401329910ac17438be6f13511b6",
+    "src/main/java/ManagerProbe.java": "6416669a40ede1a947efbee91ed47a1da3a9de906157ba9528283da733efa817",
+    "src/main/java/SandboxProbe.java": "b06fbb25e55c954bd16a73d952ef5080ea329734ec841d94edbdb3fa35a9d570",
+    "task-init.sh": "cc68b1eb10c74d125f74269160942896bd65e081f17f4a9fd09d761193b50a2c",
+    "verify.py": "b0b00a7c37abc2a3e64eadd293632591d96d833d50cb804301e39da32242d42c",
+    "verify_managed.py": "ab85f0f5c10621d0555f29fc453e2767a5b3f57ed2afd60794ce5d8adc962cdb",
+    "worker.py": "adc72c3d2035c9c383104de42b87bcdf62dc1fbf01139c1617f1683d248c904a"
+  }
+}

@@ -9,6 +9,10 @@ import time
 
 root = Path('/workspace')
 mode = sys.argv[1]
+# Fixed failure fixtures simulate a parser stuck or failing on particular input.
+if mode == 'convert':
+    fixture = (root / 'source.txt').read_text()
+    mode = {'__IW8_SLOW_FIXTURE__': 'heartbeat', '__IW8_FAIL_FIXTURE__': 'fail'}.get(fixture, mode)
 if mode == 'convert':
     body = (root / 'source.txt').read_text()
     (root / 'draft.md').write_text('# Synthetic document\n\n' + body)

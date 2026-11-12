@@ -127,7 +127,7 @@ public final class SandboxProbe {
         synchronized void cancel() { if (state.equals("RUNNING")) state = "CANCELLED"; }
         void remove() throws Exception {
             sandbox.shutdown();
-            check(!exists(id()), "SDK shutdown returned with a container still present");
+            eventually(() -> !exists(id()));
         }
     }
     public static final class Converter {

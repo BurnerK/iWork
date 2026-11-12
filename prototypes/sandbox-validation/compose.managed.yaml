@@ -1,0 +1,36 @@
+services:
+  manager:
+    image: iwork-sandbox-probe:local
+    entrypoint: [java, -Djava.io.tmpdir=/tmp/codex, -cp, '/app/classes:/app/lib/*', ManagerProbe]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp/codex:rw,noexec,nosuid,size=32m,mode=1777
+    environment:
+      PROBE_RUN: ${PROBE_RUN:?set run ID}
+      MANAGER_KEY: synthetic-manager-key
+    volumes:
+      - ${DOCKER_SOCKET:?set local socket}:/var/run/docker.sock
+      - ${PROBE_EVIDENCE:?set evidence directory}/registry:/registry
+    networks: [control]
+  app:
+    image: iwork-sandbox-probe:local
+    entrypoint: [java, -Djava.io.tmpdir=/tmp/codex, -cp, '/app/classes:/app/lib/*', ManagerClientProbe]
+    command: [suite]
+    user: '1000:1000'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp/codex:rw,noexec,nosuid,size=32m,mode=1777
+    environment:
+      MANAGER_KEY: synthetic-manager-key
+      DB_PASSWORD: synthetic-db-only
+      MODEL_API_KEY: synthetic-model-only
+    volumes:
+      - ${PROBE_EVIDENCE:?set evidence directory}/app:/evidence
+    networks: [control]
+networks:
+  control:
+    internal: true
