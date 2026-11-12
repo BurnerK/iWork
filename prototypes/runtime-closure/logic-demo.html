@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>资料生成文档 · 运行闭环演示</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#202b32;background:#f6f7f8;line-height:1.65}
+body{max-width:1080px;margin:40px auto;padding:0 24px}h1{font-size:30px}h2{font-size:19px;margin-top:0}
+section{background:white;border:1px solid #dce2e6;border-radius:10px;padding:22px;margin:18px 0}
+button,select,input{font:inherit}button{padding:7px 12px;border:1px solid #bdc9ce;background:white;border-radius:5px;cursor:pointer;margin:4px}
+button:hover,button[aria-selected=true]{background:#e7f3f1;border-color:#25776c}
+button:focus-visible,input:focus-visible{outline:3px solid #25776c;outline-offset:2px}
+button:disabled{cursor:default;opacity:.45}label{display:inline-block;margin:5px 10px 5px 0}
+input{width:110px}#notice{border-left:4px solid #25776c;padding:8px 14px;background:#edf5f3}
+dl{display:grid;grid-template-columns:140px 1fr;gap:7px}dt{color:#56636b}dd{margin:0;overflow-wrap:anywhere}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;border-bottom:1px solid #dde3e7;padding:8px;vertical-align:top}
+.scroll{overflow-x:auto}.muted{color:#596770;font-size:14px}#steps button{display:block;text-align:left}
+pre{white-space:pre-wrap;overflow-wrap:anywhere} @media(max-width:600px){body{padding:0 12px}dl{grid-template-columns:100px 1fr}}
+</style>
+<h1>资料生成文档的运行闭环</h1>
+<p>关闭网页、重复提交、切换用户、取消或重启时，任务、正式版本和用量应该如何变化？按下面的引导逐步操作，也可以自由组合事件。</p>
+<p class="muted">可丢弃的内存逻辑演示。所有事件由按钮模拟，刷新文件会重置全部数据。真实 SDK / HTTP / JVM 验证记录见同目录 README；本页的模拟用量仅帮助审阅状态含义。</p>
+<section aria-labelledby="current">
+<h2 id="current">当前状态</h2>
+<p id="notice" role="status"></p>
+<dl id="summary"></dl>
+<div class="scroll"><table><caption>当前用户可见的任务与工作文件</caption><thead><tr><th>任务 / 会话 / 请求</th><th>状态 / 草稿</th><th>执行情况</th><th>模拟用量</th></tr></thead><tbody id="tasks"></tbody></table></div>
+<div id="versions"></div>
+</section>
+<section><h2>自由操作</h2>
+<label>会话 <input id="session" value="会话一"></label>
+<label>请求键 <input id="key" value="请求一"></label>
+<p class="muted">相同请求键用于重提；修改请求键可发起新任务。「查回所选任务」可验证切换用户后的访问边界。后台事件作用于所选任务。</p>
+<div id="actions"></div></section>
+<section><h2>引导场景</h2>
+<div id="tabs" role="tablist" aria-label="选择验证场景"></div>
+<div id="walkthrough" role="tabpanel" tabindex="0"><p id="description"></p><div id="steps"></div></div>
+</section>
+<script>
+// Pure state model. Simulation events deliberately expose race ordering for review.
+const initial = () => ({
+  viewer:"小林", connected:true, session:"会话一", key:"请求一",
+  selected:null, tasks:[], versions:[], notice:"请选择引导场景，或提交第一份资料。"
+});
+function transition(previous, action) {
+  const s = structuredClone(previous);
+  const task = s.tasks.find(t => t.id === s.selected);
+  const owned = task && task.owner === s.viewer;
+  const active = task && task.status === "运行中";
+  const say = text => { s.notice = text; return s; };
+  if (action.type === "settings") {
+    s.session = action.session; s.key = action.key; return s;
+  }
+  if (action.type === "switch") {
+    s.viewer = s.viewer === "小林" ? "小周" : "小林";
+    return say("已切换为" + s.viewer + "。任务和成果列表按当前身份展示。");
+  }
+  if (action.type === "disconnect") { s.connected = false; return say("页面已断连。可继续触发后台事件，重连后观察结果。"); }
+  if (action.type === "reconnect") { s.connected = true; return say("页面已重连，可查回原任务。"); }
+  if (action.type === "restart") {
+    s.tasks.filter(t => t.status === "运行中").forEach(t => {
+      t.status = "中断"; t.execution = "进程已结束"; t.draft = false;
+    });
+    return say("服务已重启，未完成任务标为中断，正式版本和已知用量保留。");
+  }
+  if (["submit","revise","lookup","cancel"].includes(action.type) && !s.connected)
+    return say("页面已断连，请先重连再发送用户请求。");
+  if (action.type === "submit" || action.type === "revise") {
+    if (!s.session.trim() || !s.key.trim()) return say("请填写会话和请求键。");
+    const duplicate = s.tasks.find(t => t.owner === s.viewer && t.key === s.key);
+    if (duplicate) {
+      if (duplicate.session !== s.session || duplicate.revision !== (action.type === "revise"))
+        return say("请求键已被不同参数占用，拒绝启动。");
+      s.selected = duplicate.id; return say("已查回原任务 " + duplicate.id + "，执行次数保持一次。");
+    }
+    if (s.tasks.some(t => t.owner === s.viewer && t.session === s.session && t.status === "运行中"))
+      return say("同一会话已有任务运行，请等待结束或取消。");
+    const base = s.versions.filter(v => v.owner === s.viewer).at(-1);
+    if (action.type === "revise" && !base) return say("当前用户没有可继续修改的正式版本。");
+    const id = "任务" + (s.tasks.length + 1);
+    s.tasks.push({id, owner:s.viewer, session:s.session, key:s.key, revision:action.type === "revise",
+      status:"运行中", draft:false, execution:"执行中", calls:[null],
+      content:action.type === "revise" ? base.content + "\n补充修改。" : s.viewer + "的资料生成的文字文档。"});
+    s.selected = id;
+    return say("已启动 " + id + "，首次模型调用用量待核实。");
+  }
+  if (!task) return say("请先提交任务。");
+  if (action.type === "lookup") return say(owned ? "查回 " + task.id + "，当前为" + task.status + "。" : "无法访问其他用户的任务、资料和成果。");
+  if (action.type === "cancel") {
+    if (!owned) return say("当前用户无权取消此任务。");
+    if (!active) return say("任务已结束，保留现有状态和正式版本。");
+    task.status = "已取消"; task.execution = "停止尚未确认";
+    return say("已接受取消。已有成果保留，后续发布被禁止；执行是否停止仍待确认。");
+  }
+  if (action.type === "usage") {
+    const index = task.calls.indexOf(null);
+    if (index < 0) return say("所有已发起调用均已收到用量，重复报告不累加。");
+    task.calls[index] = 11;
+    return say("收到一笔模拟用量 11，关联到 " + task.id + "，已结束任务也可补录用量。");
+  }
+  if (action.type === "stopped") {
+    if (task.status !== "已取消") return say("当前没有待确认的取消。");
+    task.execution = "停止已确认"; task.draft = false; return say("执行端报告已停止，已知用量与未知项继续保留。");
+  }
+  if (action.type === "publish" && !active) return say("发布被拒绝，任务已结束，正式版本保持原样。");
+  if (!active) return say("任务已结束，不能开始新的处理步骤。");
+  if (action.type === "nextCall") {
+    task.calls.push(null); return say("开始下一次模型调用，用量暂未知。");
+  }
+  if (action.type === "draft") { task.draft = true; return say("草稿已进入独立工作区，等待后台保存。"); }
+  if (action.type === "fail" || action.type === "saveFail") {
+    task.status = "失败"; task.execution = "执行已结束"; task.draft = false;
+    return say(action.type === "saveFail" ? "保存失败，本次没有产生正式版本，旧版本保留。" : "模型调用失败，已知用量保留，缺失用量待核实。");
+  }
+  if (action.type === "publish") {
+    if (!task.draft) return say("尚无草稿，不能报告完成。");
+    s.versions.push({id:"版本" + (s.versions.length + 1), owner:task.owner, task:task.id, content:task.content});
+    task.status = "完成"; task.execution = "执行已结束"; task.draft = false;
+    return say("保存成功后任务完成，新增一个正式版本。");
+  }
+  return s;
+}
+const labels = {
+ submit:"提交资料",revise:"从最新成果继续修改",lookup:"查回所选任务",disconnect:"关闭页面",
+ reconnect:"重连",switch:"切换用户",usage:"收到模型用量",nextCall:"开始下一次调用",
+ draft:"后台生成草稿",publish:"后台保存成果",cancel:"取消任务",stopped:"确认执行已停止",
+ fail:"模型调用失败",saveFail:"保存失败",restart:"服务重启"
+};
+const scenarios = [
+ {name:"断连与重提",text:"先启动任务再断连。后台完成后重连，用同一请求键提交，观察是否仍是同一任务。",
+ steps:["submit","disconnect","usage","draft","publish","reconnect","submit","lookup"]},
+ {name:"串行与隔离",text:"同会话的新请求应被拒绝。切换用户后查旧任务应被拒绝，但可独立提交同名会话。",
+ steps:["submit",{type:"settings",key:"请求二",session:"会话一",label:"换一个请求键"},"submit","switch","lookup","cancel","submit","draft","publish","switch","lookup"]},
+ {name:"取消与迟到保存",text:"先保留一个正式版本，再发起修改。取消修改后，迟到的保存不得替换旧版。取消与停止确认分别展示。",
+ steps:["submit","usage","draft","publish",{type:"settings",key:"修改一",session:"会话一",label:"为修改换请求键"},"revise","draft","cancel","publish","stopped"]},
+ {name:"重启与保存失败",text:"观察已有版本是否保留。修改保存失败后再发起任务，服务重启应明确中断；重提应查回中断任务。",
+ steps:["submit","draft","publish",{type:"settings",key:"修改一",session:"会话一",label:"为修改换请求键"},"revise","draft","saveFail",{type:"settings",key:"重启一",session:"会话一",label:"为新任务换请求键"},"submit","usage","nextCall","restart","submit"]},
+ {name:"失败和取消的用量",text:"先收到一笔用量，再开始第二次调用。失败或取消后，第二笔仍显示待核实，随后收到用量时补录。",
+ steps:["submit","usage","nextCall","fail",{type:"settings",key:"取消一",session:"会话一",label:"为取消场景换请求键"},"submit","usage","nextCall","cancel","stopped","usage"]}
+];
+</script>
+<script>
+let state = initial(), scenarioIndex = 0, stepIndex = 0;
+const $ = id => document.getElementById(id);
+const escape = value => String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const actionOf = step => typeof step === "string" ? {type:step} : step;
+function render() {
+  $("notice").textContent = state.notice;
+  $("session").value = state.session; $("key").value = state.key;
+  $("summary").innerHTML = [["观察身份",state.viewer],["页面连接",state.connected ? "已连接" : "已断连"],
+    ["会话",state.session],["请求键",state.key],["所选任务",state.selected || "尚未提交"]]
+    .map(([key,value]) => "<dt>" + key + "</dt><dd>" + escape(value) + "</dd>").join("");
+  const visible = state.connected ? state.tasks.filter(t => t.owner === state.viewer) : [];
+  $("tasks").innerHTML = visible.map(t => {
+    const known = t.calls.filter(n => n !== null).reduce((sum,n) => sum+n,0);
+    const unknown = t.calls.filter(n => n === null).length;
+    return "<tr><td>" + [t.id,t.session,t.key].map(escape).join("<br>") + "</td><td>" + t.status
+      + "<br>" + (t.draft ? "工作区有草稿" : "无草稿") + "</td><td>" + t.execution
+      + "</td><td>已记录 " + known + "<br>待核实 " + unknown + " 笔<br>"
+      + t.calls.map((n,i) => "调用" + (i+1) + " " + (n === null ? "未知" : n)).join(" / ") + "</td></tr>";
+  }).join("") || '<tr><td colspan="4">' + (state.connected ? "当前用户暂无任务" : "断连期间无法观察后台状态") + "</td></tr>";
+  $("versions").innerHTML = "<h3>当前用户的正式版本</h3>" + (state.connected
+    ? state.versions.filter(v => v.owner === state.viewer).map(v =>
+      "<p>" + v.id + " · " + v.task + "</p><pre>" + escape(v.content) + "</pre>").join("") || "<p>尚无正式版本</p>"
+    : "<p>重连后查看</p>");
+  const scenario = scenarios[scenarioIndex];
+  $("description").textContent = scenario.text;
+  $("steps").replaceChildren(...scenario.steps.map((step,i) => {
+    const action = actionOf(step), button = document.createElement("button");
+    button.textContent = (i < stepIndex ? "✓ " : (i+1) + ". ") + (action.label || labels[action.type]);
+    button.disabled = i !== stepIndex;
+    button.onclick = () => { state = transition(state, action); stepIndex++; render(); };
+    return button;
+  }));
+  for (const [i,tab] of [...$("tabs").children].entries()) tab.setAttribute("aria-selected", i === scenarioIndex);
+}
+for (const [type,label] of Object.entries(labels)) {
+  const button = document.createElement("button"); button.textContent = label;
+  button.onclick = () => {
+    state = transition(state,{type:"settings",session:$("session").value,key:$("key").value});
+    state = transition(state,{type}); render();
+  };
+  $("actions").append(button);
+}
+scenarios.forEach((scenario,i) => {
+  const tab = document.createElement("button"); tab.textContent = scenario.name; tab.setAttribute("role","tab");
+  tab.id = "tab-" + i; tab.setAttribute("aria-controls","walkthrough");
+  tab.onclick = () => {
+    scenarioIndex=i; stepIndex=0; state=initial(); $("walkthrough").setAttribute("aria-labelledby",tab.id); render();
+  };
+  $("tabs").append(tab);
+});
+$("walkthrough").setAttribute("aria-labelledby","tab-0");
+render();
+</script>
+</html>
