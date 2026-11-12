@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iWork 运行闭环原型</title>
+<style>
+  body { max-width: 48rem; margin: 2rem auto; padding: 0 1rem; font: 1rem/1.6 system-ui; }
+  label { display: block; margin-block: .4rem; }
+  input, select, button, textarea { font: inherit; }
+  textarea, pre { width: 100%; box-sizing: border-box; }
+  pre { padding: 1rem; background: #eef2f5; overflow: auto; }
+</style>
+<h1>iWork 运行闭环原型</h1>
+<p>选择一个测试用户并提交资料。可关闭网页后重新打开，按任务 ID 查回同一任务。草稿就绪后，点「允许保存」或先取消再允许保存，观察状态和用量。</p>
+<form id="form">
+  <label>测试用户 <select id="user"><option>alice</option><option>bob</option></select></label>
+  <label>会话 <input id="session" value="s" required></label>
+  <label>请求键 <input id="key" required></label>
+  <label>旧版本的任务 ID <input id="base"></label>
+  <label>场景
+    <select id="mode">
+      <option value="normal">正常生成</option>
+      <option value="save-fail">保存失败</option>
+      <option value="model-fail">模型失败</option>
+      <option value="cancel-model">模型调用挂起</option>
+    </select>
+  </label>
+  <label>资料 <textarea id="source" required>试用反馈：用户希望生成后继续编辑文档。</textarea></label>
+  <button>提交任务</button>
+</form>
+<p><label>任务 ID <input id="task"></label>
+  <button data-action="">查任务</button>
+  <button data-action="/cancel">取消</button>
+  <button data-action="/release">允许保存</button></p>
+<pre id="result" aria-live="polite"></pre>
+<script>
+const el = id => document.getElementById(id);
+const value = id => el(id).value;
+el("key").value = crypto.randomUUID();
+el("task").value = localStorage.getItem("probe-task") || "";
+
+async function run(method, suffix, body) {
+  try {
+    const response = await fetch("/tasks" + suffix, {
+      method, headers: {"X-Probe-Token": value("user") + "-token"},
+      body: body && JSON.stringify(body)
+    });
+    const data = await response.json();
+    el("result").textContent = response.status + "\n" + JSON.stringify(data, null, 2);
+    if (data.id) {
+      el("task").value = data.id;
+      localStorage.setItem("probe-task", data.id);
+    }
+  } catch (error) {
+    el("result").textContent = error.message;
+  }
+}
+
+el("form").onsubmit = event => {
+  event.preventDefault();
+  const body = Object.fromEntries(["key", "session", "source", "mode"].map(id => [id, value(id)]));
+  if (value("base")) body.base = value("base");
+  run("POST", "", body);
+};
+for (const button of document.querySelectorAll("[data-action]")) {
+  button.onclick = () => {
+    const action = button.dataset.action;
+    if (value("task")) run(action ? "POST" : "GET", "/" + encodeURIComponent(value("task")) + action);
+  };
+}
+</script>
