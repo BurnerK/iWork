@@ -1,0 +1,483 @@
+{
+  "model": "deepseek-flash",
+  "sdk": "2.0.4",
+  "maxHttpRequests": 16,
+  "maxOutputTokensPerRequest": 512,
+  "cases": {
+    "baseline": {
+      "id": "cfc467bb-4d42-4914-a5c8-d49cd6a828c9",
+      "key": "baseline",
+      "owner": "alice",
+      "session": "baseline",
+      "state": "COMPLETED",
+      "phase": "published",
+      "model": "deepseek-flash",
+      "calls": {
+        "46779ef37f5049da9a25a501ce4db2e0": 368,
+        "0562ebf4b63c4999825227d66c7034e0": 546,
+        "6cf49f4ebd304d9cad842a2cb61298c8": 584
+      },
+      "activeSdkReplyId": "6cf49f4ebd304d9cad842a2cb61298c8",
+      "attempts": {
+        "a19449b1-97a1-4204-b373-ef6c6ebf5ac7": {
+          "sdkReplyId": "46779ef37f5049da9a25a501ce4db2e0",
+          "startedAt": 1794478708545,
+          "providerUsage": {
+            "prompt_tokens": 344,
+            "completion_tokens": 24,
+            "total_tokens": 368,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "prompt_cache_hit_tokens": 0,
+            "prompt_cache_miss_tokens": 344
+          },
+          "adapterUsage": {
+            "inputTokens": 344,
+            "outputTokens": 24,
+            "cachedTokens": 0,
+            "cacheCreationTokens": 0,
+            "reasoningTokens": 0,
+            "toolUsePromptTokens": 0,
+            "time": 0.875,
+            "totalTokens": 368
+          },
+          "httpStartedAt": 1794478708635,
+          "firstChunkAt": 1794478708886,
+          "providerResponseId": "bdb20d81-47f5-4790-b434-32bc7165fac0",
+          "firstContentAt": 1794478709337,
+          "modelSignal": "ON_COMPLETE",
+          "modelEndedAt": 1794478709514,
+          "transportSignal": "ON_COMPLETE",
+          "transportEndedAt": 1794478709514
+        },
+        "2e345728-99aa-45b9-ae71-8867a488e58e": {
+          "sdkReplyId": "0562ebf4b63c4999825227d66c7034e0",
+          "startedAt": 1794478709517,
+          "providerUsage": {
+            "prompt_tokens": 421,
+            "completion_tokens": 125,
+            "total_tokens": 546,
+            "prompt_tokens_details": {
+              "cached_tokens": 256
+            },
+            "prompt_cache_hit_tokens": 256,
+            "prompt_cache_miss_tokens": 165
+          },
+          "adapterUsage": {
+            "inputTokens": 421,
+            "outputTokens": 125,
+            "cachedTokens": 256,
+            "cacheCreationTokens": 0,
+            "reasoningTokens": 0,
+            "toolUsePromptTokens": 0,
+            "time": 1.671,
+            "totalTokens": 546
+          },
+          "httpStartedAt": 1794478709519,
+          "firstChunkAt": 1794478709892,
+          "providerResponseId": "d9860601-3371-4c25-ba21-6d43dfad7ffd",
+          "firstContentAt": 1794478710589,
+          "modelSignal": "ON_COMPLETE",
+          "modelEndedAt": 1794478711192,
+          "transportSignal": "ON_COMPLETE",
+          "transportEndedAt": 1794478711192
+        },
+        "8b9ffcef-1747-4d8b-9fc3-1f990a76cb01": {
+          "sdkReplyId": "6cf49f4ebd304d9cad842a2cb61298c8",
+          "startedAt": 1794478711193,
+          "providerUsage": {
+            "prompt_tokens": 562,
+            "completion_tokens": 22,
+            "total_tokens": 584,
+            "prompt_tokens_details": {
+              "cached_tokens": 384
+            },
+            "prompt_cache_hit_tokens": 384,
+            "prompt_cache_miss_tokens": 178
+          },
+          "adapterUsage": {
+            "inputTokens": 562,
+            "outputTokens": 22,
+            "cachedTokens": 384,
+            "cacheCreationTokens": 0,
+            "reasoningTokens": 0,
+            "toolUsePromptTokens": 0,
+            "time": 0.687,
+            "totalTokens": 584
+          },
+          "httpStartedAt": 1794478711194,
+          "firstChunkAt": 1794478711376,
+          "providerResponseId": "3992b8fc-9850-46b0-9449-8d84331399f1",
+          "firstContentAt": 1794478711716,
+          "modelSignal": "ON_COMPLETE",
+          "modelEndedAt": 1794478711884,
+          "transportSignal": "ON_COMPLETE",
+          "transportEndedAt": 1794478711885
+        }
+      },
+      "sdkToolCalls": [
+        "read_source",
+        "draft_document"
+      ],
+      "document": "iWork 内部试用反馈摘要\n\n一、任务持续性\n三位测试者一致希望：关闭网页后，任务仍能在后台继续进行，不因页面关闭而中断。\n\n二、取消后的文档处理\n测试者要求取消操作后，旧版本文档应予以保留，避免内容丢失。\n\n三、用量信息标注\n当用量数据缺失时，需明确标注，不应留空或省略，以保证信息透明。"
+    },
+    "cancel-before-content": {
+      "id": "7ca07fd8-cb8d-4e6e-aa19-8de4ff03bc37",
+      "key": "cancel-before-content",
+      "owner": "alice",
+      "session": "cancel-before-content",
+      "state": "CANCELLED",
+      "phase": "accepted",
+      "model": "deepseek-flash",
+      "calls": {
+        "83dede65b8d9426bae7eaba6bf27140c": null
+      },
+      "activeSdkReplyId": "83dede65b8d9426bae7eaba6bf27140c",
+      "attempts": {
+        "c3dcdfc5-b07b-4c0f-9922-d0d0f014b594": {
+          "sdkReplyId": "83dede65b8d9426bae7eaba6bf27140c",
+          "startedAt": 1794478711910,
+          "providerUsage": null,
+          "adapterUsage": null,
+          "httpStartedAt": 1794478711911,
+          "transportSignal": "CANCEL",
+          "transportEndedAt": 1794478711937,
+          "modelSignal": "CANCEL",
+          "modelEndedAt": 1794478711937
+        }
+      },
+      "execution": "sdk-subscription-ended",
+      "cancelAcceptedAt": 1794478711935,
+      "subscriptionEndedAt": 1794478711938
+    },
+    "cancel-during-output": {
+      "id": "108096d1-25aa-4aa4-a3da-60a82802bdd4",
+      "key": "cancel-during-output",
+      "owner": "alice",
+      "session": "cancel-during-output",
+      "state": "CANCELLED",
+      "phase": "accepted",
+      "model": "deepseek-flash",
+      "calls": {
+        "7200a1716189496892711f4cf97cf4c1": null
+      },
+      "activeSdkReplyId": "7200a1716189496892711f4cf97cf4c1",
+      "attempts": {
+        "7dcb7bde-0aff-4a75-acc8-ac3d40dd2237": {
+          "sdkReplyId": "7200a1716189496892711f4cf97cf4c1",
+          "startedAt": 1794478711941,
+          "providerUsage": null,
+          "adapterUsage": null,
+          "httpStartedAt": 1794478711942,
+          "firstChunkAt": 1794478712285,
+          "providerResponseId": "4fd727d6-6310-4a01-9cc6-bc6c60794e14",
+          "firstContentAt": 1794478712970,
+          "transportSignal": "CANCEL",
+          "transportEndedAt": 1794478713138,
+          "modelSignal": "CANCEL",
+          "modelEndedAt": 1794478713139
+        }
+      },
+      "execution": "sdk-subscription-ended",
+      "cancelAcceptedAt": 1794478712988,
+      "subscriptionEndedAt": 1794478713139
+    },
+    "cancel-before-save": {
+      "id": "46c479ca-f36f-41c1-9fa3-70af731da353",
+      "key": "cancel-before-save",
+      "owner": "alice",
+      "session": "cancel-before-save",
+      "state": "CANCELLED",
+      "phase": "staged",
+      "model": "deepseek-flash",
+      "calls": {
+        "b0225422ee764908a0f3e90645ee5d4b": 369,
+        "f379a2e610924c0295a19fc641848dd5": 667,
+        "375d635a60fb4d94b3b0da46d5bf42ef": 749
+      },
+      "activeSdkReplyId": "375d635a60fb4d94b3b0da46d5bf42ef",
+      "attempts": {
+        "98829dc0-da2f-420a-854c-f99e3ce11781": {
+          "sdkReplyId": "b0225422ee764908a0f3e90645ee5d4b",
+          "startedAt": 1794478713144,
+          "providerUsage": {
+            "prompt_tokens": 344,
+            "completion_tokens": 25,
+            "total_tokens": 369,
+            "prompt_tokens_details": {
+              "cached_tokens": 128
+            },
+            "prompt_cache_hit_tokens": 128,
+            "prompt_cache_miss_tokens": 216
+          },
+          "adapterUsage": {
+            "inputTokens": 344,
+            "outputTokens": 25,
+            "cachedTokens": 128,
+            "cacheCreationTokens": 0,
+            "reasoningTokens": 0,
+            "toolUsePromptTokens": 0,
+            "time": 0.837,
+            "totalTokens": 369
+          },
+          "httpStartedAt": 1794478713145,
+          "firstChunkAt": 1794478713329,
+          "providerResponseId": "3ffa299c-a7d1-4f4a-a8ff-7adf3da52623",
+          "firstContentAt": 1794478713838,
+          "modelSignal": "ON_COMPLETE",
+          "modelEndedAt": 1794478713985,
+          "transportSignal": "ON_COMPLETE",
+          "transportEndedAt": 1794478713986
+        },
+        "e91ebc10-7d86-4e01-84fb-d68b55eaade1": {
+          "sdkReplyId": "f379a2e610924c0295a19fc641848dd5",
+          "startedAt": 1794478713987,
+          "providerUsage": {
+            "prompt_tokens": 519,
+            "completion_tokens": 148,
+            "total_tokens": 667,
+            "prompt_tokens_details": {
+              "cached_tokens": 256
+            },
+            "prompt_cache_hit_tokens": 256,
+            "prompt_cache_miss_tokens": 263
+          },
+          "adapterUsage": {
+            "inputTokens": 519,
+            "outputTokens": 148,
+            "cachedTokens": 256,
+            "cacheCreationTokens": 0,
+            "reasoningTokens": 0,
+            "toolUsePromptTokens": 0,
+            "time": 1.626,
+            "totalTokens": 667
+          },
+          "httpStartedAt": 1794478713989,
+          "firstChunkAt": 1794478714360,
+          "providerResponseId": "4556a740-5388-44bf-91d9-457ed288699b",
+          "firstContentAt": 1794478714993,
+          "modelSignal": "ON_COMPLETE",
+          "modelEndedAt": 1794478715617,
+          "transportSignal": "ON_COMPLETE",
+          "transportEndedAt": 1794478715617
+        },
+        "a3507442-b9f8-4bad-972b-7f4180b70efb": {
+          "sdkReplyId": "375d635a60fb4d94b3b0da46d5bf42ef",
+          "startedAt": 1794478715618,
+          "providerUsage": {
+            "prompt_tokens": 683,
+            "completion_tokens": 66,
+            "total_tokens": 749,
+            "prompt_tokens_details": {
+              "cached_tokens": 512
+            },
+            "prompt_cache_hit_tokens": 512,
+            "prompt_cache_miss_tokens": 171
+          },
+          "adapterUsage": {
+            "inputTokens": 683,
+            "outputTokens": 66,
+            "cachedTokens": 512,
+            "cacheCreationTokens": 0,
+            "reasoningTokens": 0,
+            "toolUsePromptTokens": 0,
+            "time": 1.361,
+            "totalTokens": 749
+          },
+          "httpStartedAt": 1794478715619,
+          "firstChunkAt": 1794478715991,
+          "providerResponseId": "3fa7f91a-2195-40c4-b3d2-e989de432b8f",
+          "firstContentAt": 1794478716575,
+          "modelSignal": "ON_COMPLETE",
+          "modelEndedAt": 1794478716981,
+          "transportSignal": "ON_COMPLETE",
+          "transportEndedAt": 1794478716981
+        }
+      },
+      "sdkToolCalls": [
+        "read_source",
+        "draft_document"
+      ],
+      "execution": "worker-returned",
+      "cancelAcceptedAt": 1794478716992,
+      "latePublishRejected": true
+    },
+    "client-stream-failure": {
+      "id": "44fbaf17-e004-4fed-97c6-f0f54ec25b33",
+      "key": "client-stream-failure",
+      "owner": "alice",
+      "session": "client-stream-failure",
+      "state": "FAILED",
+      "phase": "IllegalStateException",
+      "model": "deepseek-flash",
+      "calls": {
+        "e8521953126445e4b51dd8eedc2eb59c": null
+      },
+      "activeSdkReplyId": "e8521953126445e4b51dd8eedc2eb59c",
+      "attempts": {
+        "ca5f19e6-c2e8-4768-b22b-0c8f73c5401f": {
+          "sdkReplyId": "e8521953126445e4b51dd8eedc2eb59c",
+          "startedAt": 1794478716997,
+          "providerUsage": null,
+          "adapterUsage": null,
+          "httpStartedAt": 1794478716997,
+          "firstChunkAt": 1794478717213,
+          "providerResponseId": "73f1433e-7b37-4271-af79-c48ed9098b12",
+          "firstContentAt": 1794478718074,
+          "injectedClientFailure": true,
+          "modelSignal": "ON_ERROR",
+          "modelEndedAt": 1794478718079,
+          "transportSignal": "ON_ERROR",
+          "transportEndedAt": 1794478718080
+        }
+      }
+    },
+    "save-failure": {
+      "id": "9fbaa087-eda3-4bf5-959c-5e2a8e20f698",
+      "key": "save-failure",
+      "owner": "alice",
+      "session": "save-failure",
+      "state": "FAILED",
+      "phase": "OpenAIException",
+      "model": "deepseek-flash",
+      "calls": {
+        "f44fcc7cdcfc4ddda2f0d5c0f329554a": null
+      },
+      "activeSdkReplyId": "f44fcc7cdcfc4ddda2f0d5c0f329554a",
+      "attempts": {
+        "debb777a-846a-4179-8c27-4cda17bfbb9d": {
+          "sdkReplyId": "f44fcc7cdcfc4ddda2f0d5c0f329554a",
+          "startedAt": 1794478718084,
+          "providerUsage": null,
+          "adapterUsage": null,
+          "httpStartedAt": 1794478718085,
+          "modelSignal": "ON_ERROR",
+          "modelEndedAt": 1794478723094,
+          "transportSignal": "ON_ERROR",
+          "transportEndedAt": 1794478723095
+        }
+      }
+    },
+    "save-failure-retry": {
+      "id": "befbc4c2-a4de-4f23-be81-824fec9cc9c3",
+      "key": "save-failure-retry",
+      "owner": "alice",
+      "session": "save-failure-retry",
+      "state": "FAILED",
+      "phase": "IOException",
+      "model": "deepseek-flash",
+      "calls": {
+        "d2226a7e48024d948976bb298f8340cd": 365,
+        "e57d3802cda14ae7994fb0c3292888fe": 641,
+        "2faad8d33d014edebc80bb7f88eb24a4": 727
+      },
+      "activeSdkReplyId": "2faad8d33d014edebc80bb7f88eb24a4",
+      "attempts": {
+        "6faaaa72-4d40-400d-bacb-3f7b3c5edf38": {
+          "sdkReplyId": "d2226a7e48024d948976bb298f8340cd",
+          "startedAt": 1794478780345,
+          "providerUsage": {
+            "prompt_tokens": 344,
+            "completion_tokens": 21,
+            "total_tokens": 365,
+            "prompt_tokens_details": {
+              "cached_tokens": 128
+            },
+            "prompt_cache_hit_tokens": 128,
+            "prompt_cache_miss_tokens": 216
+          },
+          "adapterUsage": {
+            "inputTokens": 344,
+            "outputTokens": 21,
+            "cachedTokens": 128,
+            "cacheCreationTokens": 0,
+            "reasoningTokens": 0,
+            "toolUsePromptTokens": 0,
+            "time": 1.113,
+            "totalTokens": 365
+          },
+          "httpStartedAt": 1794478780433,
+          "firstChunkAt": 1794478780887,
+          "providerResponseId": "387bef09-59ff-4ef9-b641-ed898cecacc9",
+          "firstContentAt": 1794478781488,
+          "modelSignal": "ON_COMPLETE",
+          "modelEndedAt": 1794478781555,
+          "transportSignal": "ON_COMPLETE",
+          "transportEndedAt": 1794478781556
+        },
+        "3b941696-5f6c-4641-b44d-c44a3f2662d7": {
+          "sdkReplyId": "e57d3802cda14ae7994fb0c3292888fe",
+          "startedAt": 1794478781558,
+          "providerUsage": {
+            "prompt_tokens": 515,
+            "completion_tokens": 126,
+            "total_tokens": 641,
+            "prompt_tokens_details": {
+              "cached_tokens": 256
+            },
+            "prompt_cache_hit_tokens": 256,
+            "prompt_cache_miss_tokens": 259
+          },
+          "adapterUsage": {
+            "inputTokens": 515,
+            "outputTokens": 126,
+            "cachedTokens": 256,
+            "cacheCreationTokens": 0,
+            "reasoningTokens": 0,
+            "toolUsePromptTokens": 0,
+            "time": 2.136,
+            "totalTokens": 641
+          },
+          "httpStartedAt": 1794478781561,
+          "firstChunkAt": 1794478782762,
+          "providerResponseId": "0459ae13-bb4b-4031-8d13-1ba1a4588a05",
+          "firstContentAt": 1794478783311,
+          "modelSignal": "ON_COMPLETE",
+          "modelEndedAt": 1794478783699,
+          "transportSignal": "ON_COMPLETE",
+          "transportEndedAt": 1794478783699
+        },
+        "b39436f6-6763-4d79-9e3b-7cfd7071aac4": {
+          "sdkReplyId": "2faad8d33d014edebc80bb7f88eb24a4",
+          "startedAt": 1794478783700,
+          "providerUsage": {
+            "prompt_tokens": 657,
+            "completion_tokens": 70,
+            "total_tokens": 727,
+            "prompt_tokens_details": {
+              "cached_tokens": 512
+            },
+            "prompt_cache_hit_tokens": 512,
+            "prompt_cache_miss_tokens": 145
+          },
+          "adapterUsage": {
+            "inputTokens": 657,
+            "outputTokens": 70,
+            "cachedTokens": 512,
+            "cacheCreationTokens": 0,
+            "reasoningTokens": 0,
+            "toolUsePromptTokens": 0,
+            "time": 3.06,
+            "totalTokens": 727
+          },
+          "httpStartedAt": 1794478783701,
+          "firstChunkAt": 1794478785991,
+          "providerResponseId": "ed9775f8-48a1-411b-ab70-09260aee7263",
+          "firstContentAt": 1794478786423,
+          "modelSignal": "ON_COMPLETE",
+          "modelEndedAt": 1794478786763,
+          "transportSignal": "ON_COMPLETE",
+          "transportEndedAt": 1794478786764
+        }
+      },
+      "sdkToolCalls": [
+        "read_source",
+        "draft_document"
+      ]
+    }
+  },
+  "providerExecutionAfterCancel": "unverified",
+  "providerBilling": "unverified",
+  "checks": "passed-after-targeted-retry"
+}

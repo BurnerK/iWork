@@ -8,6 +8,7 @@ import io.agentscope.core.event.*;
 import io.agentscope.core.message.*;
 import io.agentscope.core.model.*;
 import io.agentscope.core.tool.Tool;
+import io.agentscope.core.tool.ToolParam;
 import io.agentscope.core.tool.Toolkit;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
@@ -24,6 +25,8 @@ public final class RuntimeProbe {
     static final ObjectMapper JSON = new ObjectMapper();
     static final Map<String, String> FIXTURES = Map.of(
             "alice-token", "alice", "bob-token", "bob");
+    JsonNode modelConfig;
+    final java.util.concurrent.atomic.AtomicInteger requestCount = new java.util.concurrent.atomic.AtomicInteger();
     final Path records;
     final Path work;
     final Map<String, ObjectNode> tasks = new LinkedHashMap<>();
@@ -40,10 +43,22 @@ public final class RuntimeProbe {
                 else tasks.put(task.path("id").asText(), task);
             }
         }
+        requestCount.set(tasks.values().stream()
+                .mapToInt(t -> {
+                    int count = 0;
+                    for (JsonNode attempt : t.path("attempts")) if (attempt.has("httpStartedAt")) count++;
+                    return count;
+                }).sum());
     }
 
     public static void main(String[] args) throws IOException {
         RuntimeProbe probe = new RuntimeProbe(Path.of(args[0]));
+        if (args.length > 1) {
+            probe.modelConfig = JSON.readTree(Path.of(args[1]).toFile());
+            for (String field : List.of("baseUrl", "model", "apiKey"))
+                if (probe.modelConfig.path(field).asText().isBlank())
+                    throw new IllegalArgumentException("Missing model configuration field: " + field);
+        }
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", probe::http);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
@@ -86,7 +101,7 @@ public final class RuntimeProbe {
             String base = body.path("base").asText();
             String mode = body.path("mode").asText("normal");
             if (key.isBlank() || session.isBlank() || source.isBlank()
-                    || !Set.of("normal", "cancel-model", "model-fail", "save-fail").contains(mode))
+                    || !Set.of("normal", "cancel-model", "model-fail", "save-fail", "stream-fail").contains(mode))
                 return new Reply(400, Map.of("error", "invalid request"));
             for (ObjectNode t : tasks.values()) {
                 if (t.path("owner").asText().equals(user) && t.path("key").asText().equals(key)) {
@@ -104,7 +119,7 @@ public final class RuntimeProbe {
             String id = UUID.randomUUID().toString();
             ObjectNode task = JSON.createObjectNode().put("id", id).put("key", key)
                     .put("owner", user).put("session", session).put("state", "RUNNING")
-                    .put("phase", "accepted").put("model", "deterministic-stub");
+                    .put("phase", "accepted").put("model", modelConfig == null ? "deterministic-stub" : modelConfig.path("model").asText());
             task.set("request", body);
             task.putObject("calls");
             save(task);
@@ -125,11 +140,13 @@ public final class RuntimeProbe {
                 }
                 if (path.length == 4 && method.equals("POST") && path[3].equals("cancel")) {
                     if (running(task)) {
-                        task = task.deepCopy().put("state", "CANCELLED").put("execution", "stop-unconfirmed");
+                        task = task.deepCopy().put("state", "CANCELLED").put("execution", "stop-unconfirmed")
+                                .put("cancelAcceptedAt", System.currentTimeMillis());
                         save(task);
-                        if (task.path("request").path("mode").asText().equals("cancel-model")) {
+                        if (modelConfig != null || task.path("request").path("mode").asText().equals("cancel-model")) {
                             var stop = stops.get(path[2]);
                             if (stop != null) stop.tryEmitValue(1);
+                            if (modelConfig != null && gates.containsKey(path[2])) gates.get(path[2]).tryEmitValue(1);
                         }
                     }
                     return new Reply(200, task.deepCopy());
@@ -199,18 +216,36 @@ public final class RuntimeProbe {
         }
     }
 
+    public static final class RealBuiltIns {
+        final Path workspace;
+        RealBuiltIns(Path workspace) { this.workspace = workspace; }
+
+        @Tool(name = "read_source", description = "Read the input granted to this task")
+        public String readSource() throws IOException {
+            return Files.readString(workspace.resolve("source.txt"));
+        }
+
+        @Tool(name = "draft_document", description = "Save the generated document body to this task workspace")
+        public String draftDocument(@ToolParam(name = "content", description = "Complete document body", required = true) String content) throws IOException {
+            if (content == null || content.isBlank() || content.length() > 20000)
+                throw new IllegalArgumentException("Invalid document body");
+            Files.writeString(workspace.resolve("draft.md"), content);
+            return "draft staged";
+        }
+    }
+
     void run(String id, String input, String mode, Sinks.One<Integer> gate) {
         Path workspace = work.resolve(id);
         var stop = Sinks.<Integer>one();
         synchronized (this) {
             stops.put(id, stop);
-            if (mode.equals("cancel-model") && !running(tasks.get(id))) stop.tryEmitValue(1);
+            if ((modelConfig != null || mode.equals("cancel-model")) && !running(tasks.get(id))) stop.tryEmitValue(1);
         }
         try {
             Files.createDirectory(workspace);
             Files.writeString(workspace.resolve("source.txt"), input, StandardCharsets.UTF_8);
             Toolkit toolkit = new Toolkit();
-            toolkit.registerTool(new BuiltIns(workspace));
+            toolkit.registerTool(modelConfig == null ? new BuiltIns(workspace) : new RealBuiltIns(workspace));
             Model model = new Model() {
                 int step;
                 public String getModelName() { return "deterministic-stub"; }
@@ -232,24 +267,33 @@ public final class RuntimeProbe {
                             .usage(new ChatUsage(10, call, 0)).build());
                 }
             };
+            if (modelConfig != null) model = new ObservedModel(this, id, mode);
             try (var agent = ReActAgent.builder().name("runtime-probe").model(model)
-                    .toolkit(toolkit).maxIters(4).maxRetries(1).build()) {
-                var events = agent.streamEvents("读取获准资料并生成文字文档")
+                    .toolkit(toolkit).maxIters(4).maxRetries(1)
+                    .modelExecutionConfig(ExecutionConfig.builder().maxAttempts(1).timeout(Duration.ofSeconds(60)).build())
+                    .build()) {
+                var events = agent.streamEvents("依次调用 read_source 读取资料，再整理成简短中文文字文档并调用 draft_document 保存正文，最后简短确认。仅使用提供的工具。")
                         .doOnNext(event -> {
                             if (event instanceof ModelCallStartEvent start)
-                                update(id, t -> ((ObjectNode) t.path("calls")).putNull(start.getReplyId()));
+                                update(id, t -> {
+                                    ((ObjectNode) t.path("calls")).putNull(start.getReplyId());
+                                    t.put("activeSdkReplyId", start.getReplyId());
+                                });
                             if (event instanceof ModelCallEndEvent end && end.getUsage() != null)
                                 update(id, t -> ((ObjectNode) t.path("calls")).put(end.getReplyId(),
                                         end.getUsage().getTotalTokens()));
                             if (event instanceof ToolCallEndEvent tool)
                                 update(id, t -> t.withArray("sdkToolCalls").add(tool.getToolCallName()));
                         });
-                if (mode.equals("cancel-model"))
+                if (modelConfig != null || mode.equals("cancel-model"))
                     events = events.takeUntilOther(stop.asMono());
                 var result = events.filter(AgentResultEvent.class::isInstance)
-                        .blockLast(Duration.ofSeconds(30));
-                if (result == null && mode.equals("cancel-model")) {
-                    update(id, t -> t.put("execution", "sdk-subscription-ended"));
+                        .blockLast(Duration.ofSeconds(120));
+                if (result == null && (modelConfig != null || mode.equals("cancel-model"))) {
+                    update(id, t -> {
+                        t.put("execution", "sdk-subscription-ended").put("subscriptionEndedAt", System.currentTimeMillis());
+                        if (running(t)) t.put("state", "FAILED").put("phase", "missing SDK result");
+                    });
                     return;
                 }
                 if (result == null) throw new IllegalStateException("missing SDK result");
@@ -260,7 +304,7 @@ public final class RuntimeProbe {
             }
         } catch (Exception error) {
             update(id, t -> {
-                if (running(t)) t.put("state", "FAILED").put("phase", error.toString());
+                if (running(t)) t.put("state", "FAILED").put("phase", modelConfig == null ? error.toString() : error.getClass().getSimpleName());
             });
         } finally {
             synchronized (this) {

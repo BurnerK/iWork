@@ -49,7 +49,7 @@ java -cp "target/classes:$(cat target/classpath)" RuntimeProbe "$probe_dir"
 - 下一步需选定试用模型与连接条件，验证真实工具回合、流式用量何时出现、取消后上游是否继续执行或计费，以及如何对账。SDK 收到的模拟 token 和取消信号不能用于确认供应商结算或外部工具回滚。
 - 本次报告可供共同审阅。[Issue #7](https://github.com/BurnerK/iWork/issues/7) 保持开放，[Issue #6](https://github.com/BurnerK/iWork/issues/6) 继续受其阻塞。
 
-## 真实模型验证计划 · 待提供模型资源
+## 真实模型验证计划 · 2026-11-12 接入前记录
 
 用户已确认单文件演示中「取消与迟到保存」「失败和取消的用量」两个场景的状态符合预期。该确认用于业务状态设计。接下来沿用 AgentScope Java 2.0.4 和合成资料，在选定模型后执行以下验证。
 
@@ -86,4 +86,55 @@ java -cp "target/classes:$(cat target/classpath)" RuntimeProbe "$probe_dir"
 
 若供应商只能在正常流尾提供用量，取消后永久缺失的情况需要进入后续用量核对和额度处理决策。不得把缺失记录自动置零，也不为取得用量而默认让已取消任务继续生成。
 
-当前等待供应商、模型名、接口地址和凭据配置位置。可提供环境变量名或本地配置文件路径，无需在聊天中粘贴密钥。如有调用次数或费用上限，执行时一并采用。真实模型调用和供应商结算验证尚未发生。
+接入前曾等待模型资源。用户随后提供 DeepSeek 配置，本轮实际结果见下节；供应商结算仍待核实。
+
+### 本地模型配置
+
+在本目录的 `model.local.json` 填写以下三个字段，保留 JSON 格式。
+
+- `baseUrl` 为 OpenAI 兼容接口的基础地址，例如 `https://your-service.example/v1`，不包含 `/chat/completions`。以服务商提供的路径为准。
+- `model` 为接口接受的模型标识。
+- `apiKey` 为该服务的调用密钥。
+
+本地文件已加入 Git 忽略规则，并设置为仅当前用户可读写。密钥只填入该文件。填写后告知代理继续，即可按本文方案接入并验证。真实模型探针通过显式命令读取该文件；默认确定性验证继续使用模型替身。若服务仅提供其他协议，接入前按其协议调整适配器。
+
+## DeepSeek 实测 · 2026-11-12
+
+用户提供 deepseek-flash 的 OpenAI 兼容接口配置后，实际执行了六类场景。完整脱敏记录见 [evidence/deepseek-20261112.json](evidence/deepseek-20261112.json)。采用 AgentScope Java 2.0.4 的 OpenAI 模型适配器、JDK HTTP transport、流式响应、关闭 thinking、每次最多 512 输出 token、单次模型执行最多一次尝试。探针跨本次进程重启累计限制 16 次 HTTP 请求。
+
+| 实测场景 | 请求数 | 业务结果 | 已记录 token | 用量未知的调用数 |
+| --- | --- | --- | --- | --- |
+| 完整生成基线 | 3 | COMPLETED，真实模型读取合成资料并通过工具写入文档正文，正式保存成功 | 1,498 | 0 |
+| 首个内容前取消 | 1 | CANCELLED，无正式成果 | 0 已知 | 1 |
+| 输出中取消 | 1 | CANCELLED，无正式成果 | 0 已知 | 1 |
+| 草稿生成后、保存前取消 | 3 | CANCELLED，迟到发布被拒，原版本保留 | 1,785 | 0 |
+| 收到真实输出时注入客户端流错误 | 1 | FAILED，无正式成果 | 0 已知 | 1 |
+| 保存失败场景首次尝试 | 1 | 上游 OpenAIException 导致 FAILED，未到保存步骤 | 0 已知 | 1 |
+| 仅复跑保存失败场景 | 3 | 真实模型完成后注入保存错误，FAILED，原版本完整 | 1,733 | 0 |
+
+共 13 次请求，已记录 5,016 token，另有 4 次调用的用量未知。这个已记录合计不能充当整轮最终计费用量。保存失败场景的首次上游异常保留在报告中，当时只记录到异常类型，无法可靠判断具体上游原因。随后补充了传输错误类与 HTTP 错误状态观测，定向复跑后命中保存失败场景。
+
+### 取消与用量的实际证据
+
+- 首个内容前取消从业务受理到模型/传输订阅取消为 2 毫秒，到 SDK 订阅结束为 3 毫秒。该请求未收到供应商响应 ID，是否已被上游接收仍未知。
+- 输出中取消已有供应商响应 ID 4fd727d6-6310-4a01-9cc6-bc6c60794e14。取消受理到模型/SDK 订阅结束为 151 毫秒。两种取消时机均未收到最终 usage，业务记录保留 null。
+- 时间来自单次本机样本，表示取消传到本地订阅链的耗时。transportSignal=CANCEL 直接观测的是 SDK transport 的响应流终止，未做抓包或供应商执行状态查询。
+- 正常基线的每笔供应商原始 usage、SDK 适配器 ChatUsage 和任务中的调用记录均已核对一致。原始响应保留输入、输出、缓存命中和未命中字段，累计 usage 以最新值覆盖；任务结束前取消也保留已接收的适配器用量。
+- 保存前取消的模型请求已正常完成，1,785 token 保留，取消禁止成果发布。客户端流错误场景保留供应商响应 ID，缺失最终用量保持未知。
+- [DeepSeek Chat Completions 文档](https://api-docs.deepseek.com/api/create-chat-completion/)说明 include_usage 在最后一个流块返回用量，与本次取消后缺少最终用量的观察一致。[余额接口](https://api-docs.deepseek.com/api/get-user-balance/)提供账户汇总余额。此次没有取得逐请求账单或供应商停止确认，不能从本地取消推导上游零消耗。
+
+### 复跑真实模型
+
+以下命令会实际消耗配置账户的模型用量。需要先填写被 Git 忽略的 model.local.json。证据保存在系统临时目录的 codex/iwork-real-model-* 中，程序打印报告位置。原型只监听回环地址，生成过程使用合成资料。
+
+~~~sh
+cd prototypes/runtime-closure
+mvn -s settings.xml -q compile org.apache.maven.plugins:maven-dependency-plugin:3.9.0:build-classpath -Dmdep.outputFile=target/classpath
+python3 verify_live.py
+~~~
+
+如最后的保存失败场景因上游异常而未命中，可使用 python3 verify_live.py --resume-save-failure <本轮证据目录> 只复跑这一项，保留原失败记录和累计请求计数。该入口仅用于已有 baseline 的本轮记录。
+
+### 尚待共同审阅
+
+真实模型的本地取消传播、成果保护和用量缺口记录已取得本轮证据。供应商侧的取消后执行状态与最终计费仍未知，需要供应商请求明细或支持渠道核实。#7 保持开放；本次结果不承担生产身份、OS 级隔离、多实例或断电持久性的验收。
