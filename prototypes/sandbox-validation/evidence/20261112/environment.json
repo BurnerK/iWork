@@ -1,0 +1,74 @@
+{
+  "run": "iw8-0006a9bcbf98",
+  "host": "macOS-27.2-arm64-arm-64bit",
+  "compose": "Docker Compose version v5.5.0",
+  "docker": "Client:\n Version:           29.8.2\n API version:       1.56\n Go version:        go1.26.8\n Git commit:        7fc2dff\n Built:             Sun Oct 11 12:42:20 2026\n OS/Arch:           darwin/arm64\n Context:           orbstack\n\nServer: Docker Engine - Community\n Engine:\n  Version:          29.8.2\n  API version:      1.56 (minimum version 1.40)\n  Go version:       go1.26.8\n  Git commit:       8af9fe3\n  Built:            Wed Sep 30 19:32:49 2026\n  OS/Arch:          linux/arm64\n  Experimental:     true\n containerd:\n  Version:          v2.3.6\n  GitCommit:        ee2735368117d2eb259779949d5e75cdafec9761\n runc:\n  Version:          1.5.2\n  GitCommit:        29dd3dc2b13b4123162e5fe132504bb4b15569f1\n docker-init:\n  Version:          0.19.0\n  GitCommit:        de40ad0",
+  "images": [
+    {
+      "Id": "sha256:8b6b5226881209cdc667582ff0d329e0a4d772d1679b230d3632d8aed3af4ca4",
+      "RepoTags": [
+        "iwork-sandbox-worker:local"
+      ],
+      "RepoDigests": [
+        "iwork-sandbox-worker@sha256:8b6b5226881209cdc667582ff0d329e0a4d772d1679b230d3632d8aed3af4ca4"
+      ],
+      "Architecture": "arm64",
+      "Os": "linux"
+    },
+    {
+      "Id": "sha256:9f709ad0458350ba75e2e22961f0c2ed1eb280596a9fafafcf79087551ce5b28",
+      "RepoTags": [
+        "iwork-sandbox-probe:local"
+      ],
+      "RepoDigests": [
+        "iwork-sandbox-probe@sha256:9f709ad0458350ba75e2e22961f0c2ed1eb280596a9fafafcf79087551ce5b28"
+      ],
+      "Architecture": "arm64",
+      "Os": "linux"
+    },
+    {
+      "Id": "sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e",
+      "RepoTags": [
+        "python:3.13-alpine"
+      ],
+      "RepoDigests": [
+        "python@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e"
+      ],
+      "Architecture": "arm64",
+      "Os": "linux"
+    },
+    {
+      "Id": "sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d",
+      "RepoTags": [
+        "docker:29-cli"
+      ],
+      "RepoDigests": [
+        "docker@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d"
+      ],
+      "Architecture": "arm64",
+      "Os": "linux"
+    },
+    {
+      "Id": "sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99",
+      "RepoTags": [
+        "eclipse-temurin:21-jre"
+      ],
+      "RepoDigests": [
+        "eclipse-temurin@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99"
+      ],
+      "Architecture": "arm64",
+      "Os": "linux"
+    }
+  ],
+  "sourceHashes": {
+    ".gitignore": "1141064ed2630abfb4a4b52385d7e6c5676a9a51c3c01a4884a7cdaf05609a74",
+    "Dockerfile.app": "fa85500be05a18aa4fb1a48abcfb886d78b7fddc757f86db3d447f9ce22e0d62",
+    "Dockerfile.worker": "8522d48fcd70e7fbb43add5f4af65b4b544ad915ea44557bcc0e9355ecfd0691",
+    "compose.yaml": "2bac82ade22a52d2478f8795b004f8c18289fbd59bde022b16e1d25125dfd38c",
+    "pom.xml": "c12056560c796bd8671894063e6f50ce2689260ce220d2cf30b183c276330545",
+    "settings.xml": "ee6885c097c2a81b59682d70e2f94843103a476345501b1e66f8f5fa0bdf3719",
+    "src/main/java/SandboxProbe.java": "6006988d74b3e2eb8d9802b3490c51669661aa56023d47728ea234507bd5bc5b",
+    "verify.py": "b0b00a7c37abc2a3e64eadd293632591d96d833d50cb804301e39da32242d42c",
+    "worker.py": "87c1f380dba58ae154cb330194dcfbdf569aa0e6bdb851d82492e0903ef238cb"
+  }
+}

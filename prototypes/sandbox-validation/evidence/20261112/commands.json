@@ -1,0 +1,295 @@
+[
+  {
+    "argv": [
+      "docker",
+      "context",
+      "inspect"
+    ],
+    "returncode": 0,
+    "output": "[\n    {\n        \"Name\": \"orbstack\",\n        \"Metadata\": {\n            \"Description\": \"OrbStack\"\n        },\n        \"Endpoints\": {\n            \"docker\": {\n                \"Host\": \"unix:///Users/hekai/.orbstack/run/docker.sock\",\n                \"SkipTLSVerify\": false\n            }\n        },\n        \"TLSMaterial\": {},\n        \"Storage\": {\n            \"MetadataPath\": \"/Users/hekai/.docker/contexts/meta/2d89b732b01a00a2d1675ed3cee9fd0f965daadf90603c989dd3afd4569c6896\",\n            \"TLSPath\": \"/Users/hekai/.docker/contexts/tls/2d89b732b01a00a2d1675ed3cee9fd0f965daadf90603c989dd3afd4569c6896\"\n        }\n    }\n]\n"
+  },
+  {
+    "argv": [
+      "mvn",
+      "-s",
+      "settings.xml",
+      "-q",
+      "compile",
+      "org.apache.maven.plugins:maven-dependency-plugin:3.9.0:copy-dependencies",
+      "-DoutputDirectory=target/lib"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "build",
+      "-f",
+      "Dockerfile.worker",
+      "-t",
+      "iwork-sandbox-worker:local",
+      "."
+    ],
+    "returncode": 0,
+    "output": "#0 building with \"orbstack\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile.worker\n#1 transferring dockerfile: 187B done\n#1 DONE 0.0s\n\n#2 [internal] load metadata for docker.io/library/python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e\n#2 DONE 0.0s\n\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.0s\n\n#4 [internal] load build context\n#4 transferring context: 3.43kB done\n#4 DONE 0.0s\n\n#5 [1/2] FROM docker.io/library/python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e\n#5 resolve docker.io/library/python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e 0.0s done\n#5 DONE 0.0s\n\n#6 [2/2] COPY worker.py /opt/worker.py\n#6 CACHED\n\n#7 exporting to image\n#7 exporting layers done\n#7 exporting manifest sha256:73a5c3aa33b3e987e6ad44a4db05a84566b138e8515d783878b62a0bc1a2cce0 done\n#7 exporting config sha256:f5d67b7ee3e07ed1cf9bc575b28953cbf499dec157de3d32f3fbf5626a5279b6 done\n#7 exporting attestation manifest sha256:73ba379835b5383ca775de072605047477ad5d4fdd93abc6670bfea231e24bb0\n#7 exporting attestation manifest sha256:73ba379835b5383ca775de072605047477ad5d4fdd93abc6670bfea231e24bb0 0.0s done\n#7 exporting manifest list sha256:8b6b5226881209cdc667582ff0d329e0a4d772d1679b230d3632d8aed3af4ca4 done\n#7 naming to docker.io/library/iwork-sandbox-worker:local done\n#7 unpacking to docker.io/library/iwork-sandbox-worker:local done\n#7 DONE 0.0s\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-p",
+      "iw8-0006a9bcbf98",
+      "build",
+      "probe"
+    ],
+    "returncode": 0,
+    "output": " Image iwork-sandbox-probe:local Building \n#1 [internal] load local bake definitions\n#1 reading from stdin 607B done\n#1 DONE 0.0s\n\n#2 [internal] load build definition from Dockerfile.app\n#2 transferring dockerfile:\n#2 transferring dockerfile: 473B done\n#2 DONE 0.0s\n\n#3 [internal] load metadata for docker.io/library/docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d\n#3 DONE 0.0s\n\n#4 [internal] load metadata for docker.io/library/eclipse-temurin:21-jre@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99\n#4 DONE 0.0s\n\n#5 [internal] load .dockerignore\n#5 transferring context: 2B done\n#5 DONE 0.0s\n\n#6 [stage-1 1/5] FROM docker.io/library/eclipse-temurin:21-jre@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99\n#6 resolve docker.io/library/eclipse-temurin:21-jre@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99 0.0s done\n#6 DONE 0.0s\n\n#7 [cli 1/1] FROM docker.io/library/docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d\n#7 resolve docker.io/library/docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d 0.0s done\n#7 DONE 0.0s\n\n#8 [internal] load build context\n#8 transferring context: 31.44MB 0.1s done\n#8 DONE 0.1s\n\n#9 [stage-1 2/5] COPY --from=cli /usr/local/bin/docker /usr/local/bin/docker\n#9 CACHED\n\n#10 [stage-1 3/5] COPY target/classes /app/classes\n#10 DONE 0.1s\n\n#11 [stage-1 4/5] COPY target/lib /app/lib\n#11 DONE 0.1s\n\n#12 [stage-1 5/5] WORKDIR /app\n#12 DONE 0.0s\n\n#13 exporting to image\n#13 exporting layers\n#13 exporting layers 0.4s done\n#13 exporting manifest sha256:0c4bdbbfa061d455e8bf6298d7ee8aea82ad20e8410887a6113cd9c088ed5156\n#13 exporting manifest sha256:0c4bdbbfa061d455e8bf6298d7ee8aea82ad20e8410887a6113cd9c088ed5156 0.0s done\n#13 exporting config sha256:8f5afbe712775e8be6e629f7b9ea57e9c6817d7002b1f512317a14947a5fca06 done\n#13 exporting attestation manifest sha256:3cf65c1bbb8233be448ec81977230ebc109e81779a26b5c25b8cadf35849fcec done\n#13 exporting manifest list sha256:9f709ad0458350ba75e2e22961f0c2ed1eb280596a9fafafcf79087551ce5b28 done\n#13 naming to docker.io/library/iwork-sandbox-probe:local done\n#13 unpacking to docker.io/library/iwork-sandbox-probe:local 0.1s done\n#13 DONE 0.6s\n\n#14 resolving provenance for metadata file\n#14 DONE 0.0s\n Image iwork-sandbox-probe:local Built \n"
+  },
+  {
+    "argv": [
+      "docker",
+      "image",
+      "inspect",
+      "iwork-sandbox-worker:local",
+      "iwork-sandbox-probe:local",
+      "python:3.13-alpine",
+      "docker:29-cli",
+      "eclipse-temurin:21-jre"
+    ],
+    "returncode": 0,
+    "output": "[\n    {\n        \"Id\": \"sha256:8b6b5226881209cdc667582ff0d329e0a4d772d1679b230d3632d8aed3af4ca4\",\n        \"RepoTags\": [\n            \"iwork-sandbox-worker:local\"\n        ],\n        \"RepoDigests\": [\n            \"iwork-sandbox-worker@sha256:8b6b5226881209cdc667582ff0d329e0a4d772d1679b230d3632d8aed3af4ca4\"\n        ],\n        \"Comment\": \"buildkit.dockerfile.v0\",\n        \"Created\": \"2026-11-12T21:30:40.316645793+08:00\",\n        \"Config\": {\n            \"User\": \"1000:1000\",\n            \"Env\": [\n                \"PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n                \"LANG=C.UTF-8\",\n                \"GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305\",\n                \"PYTHON_VERSION=3.13.18\",\n                \"PYTHON_SHA256=abb0102e6d4ae027509bcb82327d9dd85515b44a3ba8ad538cfc5e9847029f68\"\n            ],\n            \"Cmd\": [\n                \"python3\"\n            ],\n            \"WorkingDir\": \"/\"\n        },\n        \"Architecture\": \"arm64\",\n        \"Os\": \"linux\",\n        \"Size\": 74349384,\n        \"RootFS\": {\n            \"Type\": \"layers\",\n            \"Layers\": [\n                \"sha256:3d971ddbca237031066ab6609a11ae2e9e5b109da24d5c5d94d2e584dd94bd54\",\n                \"sha256:867b1974c4f78993069f7ada7359eec2ab64c216d746945db65a5c7aca3bb84a\",\n                \"sha256:3092cbd873290cdb51fb888686227d0d248e87bef599dfd3e349e180f89dab2b\",\n                \"sha256:83ca6df93417b05f92ec69d0a818a7317a22533037f7c3c1a055bcb3c1b6ccfd\",\n                \"sha256:8bfbadc508cb01f20f778de446829b8be2a6300d20f3873892cc854ec6167182\"\n            ]\n        },\n        \"Metadata\": {\n            \"LastTagTime\": \"2026-11-12T13:33:21.727827324Z\"\n        },\n        \"Descriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.index.v1+json\",\n            \"digest\": \"sha256:8b6b5226881209cdc667582ff0d329e0a4d772d1679b230d3632d8aed3af4ca4\",\n            \"size\": 856\n        },\n        \"Identity\": {\n            \"Build\": [\n                {\n                    \"Ref\": \"oterhxvxbngasyesbzqcdk9d4\",\n                    \"CreatedAt\": \"2026-11-12T21:33:21.736459398+08:00\"\n                }\n            ]\n        }\n    },\n    {\n        \"Id\": \"sha256:9f709ad0458350ba75e2e22961f0c2ed1eb280596a9fafafcf79087551ce5b28\",\n        \"RepoTags\": [\n            \"iwork-sandbox-probe:local\"\n        ],\n        \"RepoDigests\": [\n            \"iwork-sandbox-probe@sha256:9f709ad0458350ba75e2e22961f0c2ed1eb280596a9fafafcf79087551ce5b28\"\n        ],\n        \"Comment\": \"buildkit.dockerfile.v0\",\n        \"Created\": \"2026-11-12T21:33:22.444149746+08:00\",\n        \"Config\": {\n            \"Env\": [\n                \"PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n                \"JAVA_HOME=/opt/java/openjdk\",\n                \"LANG=en_US.UTF-8\",\n                \"LANGUAGE=en_US:en\",\n                \"LC_ALL=en_US.UTF-8\",\n                \"JAVA_VERSION=jdk-21.0.12.1+1\"\n            ],\n            \"Entrypoint\": [\n                \"java\",\n                \"-Djava.io.tmpdir=/tmp/codex\",\n                \"-cp\",\n                \"/app/classes:/app/lib/*\",\n                \"SandboxProbe\"\n            ],\n            \"WorkingDir\": \"/app\",\n            \"Labels\": {\n                \"com.docker.compose.project\": \"iw8-0006a9bcbf98\",\n                \"com.docker.compose.service\": \"probe\",\n                \"com.docker.compose.version\": \"5.5.0\",\n                \"org.opencontainers.image.created\": \"2026-10-06T20:38:12.175309+00:00\",\n                \"org.opencontainers.image.description\": \"The Ubuntu container image maintained by Canonical\\n\\nUbuntu is a Debian-based Linux operating system that runs from the desktop to the cloud, to all your internet connected things.\\nIt is the world's most popular operating system across public clouds and OpenStack clouds.\\nIt is the number one platform for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers at scale.\\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\\n\",\n                \"org.opencontainers.image.title\": \"ubuntu\",\n                \"org.opencontainers.image.version\": \"26.04\"\n            }\n        },\n        \"Architecture\": \"arm64\",\n        \"Os\": \"linux\",\n        \"Size\": 596321855,\n        \"RootFS\": {\n            \"Type\": \"layers\",\n            \"Layers\": [\n                \"sha256:862e6cfe4341019f54f4dc7c3325a967558a7102a32ceff4edaadf02796c5c07\",\n                \"sha256:900b24069e64aca5d65cf951635e7513f7f6d447debcfc1b99f73878cc039f59\",\n                \"sha256:647119b1a3d842729c88dc491eef41a48f14e41223072e2825057ab2e082c0f9\",\n                \"sha256:582970787d84b0eae2494cea9a04271fb1b22f0e80b9187e632ad74bf38238e3\",\n                \"sha256:9a1e1523dd3f347e09c053856bf745113e715f7345e5041e948ca326dbd63889\",\n                \"sha256:6715ee91c5c2331e67725a2dcb7bb698d287ec4793afd7cb640894744e880f23\",\n                \"sha256:431b198eab70a81309ebd026e4abadf17819d26279334360aeb9472b2604706f\",\n                \"sha256:203ed7d694c214bcd967810b963c6f8ca8f0ca1bbabd114b24f82667407f796d\",\n                \"sha256:9706ac79d8231c896c92d9b876c43d8357806a3969f9ff3c3fab63bc5559f93b\",\n                \"sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef\"\n            ]\n        },\n        \"Metadata\": {\n            \"LastTagTime\": \"2026-11-12T13:33:22.940110802Z\"\n        },\n        \"Descriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.index.v1+json\",\n            \"digest\": \"sha256:9f709ad0458350ba75e2e22961f0c2ed1eb280596a9fafafcf79087551ce5b28\",\n            \"size\": 856\n        },\n        \"Identity\": {\n            \"Build\": [\n                {\n                    \"Ref\": \"msgghoe17retosuwxhcf9ck5v\",\n                    \"CreatedAt\": \"2026-11-12T21:33:23.059366148+08:00\"\n                }\n            ]\n        }\n    },\n    {\n        \"Id\": \"sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e\",\n        \"RepoTags\": [\n            \"python:3.13-alpine\"\n        ],\n        \"RepoDigests\": [\n            \"python@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e\"\n        ],\n        \"Comment\": \"buildkit.dockerfile.v0\",\n        \"Created\": \"2026-11-05T19:30:11.103173202Z\",\n        \"Config\": {\n            \"Env\": [\n                \"PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n                \"LANG=C.UTF-8\",\n                \"GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305\",\n                \"PYTHON_VERSION=3.13.18\",\n                \"PYTHON_SHA256=abb0102e6d4ae027509bcb82327d9dd85515b44a3ba8ad538cfc5e9847029f68\"\n            ],\n            \"Cmd\": [\n                \"python3\"\n            ],\n            \"WorkingDir\": \"/\"\n        },\n        \"Architecture\": \"arm64\",\n        \"Variant\": \"v8\",\n        \"Os\": \"linux\",\n        \"Size\": 74343906,\n        \"RootFS\": {\n            \"Type\": \"layers\",\n            \"Layers\": [\n                \"sha256:3d971ddbca237031066ab6609a11ae2e9e5b109da24d5c5d94d2e584dd94bd54\",\n                \"sha256:867b1974c4f78993069f7ada7359eec2ab64c216d746945db65a5c7aca3bb84a\",\n                \"sha256:3092cbd873290cdb51fb888686227d0d248e87bef599dfd3e349e180f89dab2b\",\n                \"sha256:83ca6df93417b05f92ec69d0a818a7317a22533037f7c3c1a055bcb3c1b6ccfd\"\n            ]\n        },\n        \"Metadata\": {\n            \"LastTagTime\": \"2026-11-12T13:27:02.106005607Z\"\n        },\n        \"Descriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.index.v1+json\",\n            \"digest\": \"sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e\",\n            \"size\": 10301\n        },\n        \"Identity\": {\n            \"Pull\": [\n                {\n                    \"Repository\": \"docker.io/library/python\"\n                }\n            ]\n        }\n    },\n    {\n        \"Id\": \"sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d\",\n        \"RepoTags\": [\n            \"docker:29-cli\"\n        ],\n        \"RepoDigests\": [\n            \"docker@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d\"\n        ],\n        \"Comment\": \"buildkit.dockerfile.v0\",\n        \"Created\": \"2026-11-05T18:50:52.365265004Z\",\n        \"Config\": {\n            \"Env\": [\n                \"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n                \"DOCKER_VERSION=29.9.3\",\n                \"DOCKER_BUILDX_VERSION=0.38.2\",\n                \"DOCKER_COMPOSE_VERSION=5.7.0\",\n                \"DOCKER_TLS_CERTDIR=/certs\"\n            ],\n            \"Entrypoint\": [\n                \"docker-entrypoint.sh\"\n            ],\n            \"Cmd\": [\n                \"sh\"\n            ],\n            \"WorkingDir\": \"/\"\n        },\n        \"Architecture\": \"arm64\",\n        \"Variant\": \"v8\",\n        \"Os\": \"linux\",\n        \"Size\": 231666758,\n        \"RootFS\": {\n            \"Type\": \"layers\",\n            \"Layers\": [\n                \"sha256:3d971ddbca237031066ab6609a11ae2e9e5b109da24d5c5d94d2e584dd94bd54\",\n                \"sha256:194c561cb3c8d42b679bdb82e78dfc6d46b1be1cc9d906d9eddcf40a2cdf4452\",\n                \"sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef\",\n                \"sha256:5293fa1ce47f0776a181abe95efe0f76fcdfef61d9f807722e34c8b9cb82e6e1\",\n                \"sha256:a93b572f0e04cfc2cbcbc533174f84a4b6e18c8549327355f6740d69c30f6304\",\n                \"sha256:0578979202071e1fd8a2b49b0ff87985293ef7320a7c58bbbd365b882475886c\",\n                \"sha256:b62310fd476cd710d3f35e5844167a08cd1036d4d05bc2bf4a9b48cf3a50e6f0\",\n                \"sha256:de48312610550f82161a46d7d03dca6870a8b74c519a48ddc6c2e12a8dcb25d3\",\n                \"sha256:1f003e75ef13ba9281dd2260be5bc18a2e822b10831cbb1df2657b3cb93dcb7c\",\n                \"sha256:8530a1bce32ba47070d877d4bc9d06148aa6dcaa5ee9ff3129d1568db110de3a\"\n            ]\n        },\n        \"Metadata\": {\n            \"LastTagTime\": \"2026-11-12T13:27:09.534446488Z\"\n        },\n        \"Descriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.index.v1+json\",\n            \"digest\": \"sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d\",\n            \"size\": 5149\n        },\n        \"Identity\": {\n            \"Pull\": [\n                {\n                    \"Repository\": \"docker.io/library/docker\"\n                }\n            ]\n        }\n    },\n    {\n        \"Id\": \"sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99\",\n        \"RepoTags\": [\n            \"eclipse-temurin:21-jre\"\n        ],\n        \"RepoDigests\": [\n            \"eclipse-temurin@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99\"\n        ],\n        \"Comment\": \"buildkit.dockerfile.v0\",\n        \"Created\": \"2026-10-17T00:19:44.50212754Z\",\n        \"Config\": {\n            \"Env\": [\n                \"PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n                \"JAVA_HOME=/opt/java/openjdk\",\n                \"LANG=en_US.UTF-8\",\n                \"LANGUAGE=en_US:en\",\n                \"LC_ALL=en_US.UTF-8\",\n                \"JAVA_VERSION=jdk-21.0.12.1+1\"\n            ],\n            \"Entrypoint\": [\n                \"/__cacert_entrypoint.sh\"\n            ],\n            \"Labels\": {\n                \"org.opencontainers.image.created\": \"2026-10-06T20:38:12.175309+00:00\",\n                \"org.opencontainers.image.description\": \"The Ubuntu container image maintained by Canonical\\n\\nUbuntu is a Debian-based Linux operating system that runs from the desktop to the cloud, to all your internet connected things.\\nIt is the world's most popular operating system across public clouds and OpenStack clouds.\\nIt is the number one platform for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers at scale.\\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\\n\",\n                \"org.opencontainers.image.title\": \"ubuntu\",\n                \"org.opencontainers.image.version\": \"26.04\"\n            }\n        },\n        \"Architecture\": \"arm64\",\n        \"Variant\": \"v8\",\n        \"Os\": \"linux\",\n        \"Size\": 474523079,\n        \"RootFS\": {\n            \"Type\": \"layers\",\n            \"Layers\": [\n                \"sha256:862e6cfe4341019f54f4dc7c3325a967558a7102a32ceff4edaadf02796c5c07\",\n                \"sha256:900b24069e64aca5d65cf951635e7513f7f6d447debcfc1b99f73878cc039f59\",\n                \"sha256:647119b1a3d842729c88dc491eef41a48f14e41223072e2825057ab2e082c0f9\",\n                \"sha256:582970787d84b0eae2494cea9a04271fb1b22f0e80b9187e632ad74bf38238e3\",\n                \"sha256:9a1e1523dd3f347e09c053856bf745113e715f7345e5041e948ca326dbd63889\",\n                \"sha256:6715ee91c5c2331e67725a2dcb7bb698d287ec4793afd7cb640894744e880f23\"\n            ]\n        },\n        \"Metadata\": {\n            \"LastTagTime\": \"2026-10-19T02:44:57.045957833Z\"\n        },\n        \"Descriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.index.v1+json\",\n            \"digest\": \"sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99\",\n            \"size\": 5926\n        },\n        \"Identity\": {\n            \"Pull\": [\n                {\n                    \"Repository\": \"docker.io/library/eclipse-temurin\"\n                }\n            ]\n        }\n    }\n]\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "version"
+    ],
+    "returncode": 0,
+    "output": "Docker Compose version v5.5.0\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "version"
+    ],
+    "returncode": 0,
+    "output": "Client:\n Version:           29.8.2\n API version:       1.56\n Go version:        go1.26.8\n Git commit:        7fc2dff\n Built:             Sun Oct 11 12:42:20 2026\n OS/Arch:           darwin/arm64\n Context:           orbstack\n\nServer: Docker Engine - Community\n Engine:\n  Version:          29.8.2\n  API version:      1.56 (minimum version 1.40)\n  Go version:       go1.26.8\n  Git commit:       8af9fe3\n  Built:            Wed Sep 30 19:32:49 2026\n  OS/Arch:          linux/arm64\n  Experimental:     true\n containerd:\n  Version:          v2.3.6\n  GitCommit:        ee2735368117d2eb259779949d5e75cdafec9761\n runc:\n  Version:          1.5.2\n  GitCommit:        29dd3dc2b13b4123162e5fe132504bb4b15569f1\n docker-init:\n  Version:          0.19.0\n  GitCommit:        de40ad0\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-p",
+      "iw8-0006a9bcbf98",
+      "run",
+      "--rm",
+      "-T",
+      "probe",
+      "suite"
+    ],
+    "returncode": 0,
+    "output": " Container iw8-0006a9bcbf98-probe-run-f7092d8e7156 Creating \n Container iw8-0006a9bcbf98-probe-run-f7092d8e7156 Created \nPASS versions\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nPASS sdk-upload-readonly-root-failure\nPASS controlled-tool-alice-a\nPASS controlled-tool-bob-b\nPASS controlled-tool-alice-c\nPASS authorization-and-tool-denials\nPASS symlink-export-denied\nPASS container-isolation\nPASS memory-enforced\nPASS normal-cleanup\nPASS sdk-stop-keeps-processing\nPASS sdk-shutdown-removes-processes\nPASS interrupt-alone-keeps-processing\nPASS cancel-with-shutdown\nPASS sdk-timeout-keeps-processing\nPASS timeout-with-shutdown\nPASS failures-preserve-version\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-p",
+      "iw8-0006a9bcbf98",
+      "run",
+      "-d",
+      "--name",
+      "iw8-0006a9bcbf98-app",
+      "probe",
+      "crash"
+    ],
+    "returncode": 0,
+    "output": " Container iw8-0006a9bcbf98-app Creating \n Container iw8-0006a9bcbf98-app Created \nc9c199d519ea6d87a7702c37813ef9fc88cdd87e99baecc45a3b55b6ddf65f5b\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ceb5e155971fcb6be97f2c4724cfb05e9ef3e6fc32f2bcb37630a01706c32354",
+      "cat",
+      "/workspace/heartbeat"
+    ],
+    "returncode": 0,
+    "output": "4"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ceb5e155971fcb6be97f2c4724cfb05e9ef3e6fc32f2bcb37630a01706c32354",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "2"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ceb5e155971fcb6be97f2c4724cfb05e9ef3e6fc32f2bcb37630a01706c32354",
+      "cat",
+      "/workspace/heartbeat"
+    ],
+    "returncode": 0,
+    "output": "9"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ceb5e155971fcb6be97f2c4724cfb05e9ef3e6fc32f2bcb37630a01706c32354",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "7"
+  },
+  {
+    "argv": [
+      "docker",
+      "top",
+      "ceb5e155971fcb6be97f2c4724cfb05e9ef3e6fc32f2bcb37630a01706c32354"
+    ],
+    "returncode": 0,
+    "output": "PID                 USER                TIME                COMMAND\n2258546             1000                0:00                sh -c trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done\n2258558             1000                0:00                sleep 3600\n2258705             1000                0:00                python /opt/worker.py heartbeat\n2258723             1000                0:00                /usr/local/bin/python /opt/worker.py child\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "kill",
+      "--signal=KILL",
+      "c9c199d519ea6d87a7702c37813ef9fc88cdd87e99baecc45a3b55b6ddf65f5b"
+    ],
+    "returncode": 0,
+    "output": "c9c199d519ea6d87a7702c37813ef9fc88cdd87e99baecc45a3b55b6ddf65f5b\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "wait",
+      "c9c199d519ea6d87a7702c37813ef9fc88cdd87e99baecc45a3b55b6ddf65f5b"
+    ],
+    "returncode": 0,
+    "output": "137\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ceb5e155971fcb6be97f2c4724cfb05e9ef3e6fc32f2bcb37630a01706c32354",
+      "cat",
+      "/workspace/heartbeat"
+    ],
+    "returncode": 0,
+    "output": "11"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ceb5e155971fcb6be97f2c4724cfb05e9ef3e6fc32f2bcb37630a01706c32354",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "9"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ceb5e155971fcb6be97f2c4724cfb05e9ef3e6fc32f2bcb37630a01706c32354",
+      "cat",
+      "/workspace/heartbeat"
+    ],
+    "returncode": 0,
+    "output": "16"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ceb5e155971fcb6be97f2c4724cfb05e9ef3e6fc32f2bcb37630a01706c32354",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "14"
+  },
+  {
+    "argv": [
+      "docker",
+      "top",
+      "ceb5e155971fcb6be97f2c4724cfb05e9ef3e6fc32f2bcb37630a01706c32354"
+    ],
+    "returncode": 0,
+    "output": "PID                 USER                TIME                COMMAND\n2258546             1000                0:00                sh -c trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done\n2258558             1000                0:00                sleep 3600\n2258705             1000                0:00                python /opt/worker.py heartbeat\n2258723             1000                0:00                /usr/local/bin/python /opt/worker.py child\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-p",
+      "iw8-0006a9bcbf98",
+      "run",
+      "--rm",
+      "-T",
+      "probe",
+      "recover"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T21:33:34+08:00\" level=warning msg=\"Found orphan containers (iw8-0006a9bcbf98-app) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8-0006a9bcbf98-probe-run-f4f820452590 Creating \n Container iw8-0006a9bcbf98-probe-run-f4f820452590 Created \nRECOVERY_OK\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "label=iwork.probe=iw8-0006a9bcbf98"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "label=iwork.probe=iw8-0006a9bcbf98"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "rm",
+      "-f",
+      "c9c199d519ea6d87a7702c37813ef9fc88cdd87e99baecc45a3b55b6ddf65f5b"
+    ],
+    "returncode": 0,
+    "output": "c9c199d519ea6d87a7702c37813ef9fc88cdd87e99baecc45a3b55b6ddf65f5b\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-p",
+      "iw8-0006a9bcbf98",
+      "down",
+      "--remove-orphans"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T21:33:35+08:00\" level=warning msg=\"Warning: No resource found to remove for project \\\"iw8-0006a9bcbf98\\\".\"\n"
+  }
+]

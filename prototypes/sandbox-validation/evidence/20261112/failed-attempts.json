@@ -1,0 +1,62 @@
+[
+  {
+    "cause": "SDK docker cp cannot upload to read-only rootfs/tmpfs",
+    "failedCommands": [
+      {
+        "argv": [
+          "docker",
+          "compose",
+          "-p",
+          "iw8-c8cb5d02756b",
+          "run",
+          "--rm",
+          "-T",
+          "probe",
+          "suite"
+        ],
+        "returncode": 1,
+        "output": " Container iw8-c8cb5d02756b-probe-run-472a7c27eb68 Creating \n Container iw8-c8cb5d02756b-probe-run-472a7c27eb68 Created \nPASS versions\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nException in thread \"main\" io.agentscope.harness.agent.sandbox.SandboxException$SandboxRuntimeException: docker command failed (exit=1): Error response from daemon: container rootfs is marked read-only\n\n\tat io.agentscope.harness.agent.sandbox.impl.docker.DockerSandbox.runDockerCliBlocking(DockerSandbox.java:741)\n\tat io.agentscope.harness.agent.sandbox.impl.docker.DockerSandbox.uploadFile(DockerSandbox.java:388)\n\tat SandboxProbe.task(SandboxProbe.java:64)\n\tat SandboxProbe.suite(SandboxProbe.java:137)\n\tat SandboxProbe.main(SandboxProbe.java:252)\n\n"
+      }
+    ]
+  },
+  {
+    "cause": "Probe direct Toolkit call omitted raw JSON content; fixed to {}",
+    "failedCommands": [
+      {
+        "argv": [
+          "docker",
+          "compose",
+          "-p",
+          "iw8-ad6364d25672",
+          "run",
+          "--rm",
+          "-T",
+          "probe",
+          "suite"
+        ],
+        "returncode": 1,
+        "output": " Container iw8-ad6364d25672-probe-run-6a4ed8fa3661 Creating \n Container iw8-ad6364d25672-probe-run-6a4ed8fa3661 Created \nPASS versions\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nException in thread \"main\" java.lang.AssertionError: SDK tool failed: {\"type\":\"tool_result\",\"id\":null,\"name\":null,\"output\":[{\"type\":\"text\",\"text\":\"Error: Parameter validation failed for tool 'convert_document': Schema validation error: argument \\\"content\\\" is null\\nPlease correct the parameters and try again.\"}],\"metadata\":{},\"state\":\"error\"}\n\tat SandboxProbe.check(SandboxProbe.java:31)\n\tat SandboxProbe.suite(SandboxProbe.java:169)\n\tat SandboxProbe.main(SandboxProbe.java:276)\n\n"
+      }
+    ]
+  },
+  {
+    "cause": "Probe readiness compared stdout without trimming newline; fixed",
+    "failedCommands": [
+      {
+        "argv": [
+          "docker",
+          "compose",
+          "-p",
+          "iw8-e53736dfd0b9",
+          "run",
+          "--rm",
+          "-T",
+          "probe",
+          "suite"
+        ],
+        "returncode": 1,
+        "output": " Container iw8-e53736dfd0b9-probe-run-55a315f03a14 Creating \n Container iw8-e53736dfd0b9-probe-run-55a315f03a14 Created \nPASS versions\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nPASS controlled-tool-alice-a\nPASS controlled-tool-bob-b\nPASS controlled-tool-alice-c\nPASS authorization-and-tool-denials\nPASS container-isolation\nPASS memory-enforced\nPASS normal-cleanup\nException in thread \"main\" java.lang.AssertionError: condition timed out\n\tat SandboxProbe.eventually(SandboxProbe.java:61)\n\tat SandboxProbe.heartbeat(SandboxProbe.java:142)\n\tat SandboxProbe.suite(SandboxProbe.java:204)\n\tat SandboxProbe.main(SandboxProbe.java:276)\n\n"
+      }
+    ]
+  }
+]

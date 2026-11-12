@@ -1,0 +1,18 @@
+services:
+  probe:
+    image: iwork-sandbox-probe:local
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp/codex:rw,noexec,nosuid,size=32m,mode=1777
+    environment:
+      PROBE_RUN: ${PROBE_RUN:?set a unique run ID}
+      DB_PASSWORD: synthetic-db-only
+      MODEL_API_KEY: synthetic-model-only
+    volumes:
+      - ${DOCKER_SOCKET:?set daemon socket}:/var/run/docker.sock
+      - ${PROBE_EVIDENCE:?set evidence directory}:/evidence
+    command: [suite]

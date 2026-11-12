@@ -1,0 +1,260 @@
+[ {
+  "name" : "versions",
+  "evidence" : {
+    "docker" : "Client:\n Version:           29.9.3\n API version:       1.56\n Go version:        go1.26.10\n Git commit:        5457199\n Built:             Tue Nov  3 21:42:34 2026\n OS/Arch:           linux/arm64\n Context:           default\n\nServer: Docker Engine - Community\n Engine:\n  Version:          29.8.2\n  API version:      1.56 (minimum version 1.40)\n  Go version:       go1.26.8\n  Git commit:       8af9fe3\n  Built:            Wed Sep 30 19:32:49 2026\n  OS/Arch:          linux/arm64\n  Experimental:     true\n containerd:\n  Version:          v2.3.6\n  GitCommit:        ee2735368117d2eb259779949d5e75cdafec9761\n runc:\n  Version:          1.5.2\n  GitCommit:        29dd3dc2b13b4123162e5fe132504bb4b15569f1\n docker-init:\n  Version:          0.19.0\n  GitCommit:        de40ad0",
+    "java" : "21.0.12.1",
+    "sdk" : "2.0.4",
+    "os" : "Linux cb191cd3c236 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 GNU/Linux"
+  }
+}, {
+  "name" : "sdk-upload-readonly-root-failure",
+  "evidence" : {
+    "exception" : "io.agentscope.harness.agent.sandbox.SandboxException$SandboxRuntimeException: docker command failed (exit=1): Error response from daemon: container rootfs is marked read-only\n",
+    "workingAlternative" : "hydrateWorkspace/persistWorkspace"
+  }
+}, {
+  "name" : "controlled-tool-alice-a",
+  "evidence" : {
+    "sdkReply" : {
+      "type" : "tool_result",
+      "id" : null,
+      "name" : null,
+      "output" : [ {
+        "type" : "text",
+        "text" : "\"{\\\"hostname\\\": \\\"d8b2e3829721\\\", \\\"pid\\\": 27, \\\"uid\\\": 1000, \\\"body\\\": \\\"ALICE_A_ONLY\\\"}\""
+      } ],
+      "metadata" : { },
+      "state" : "running"
+    },
+    "draft" : "# Synthetic document\n\nALICE_A_ONLY",
+    "container" : "d8b2e3829721cb08d6c269eafc28ebea46aee5ccd9a8e5cadb9200aa5bc475fa"
+  }
+}, {
+  "name" : "controlled-tool-bob-b",
+  "evidence" : {
+    "sdkReply" : {
+      "type" : "tool_result",
+      "id" : null,
+      "name" : null,
+      "output" : [ {
+        "type" : "text",
+        "text" : "\"{\\\"hostname\\\": \\\"972fb51ed08d\\\", \\\"pid\\\": 22, \\\"uid\\\": 1000, \\\"body\\\": \\\"BOB_B_ONLY\\\"}\""
+      } ],
+      "metadata" : { },
+      "state" : "running"
+    },
+    "draft" : "# Synthetic document\n\nBOB_B_ONLY",
+    "container" : "972fb51ed08dfa713189ce6b23a06beb121b3788ea49054f93dc2c7746663d3b"
+  }
+}, {
+  "name" : "controlled-tool-alice-c",
+  "evidence" : {
+    "sdkReply" : {
+      "type" : "tool_result",
+      "id" : null,
+      "name" : null,
+      "output" : [ {
+        "type" : "text",
+        "text" : "\"{\\\"hostname\\\": \\\"1aab61838ea5\\\", \\\"pid\\\": 22, \\\"uid\\\": 1000, \\\"body\\\": \\\"ALICE_C_ONLY\\\"}\""
+      } ],
+      "metadata" : { },
+      "state" : "running"
+    },
+    "draft" : "# Synthetic document\n\nALICE_C_ONLY",
+    "container" : "1aab61838ea512fe9736623172e0ebd98848d8aa231c4c566fa294d8b10c2b1b"
+  }
+}, {
+  "name" : "authorization-and-tool-denials",
+  "evidence" : {
+    "pathTraversal" : "denied",
+    "foreignIdentity" : "denied",
+    "shell" : {
+      "type" : "tool_result",
+      "id" : null,
+      "name" : null,
+      "output" : [ {
+        "type" : "text",
+        "text" : "Error: Tool not found: shell"
+      } ],
+      "metadata" : { },
+      "state" : "error"
+    }
+  }
+}, {
+  "name" : "symlink-export-denied",
+  "evidence" : {
+    "appValidation" : "only regular non-link draft <=20000 bytes"
+  }
+}, {
+  "name" : "container-isolation",
+  "evidence" : {
+    "hostConfig" : {
+      "Binds" : null,
+      "ContainerIDFile" : "",
+      "LogConfig" : {
+        "Type" : "json-file",
+        "Config" : {
+          "max-file" : "5",
+          "max-size" : "20m"
+        }
+      },
+      "NetworkMode" : "none",
+      "PortBindings" : { },
+      "RestartPolicy" : {
+        "Name" : "no",
+        "MaximumRetryCount" : 0
+      },
+      "AutoRemove" : false,
+      "VolumeDriver" : "",
+      "VolumesFrom" : null,
+      "ConsoleSize" : [ 0, 0 ],
+      "CapAdd" : null,
+      "CapDrop" : [ "ALL" ],
+      "CgroupnsMode" : "private",
+      "Dns" : null,
+      "DnsOptions" : [ ],
+      "DnsSearch" : [ ],
+      "ExtraHosts" : null,
+      "GroupAdd" : null,
+      "IpcMode" : "private",
+      "Cgroup" : "",
+      "Links" : null,
+      "OomScoreAdj" : 0,
+      "PidMode" : "",
+      "Privileged" : false,
+      "PublishAllPorts" : false,
+      "ReadonlyRootfs" : true,
+      "SecurityOpt" : [ "no-new-privileges" ],
+      "Tmpfs" : {
+        "/tmp/codex" : "rw,noexec,nosuid,size=4m,uid=1000,gid=1000,mode=0700",
+        "/workspace" : "rw,noexec,nosuid,size=8m,uid=1000,gid=1000,mode=0700"
+      },
+      "UTSMode" : "",
+      "UsernsMode" : "",
+      "ShmSize" : 8408530944,
+      "Runtime" : "runc",
+      "Isolation" : "",
+      "CpuShares" : 0,
+      "Memory" : 67108864,
+      "NanoCpus" : 500000000,
+      "CgroupParent" : "",
+      "BlkioWeight" : 0,
+      "BlkioWeightDevice" : [ ],
+      "BlkioDeviceReadBps" : [ ],
+      "BlkioDeviceWriteBps" : [ ],
+      "BlkioDeviceReadIOps" : [ ],
+      "BlkioDeviceWriteIOps" : [ ],
+      "CpuPeriod" : 0,
+      "CpuQuota" : 0,
+      "CpuRealtimePeriod" : 0,
+      "CpuRealtimeRuntime" : 0,
+      "CpusetCpus" : "",
+      "CpusetMems" : "",
+      "Devices" : [ ],
+      "DeviceCgroupRules" : null,
+      "DeviceRequests" : null,
+      "MemoryReservation" : 0,
+      "MemorySwap" : 67108864,
+      "MemorySwappiness" : null,
+      "OomKillDisable" : null,
+      "PidsLimit" : 32,
+      "Ulimits" : null,
+      "CpuCount" : 0,
+      "CpuPercent" : 0,
+      "IOMaximumIOps" : 0,
+      "IOMaximumBandwidth" : 0,
+      "MaskedPaths" : [ "/proc/acpi", "/proc/asound", "/proc/interrupts", "/proc/kcore", "/proc/keys", "/proc/latency_stats", "/proc/sched_debug", "/proc/scsi", "/proc/timer_list", "/proc/timer_stats", "/sys/devices/virtual/powercap", "/sys/firmware" ],
+      "ReadonlyPaths" : [ "/proc/bus", "/proc/fs", "/proc/irq", "/proc/sys", "/proc/sysrq-trigger" ]
+    },
+    "audit" : {
+      "checks" : {
+        "/evidence/private.txt" : true,
+        "/var/run/docker.sock" : true,
+        "/app" : true,
+        "/workspace/other-task/source.txt" : true,
+        "/workspace/../other-task/source.txt" : true,
+        "fake_credentials_absent" : true,
+        "nonroot" : true,
+        "no_new_privs" : true,
+        "no_caps" : true,
+        "seccomp" : true,
+        "readonly_root" : true,
+        "no_egress" : true,
+        "limits" : true,
+        "cpu_throttled" : true,
+        "pids_enforced" : true
+      },
+      "limits" : {
+        "memory.max" : "67108864",
+        "cpu.max" : "50000 100000",
+        "pids.max" : "32"
+      },
+      "cpu_before" : "usage_usec 192790\nuser_usec 158009\nsystem_usec 34781\nnice_usec 0\nnr_periods 8\nnr_throttled 2\nthrottled_usec 25183\nnr_bursts 0\nburst_usec 0\n",
+      "cpu_after" : "usage_usec 943667\nuser_usec 908885\nsystem_usec 34781\nnice_usec 0\nnr_periods 23\nnr_throttled 17\nthrottled_usec 774057\nnr_bursts 0\nburst_usec 0\n",
+      "children_before_rejection" : 29
+    },
+    "mounts" : [ ]
+  }
+}, {
+  "name" : "memory-enforced",
+  "evidence" : {
+    "exception" : "io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: ",
+    "events" : "low 0\nhigh 0\nmax 56\noom 1\noom_kill 1\noom_group_kill 0\nsock_throttled 0"
+  }
+}, {
+  "name" : "normal-cleanup",
+  "evidence" : {
+    "containersRemoved" : true,
+    "published" : "# Synthetic document\n\nALICE_A_ONLY",
+    "workspace" : "container tmpfs destroyed"
+  }
+}, {
+  "name" : "sdk-stop-keeps-processing",
+  "evidence" : {
+    "top" : "PID                 USER                TIME                COMMAND\n2256537             1000                0:00                sh -c trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done\n2256548             1000                0:00                sleep 3600\n2256683             1000                0:00                python /opt/worker.py heartbeat\n2256728             1000                0:00                /usr/local/bin/python /opt/worker.py child",
+    "pids" : [ 22, 37 ],
+    "parent" : [ 3, 7 ],
+    "child" : [ 1, 5 ]
+  }
+}, {
+  "name" : "sdk-shutdown-removes-processes",
+  "evidence" : {
+    "containerRemoved" : true
+  }
+}, {
+  "name" : "interrupt-alone-keeps-processing",
+  "evidence" : {
+    "top" : "PID                 USER                TIME                COMMAND\n2257051             1000                0:00                sh -c trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done\n2257063             1000                0:00                sleep 3600\n2257185             1000                0:00                python /opt/worker.py heartbeat\n2257204             1000                0:00                /usr/local/bin/python /opt/worker.py child",
+    "pids" : [ 22, 32 ],
+    "parent" : [ 2, 6 ],
+    "child" : [ 0, 4 ]
+  }
+}, {
+  "name" : "cancel-with-shutdown",
+  "evidence" : {
+    "removed" : true,
+    "latePublishRejected" : true,
+    "elapsedMs" : 83
+  }
+}, {
+  "name" : "sdk-timeout-keeps-processing",
+  "evidence" : {
+    "top" : "PID                 USER                TIME                COMMAND\n2257529             1000                0:00                sh -c trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done\n2257541             1000                0:00                sleep 3600\n2257652             1000                0:00                python /opt/worker.py heartbeat\n2257658             1000                0:00                /usr/local/bin/python /opt/worker.py child",
+    "pids" : [ 22, 27 ],
+    "parent" : [ 9, 13 ],
+    "child" : [ 8, 12 ]
+  }
+}, {
+  "name" : "timeout-with-shutdown",
+  "evidence" : {
+    "latePublishRejected" : true,
+    "removed" : true
+  }
+}, {
+  "name" : "failures-preserve-version",
+  "evidence" : {
+    "oldVersion" : "# Synthetic document\n\nALICE_A_ONLY",
+    "processorExit" : 23,
+    "saveFailureInjected" : true
+  }
+} ]
