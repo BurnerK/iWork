@@ -1,0 +1,15 @@
+[ {
+  "id" : "983f470b-797b-4146-8b7e-3dd763ef7cba",
+  "state" : "INTERRUPTED",
+  "draft" : "",
+  "cleaned" : true,
+  "cleanupState" : "CONFIRMED",
+  "processState" : "STOPPED"
+}, {
+  "id" : "0eda1105-27b7-4002-b46c-9cfdfd2e901f",
+  "state" : "INTERRUPTED",
+  "draft" : "",
+  "cleaned" : true,
+  "cleanupState" : "CONFIRMED",
+  "processState" : "STOPPED"
+} ]

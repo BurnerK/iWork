@@ -19,6 +19,7 @@ public final class ManagerProbe {
     static final String KEY = Objects.requireNonNull(System.getenv("MANAGER_KEY"));
     static final Map<String, Lease> LEASES = new ConcurrentHashMap<>();
     static final ExecutorService WORKERS = Executors.newVirtualThreadPerTaskExecutor();
+    static final ScheduledExecutorService REAPER = Executors.newSingleThreadScheduledExecutor();
 
     static final class Lease {
         final String id;
@@ -26,16 +27,19 @@ public final class ManagerProbe {
         final SandboxProbe.Task task;
         volatile String state = "RUNNING";
         String draft = "";
-        boolean cleaned;
+        volatile boolean cleaned;
+        String cleanupState = "PENDING";
+        String processState = "UNKNOWN";
         Lease(String id, String tokenHash) {
             this.id = id; this.tokenHash = tokenHash;
             task = new SandboxProbe.Task("managed-" + id, "application");
             task.config.getAdditionalRunArgs().addAll(List.of("--label=iwork.manager=" + SandboxProbe.RUN,
-                    "--label=iwork.lease=" + id, "--entrypoint=/opt/task-init", "--rm"));
+                    "--label=iwork.lease=" + id, "--rm"));
         }
         synchronized ObjectNode snapshot() {
             return JSON.createObjectNode().put("id", id).put("state", state)
-                    .put("draft", draft).put("cleaned", cleaned);
+                    .put("draft", draft).put("cleaned", cleaned)
+                    .put("cleanupState", cleanupState).put("processState", processState);
         }
         synchronized void save() throws IOException {
             ObjectNode data = snapshot().put("tokenHash", tokenHash)
@@ -57,9 +61,36 @@ public final class ManagerProbe {
         exchange.sendResponseHeaders(status, bytes.length);
         exchange.getResponseBody().write(bytes);
     }
+    static boolean watchdogReady() {
+        try {
+            JsonNode health = JSON.readTree(Path.of("/watchdog/health.json").toFile());
+            long age = System.currentTimeMillis() - health.path("at").asLong();
+            return health.path("run").asText().equals(SandboxProbe.RUN) && age >= 0 && age <= 2000;
+        } catch (IOException error) { return false; }
+    }
     static void cleanup(Lease lease) throws Exception {
-        if (lease.task.id() != null && SandboxProbe.exists(lease.task.id())) lease.task.remove();
-        synchronized (lease) { lease.cleaned = true; lease.save(); }
+        synchronized (lease) {
+            if (lease.cleaned) return;
+            lease.cleanupState = "PENDING"; lease.processState = "UNKNOWN"; lease.save();
+            try {
+                // Resolve by the deterministic name even if creation died before storing its ID.
+                String name = "agentscope-sandbox-" + SandboxProbe.RUN + "-managed-" + lease.id;
+                String ids = SandboxProbe.cli("docker", "ps", "-aq", "--filter", "name=^/" + name + "$",
+                        "--filter", "label=iwork.manager=" + SandboxProbe.RUN);
+                for (String id : ids.lines().toList()) {
+                    if (!id.isBlank()) {
+                        SandboxProbe.cli("docker", "rm", "-f", id);
+                        SandboxProbe.eventually(() -> !SandboxProbe.exists(id));
+                    }
+                }
+                lease.cleaned = true; lease.cleanupState = "CONFIRMED"; lease.processState = "STOPPED";
+                lease.save();
+            } catch (Exception | AssertionError error) {
+                lease.cleaned = false; lease.cleanupState = "RETRY_PENDING"; lease.processState = "UNKNOWN";
+                lease.save();
+                throw new IOException("cleanup unconfirmed", error);
+            }
+        }
     }
     static void convert(Lease lease) {
         try {
@@ -73,12 +104,15 @@ public final class ManagerProbe {
             System.err.println("CONVERT_FAILED " + lease.id + " " + error);
             synchronized (lease) {
                 if (lease.state.equals("RUNNING")) lease.state = "FAILED";
+                try { lease.save(); } catch (IOException saveError) { System.err.println("STATE_SAVE_FAILED " + lease.id); }
             }
             try { cleanup(lease); }
             catch (Exception cleanupError) { System.err.println("CLEANUP_FAILED " + lease.id); }
         }
     }
     static synchronized ObjectNode create(String source) throws Exception {
+        if (!watchdogReady() || LEASES.values().stream().anyMatch(l -> !l.state.equals("RUNNING") && !l.cleaned))
+            throw new IllegalStateException("supervision or cleanup unavailable");
         if (LEASES.values().stream().filter(l -> l.state.equals("RUNNING")).count() >= 4)
             throw new RejectedExecutionException("capacity");
         String id = UUID.randomUUID().toString();
@@ -115,7 +149,7 @@ public final class ManagerProbe {
                 respond(exchange, 400, Map.of("error", "query not supported")); return;
             }
             if (path.equals("/health") && method.equals("GET")) {
-                respond(exchange, 200, Map.of("ready", true)); return;
+                respond(exchange, 200, Map.of("ready", true, "admissionReady", watchdogReady())); return;
             }
             if (path.equals("/tasks") && method.equals("POST")) {
                 byte[] body = exchange.getRequestBody().readNBytes(32769);
@@ -139,11 +173,14 @@ public final class ManagerProbe {
                 synchronized (lease) {
                     if (lease.state.equals("RUNNING")) { lease.state = "CANCELLED"; lease.save(); }
                 }
-                cleanup(lease);
+                try { cleanup(lease); }
+                catch (Exception error) { respond(exchange, 202, lease.snapshot()); return; }
             }
             respond(exchange, 200, lease.snapshot());
         } catch (com.fasterxml.jackson.core.JsonProcessingException error) {
             respond(exchange, 400, Map.of("error", "invalid JSON"));
+        } catch (IllegalStateException error) {
+            respond(exchange, 503, Map.of("error", "supervision or cleanup unavailable"));
         } catch (RejectedExecutionException error) {
             respond(exchange, 429, Map.of("error", "capacity"));
         } catch (Exception error) {
@@ -154,8 +191,12 @@ public final class ManagerProbe {
     static void recover() throws Exception {
         Files.createDirectories(REGISTRY);
         String ids = SandboxProbe.cli("docker", "ps", "-aq", "--filter", "label=iwork.manager=" + SandboxProbe.RUN);
-        for (String id : ids.split("\\s+")) {
-            if (!id.isBlank()) SandboxProbe.cli("docker", "rm", "-f", id);
+        for (String id : ids.lines().toList()) {
+            if (!id.isBlank()) {
+                SandboxProbe.cli("docker", "rm", "-f", id);
+                SandboxProbe.eventually(() -> !SandboxProbe.exists(id));
+                System.out.println("RECOVER_REMOVED " + id);
+            }
         }
         try (var files = Files.list(REGISTRY)) {
             for (Path path : files.filter(p -> p.toString().endsWith(".json")).toList()) {
@@ -163,14 +204,22 @@ public final class ManagerProbe {
                 SandboxProbe.check(data.path("run").asText().equals(SandboxProbe.RUN), "registry run mismatch");
                 Lease lease = new Lease(data.path("id").asText(), data.path("tokenHash").asText());
                 lease.state = data.path("state").asText().equals("RUNNING") ? "INTERRUPTED" : data.path("state").asText();
-                lease.draft = data.path("draft").asText(); lease.cleaned = true;
-                lease.save(); LEASES.put(lease.id, lease);
+                lease.draft = data.path("draft").asText();
+                cleanup(lease); LEASES.put(lease.id, lease);
             }
         }
     }
     public static void main(String[] args) throws Exception {
         SandboxProbe.check(!KEY.isBlank(), "empty manager key");
         recover();
+        REAPER.scheduleWithFixedDelay(() -> {
+            for (Lease lease : LEASES.values()) {
+                if (!lease.state.equals("RUNNING") && !lease.cleaned) {
+                    try { cleanup(lease); }
+                    catch (Exception error) { System.err.println("CLEANUP_RETRY_PENDING " + lease.id); }
+                }
+            }
+        }, 1, 1, TimeUnit.SECONDS);
         HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", 8080), 16);
         server.createContext("/", ManagerProbe::handle);
         server.setExecutor(WORKERS); server.start();

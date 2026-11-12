@@ -1,0 +1,1923 @@
+[
+  {
+    "argv": [
+      "docker",
+      "context",
+      "inspect"
+    ],
+    "returncode": 0,
+    "output": "[\n    {\n        \"Name\": \"orbstack\",\n        \"Metadata\": {\n            \"Description\": \"OrbStack\"\n        },\n        \"Endpoints\": {\n            \"docker\": {\n                \"Host\": \"unix:///Users/hekai/.orbstack/run/docker.sock\",\n                \"SkipTLSVerify\": false\n            }\n        },\n        \"TLSMaterial\": {},\n        \"Storage\": {\n            \"MetadataPath\": \"/Users/hekai/.docker/contexts/meta/2d89b732b01a00a2d1675ed3cee9fd0f965daadf90603c989dd3afd4569c6896\",\n            \"TLSPath\": \"/Users/hekai/.docker/contexts/tls/2d89b732b01a00a2d1675ed3cee9fd0f965daadf90603c989dd3afd4569c6896\"\n        }\n    }\n]\n"
+  },
+  {
+    "argv": [
+      "mvn",
+      "-s",
+      "settings.xml",
+      "-q",
+      "compile",
+      "org.apache.maven.plugins:maven-dependency-plugin:3.9.0:copy-dependencies",
+      "-DoutputDirectory=target/lib"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "build",
+      "-f",
+      "Dockerfile.worker",
+      "-t",
+      "iwork-sandbox-worker:local",
+      "."
+    ],
+    "returncode": 0,
+    "output": "#0 building with \"orbstack\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile.worker\n#1 transferring dockerfile: 187B done\n#1 DONE 0.0s\n\n#2 [internal] load metadata for docker.io/library/python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e\n#2 DONE 0.0s\n\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.0s\n\n#4 [internal] load build context\n#4 transferring context: 3.68kB done\n#4 DONE 0.0s\n\n#5 [1/2] FROM docker.io/library/python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e\n#5 resolve docker.io/library/python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e 0.0s done\n#5 DONE 0.1s\n\n#6 [2/2] COPY worker.py /opt/worker.py\n#6 CACHED\n\n#7 exporting to image\n#7 exporting layers done\n#7 exporting manifest sha256:aa63463adbb6d3ccc93fa6542621d1281303561686c6b0511b3aea9a46e434a5 done\n#7 exporting config sha256:f17ae0b5462606552432ea70a9e5e15b78a41713ed73df72259ae77a6b9bd458 done\n#7 exporting attestation manifest sha256:dab3f2890c38455e40e661643cbfe77181f66a2d1d3d343010242d6b6e03a134 0.0s done\n#7 exporting manifest list sha256:f471860e18f90c080155b976c82a9e1487adf13a51ce1b86f7f904a8e825a59f done\n#7 naming to docker.io/library/iwork-sandbox-worker:local done\n#7 unpacking to docker.io/library/iwork-sandbox-worker:local done\n#7 DONE 0.0s\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "build",
+      "-f",
+      "Dockerfile.app",
+      "-t",
+      "iwork-sandbox-probe:local",
+      "."
+    ],
+    "returncode": 0,
+    "output": "#0 building with \"orbstack\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile.app\n#1 transferring dockerfile: 525B done\n#1 DONE 0.0s\n\n#2 [internal] load metadata for docker.io/library/eclipse-temurin:21-jre@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99\n#2 DONE 0.0s\n\n#3 [internal] load metadata for docker.io/library/docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d\n#3 DONE 0.0s\n\n#4 [internal] load .dockerignore\n#4 transferring context: 2B done\n#4 DONE 0.0s\n\n#5 [stage-1 1/6] FROM docker.io/library/eclipse-temurin:21-jre@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99\n#5 resolve docker.io/library/eclipse-temurin:21-jre@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99 0.0s done\n#5 DONE 0.0s\n\n#6 [cli 1/1] FROM docker.io/library/docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d\n#6 resolve docker.io/library/docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d 0.0s done\n#6 DONE 0.0s\n\n#7 [internal] load build context\n#7 transferring context: 31.49MB 0.1s done\n#7 DONE 0.1s\n\n#8 [stage-1 2/6] COPY --from=cli /usr/local/bin/docker /usr/local/bin/docker\n#8 CACHED\n\n#9 [stage-1 3/6] COPY target/classes /app/classes\n#9 DONE 0.1s\n\n#10 [stage-1 4/6] COPY target/lib /app/lib\n#10 DONE 0.1s\n\n#11 [stage-1 5/6] WORKDIR /app\n#11 DONE 0.0s\n\n#12 [stage-1 6/6] COPY --chmod=0555 fault-docker.sh /opt/fault/docker\n#12 DONE 0.0s\n\n#13 exporting to image\n#13 exporting layers\n#13 exporting layers 0.5s done\n#13 exporting manifest sha256:523f9b984055cc70182a672707d9e818a71fb7c0f81bad55aeb635fb2db41830\n#13 exporting manifest sha256:523f9b984055cc70182a672707d9e818a71fb7c0f81bad55aeb635fb2db41830 done\n#13 exporting config sha256:aefd78bd22b39329d92b41a44c0bb31560f75a5cc6faa84abfbfc2ebb120a397 done\n#13 exporting attestation manifest sha256:b1166534080dc726973390907b5ebb9eda0d51d72e995226ea493557bb8c8e36 done\n#13 exporting manifest list sha256:b1f32a6be4dab803d306fc467dd69597ae669a7d20d26840ee3e67b6d9f2549f done\n#13 naming to docker.io/library/iwork-sandbox-probe:local done\n#13 unpacking to docker.io/library/iwork-sandbox-probe:local 0.1s done\n#13 DONE 0.6s\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "image",
+      "inspect",
+      "iwork-sandbox-worker:local",
+      "iwork-sandbox-probe:local"
+    ],
+    "returncode": 0,
+    "output": "[\n    {\n        \"Id\": \"sha256:f471860e18f90c080155b976c82a9e1487adf13a51ce1b86f7f904a8e825a59f\",\n        \"RepoTags\": [\n            \"iwork-sandbox-worker:local\"\n        ],\n        \"RepoDigests\": [\n            \"iwork-sandbox-worker@sha256:f471860e18f90c080155b976c82a9e1487adf13a51ce1b86f7f904a8e825a59f\"\n        ],\n        \"Comment\": \"buildkit.dockerfile.v0\",\n        \"Created\": \"2026-11-12T21:44:29.591329123+08:00\",\n        \"Config\": {\n            \"User\": \"1000:1000\",\n            \"Env\": [\n                \"PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n                \"LANG=C.UTF-8\",\n                \"GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305\",\n                \"PYTHON_VERSION=3.13.18\",\n                \"PYTHON_SHA256=abb0102e6d4ae027509bcb82327d9dd85515b44a3ba8ad538cfc5e9847029f68\"\n            ],\n            \"Cmd\": [\n                \"python3\"\n            ],\n            \"WorkingDir\": \"/\"\n        },\n        \"Architecture\": \"arm64\",\n        \"Os\": \"linux\",\n        \"Size\": 74349483,\n        \"RootFS\": {\n            \"Type\": \"layers\",\n            \"Layers\": [\n                \"sha256:3d971ddbca237031066ab6609a11ae2e9e5b109da24d5c5d94d2e584dd94bd54\",\n                \"sha256:867b1974c4f78993069f7ada7359eec2ab64c216d746945db65a5c7aca3bb84a\",\n                \"sha256:3092cbd873290cdb51fb888686227d0d248e87bef599dfd3e349e180f89dab2b\",\n                \"sha256:83ca6df93417b05f92ec69d0a818a7317a22533037f7c3c1a055bcb3c1b6ccfd\",\n                \"sha256:5ee35af5a653d2f4bfc1bf946955bc7011e97ff1206a8a94603b4318dc424b0c\"\n            ]\n        },\n        \"Metadata\": {\n            \"LastTagTime\": \"2026-11-12T14:08:37.699158621Z\"\n        },\n        \"Descriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.index.v1+json\",\n            \"digest\": \"sha256:f471860e18f90c080155b976c82a9e1487adf13a51ce1b86f7f904a8e825a59f\",\n            \"size\": 856\n        },\n        \"Identity\": {\n            \"Build\": [\n                {\n                    \"Ref\": \"8d2j4juytgpnmopxps9o3o3ym\",\n                    \"CreatedAt\": \"2026-11-12T22:08:37.707952069+08:00\"\n                }\n            ]\n        }\n    },\n    {\n        \"Id\": \"sha256:b1f32a6be4dab803d306fc467dd69597ae669a7d20d26840ee3e67b6d9f2549f\",\n        \"RepoTags\": [\n            \"iwork-sandbox-probe:local\"\n        ],\n        \"RepoDigests\": [\n            \"iwork-sandbox-probe@sha256:b1f32a6be4dab803d306fc467dd69597ae669a7d20d26840ee3e67b6d9f2549f\"\n        ],\n        \"Comment\": \"buildkit.dockerfile.v0\",\n        \"Created\": \"2026-11-12T22:08:38.39907607+08:00\",\n        \"Config\": {\n            \"Env\": [\n                \"PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n                \"JAVA_HOME=/opt/java/openjdk\",\n                \"LANG=en_US.UTF-8\",\n                \"LANGUAGE=en_US:en\",\n                \"LC_ALL=en_US.UTF-8\",\n                \"JAVA_VERSION=jdk-21.0.12.1+1\"\n            ],\n            \"Entrypoint\": [\n                \"java\",\n                \"-Djava.io.tmpdir=/tmp/codex\",\n                \"-cp\",\n                \"/app/classes:/app/lib/*\",\n                \"SandboxProbe\"\n            ],\n            \"WorkingDir\": \"/app\",\n            \"Labels\": {\n                \"org.opencontainers.image.created\": \"2026-10-06T20:38:12.175309+00:00\",\n                \"org.opencontainers.image.description\": \"The Ubuntu container image maintained by Canonical\\n\\nUbuntu is a Debian-based Linux operating system that runs from the desktop to the cloud, to all your internet connected things.\\nIt is the world's most popular operating system across public clouds and OpenStack clouds.\\nIt is the number one platform for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers at scale.\\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\\n\",\n                \"org.opencontainers.image.title\": \"ubuntu\",\n                \"org.opencontainers.image.version\": \"26.04\"\n            }\n        },\n        \"Architecture\": \"arm64\",\n        \"Os\": \"linux\",\n        \"Size\": 596407469,\n        \"RootFS\": {\n            \"Type\": \"layers\",\n            \"Layers\": [\n                \"sha256:862e6cfe4341019f54f4dc7c3325a967558a7102a32ceff4edaadf02796c5c07\",\n                \"sha256:900b24069e64aca5d65cf951635e7513f7f6d447debcfc1b99f73878cc039f59\",\n                \"sha256:647119b1a3d842729c88dc491eef41a48f14e41223072e2825057ab2e082c0f9\",\n                \"sha256:582970787d84b0eae2494cea9a04271fb1b22f0e80b9187e632ad74bf38238e3\",\n                \"sha256:9a1e1523dd3f347e09c053856bf745113e715f7345e5041e948ca326dbd63889\",\n                \"sha256:6715ee91c5c2331e67725a2dcb7bb698d287ec4793afd7cb640894744e880f23\",\n                \"sha256:431b198eab70a81309ebd026e4abadf17819d26279334360aeb9472b2604706f\",\n                \"sha256:83bafba251c46eb65925bcf6451e52472ca9aae8b271c39cecc0046c826332eb\",\n                \"sha256:34fef73605e9bf7832d4690c7283ab4dec9d252fdec2cde4152a2b546489aeb5\",\n                \"sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef\",\n                \"sha256:93e2c45da302b99eb4fb364946c438b31ebe7c6db405248b8e6ef3be0b922c8c\"\n            ]\n        },\n        \"Metadata\": {\n            \"LastTagTime\": \"2026-11-12T14:08:38.923894895Z\"\n        },\n        \"Descriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.index.v1+json\",\n            \"digest\": \"sha256:b1f32a6be4dab803d306fc467dd69597ae669a7d20d26840ee3e67b6d9f2549f\",\n            \"size\": 856\n        },\n        \"Identity\": {\n            \"Build\": [\n                {\n                    \"Ref\": \"ae0sqgyehsv9fbetp7436qyf2\",\n                    \"CreatedAt\": \"2026-11-12T22:08:39.047385464+08:00\"\n                }\n            ]\n        }\n    }\n]\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "up",
+      "-d",
+      "watchdog"
+    ],
+    "returncode": 0,
+    "output": " Container iw8m-5619e88a6144-watchdog-1 Creating \n Container iw8m-5619e88a6144-watchdog-1 Created \n Container iw8m-5619e88a6144-watchdog-1 Starting \n Container iw8m-5619e88a6144-watchdog-1 Started \n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "ps",
+      "-q",
+      "watchdog"
+    ],
+    "returncode": 0,
+    "output": "9adaec3f14ac4a107024bc16197c8d4c318f37cded0cfbeabc1282794a6336ad\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "up",
+      "-d",
+      "manager"
+    ],
+    "returncode": 0,
+    "output": " Network iw8m-5619e88a6144_control Creating \n Network iw8m-5619e88a6144_control Creating \n Network iw8m-5619e88a6144_control Created \n Network iw8m-5619e88a6144_control Created \n Container iw8m-5619e88a6144-manager-1 Creating \n Container iw8m-5619e88a6144-manager-1 Created \n Container iw8m-5619e88a6144-manager-1 Starting \n Container iw8m-5619e88a6144-manager-1 Started \n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "ps",
+      "-q",
+      "manager"
+    ],
+    "returncode": 0,
+    "output": "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "inspect",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "[\n    {\n        \"Id\": \"cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142\",\n        \"Created\": \"2026-11-12T14:08:40.065998147Z\",\n        \"Path\": \"java\",\n        \"Args\": [\n            \"-Djava.io.tmpdir=/tmp/codex\",\n            \"-cp\",\n            \"/app/classes:/app/lib/*\",\n            \"ManagerProbe\"\n        ],\n        \"State\": {\n            \"Status\": \"running\",\n            \"Running\": true,\n            \"Paused\": false,\n            \"Restarting\": false,\n            \"OOMKilled\": false,\n            \"Dead\": false,\n            \"Pid\": 2285950,\n            \"ExitCode\": 0,\n            \"Error\": \"\",\n            \"StartedAt\": \"2026-11-12T14:08:40.153380833Z\",\n            \"FinishedAt\": \"0001-01-01T00:00:00Z\"\n        },\n        \"Image\": \"sha256:b1f32a6be4dab803d306fc467dd69597ae669a7d20d26840ee3e67b6d9f2549f\",\n        \"ResolvConfPath\": \"/var/lib/docker/containers/cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142/resolv.conf\",\n        \"HostnamePath\": \"/var/lib/docker/containers/cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142/hostname\",\n        \"HostsPath\": \"/var/lib/docker/containers/cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142/hosts\",\n        \"LogPath\": \"/var/lib/docker/containers/cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142/cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142-json.log\",\n        \"Name\": \"/iw8m-5619e88a6144-manager-1\",\n        \"RestartCount\": 0,\n        \"Driver\": \"overlayfs\",\n        \"Platform\": \"linux\",\n        \"MountLabel\": \"\",\n        \"ProcessLabel\": \"\",\n        \"AppArmorProfile\": \"\",\n        \"ExecIDs\": null,\n        \"HostConfig\": {\n            \"Binds\": [\n                \"/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/faults:/faults:ro\",\n                \"/Users/hekai/.orbstack/run/docker.sock:/var/run/docker.sock:rw\",\n                \"/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/registry:/registry:rw\",\n                \"/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/watchdog:/watchdog:ro\"\n            ],\n            \"ContainerIDFile\": \"\",\n            \"LogConfig\": {\n                \"Type\": \"json-file\",\n                \"Config\": {\n                    \"max-file\": \"5\",\n                    \"max-size\": \"20m\"\n                }\n            },\n            \"NetworkMode\": \"iw8m-5619e88a6144_control\",\n            \"PortBindings\": {},\n            \"RestartPolicy\": {\n                \"Name\": \"no\",\n                \"MaximumRetryCount\": 0\n            },\n            \"AutoRemove\": false,\n            \"VolumeDriver\": \"\",\n            \"VolumesFrom\": null,\n            \"ConsoleSize\": [\n                0,\n                0\n            ],\n            \"CapAdd\": null,\n            \"CapDrop\": [\n                \"ALL\"\n            ],\n            \"CgroupnsMode\": \"private\",\n            \"Dns\": null,\n            \"DnsOptions\": null,\n            \"DnsSearch\": null,\n            \"ExtraHosts\": [],\n            \"GroupAdd\": null,\n            \"IpcMode\": \"private\",\n            \"Cgroup\": \"\",\n            \"Links\": null,\n            \"OomScoreAdj\": 0,\n            \"PidMode\": \"\",\n            \"Privileged\": false,\n            \"PublishAllPorts\": false,\n            \"ReadonlyRootfs\": true,\n            \"SecurityOpt\": [\n                \"no-new-privileges:true\"\n            ],\n            \"Tmpfs\": {\n                \"/tmp/codex\": \"rw,noexec,nosuid,size=32m,mode=1777\"\n            },\n            \"UTSMode\": \"\",\n            \"UsernsMode\": \"\",\n            \"ShmSize\": 8408530944,\n            \"Runtime\": \"runc\",\n            \"Isolation\": \"\",\n            \"CpuShares\": 0,\n            \"Memory\": 0,\n            \"NanoCpus\": 0,\n            \"CgroupParent\": \"\",\n            \"BlkioWeight\": 0,\n            \"BlkioWeightDevice\": null,\n            \"BlkioDeviceReadBps\": null,\n            \"BlkioDeviceWriteBps\": null,\n            \"BlkioDeviceReadIOps\": null,\n            \"BlkioDeviceWriteIOps\": null,\n            \"CpuPeriod\": 0,\n            \"CpuQuota\": 0,\n            \"CpuRealtimePeriod\": 0,\n            \"CpuRealtimeRuntime\": 0,\n            \"CpusetCpus\": \"\",\n            \"CpusetMems\": \"\",\n            \"Devices\": null,\n            \"DeviceCgroupRules\": null,\n            \"DeviceRequests\": null,\n            \"MemoryReservation\": 0,\n            \"MemorySwap\": 0,\n            \"MemorySwappiness\": null,\n            \"OomKillDisable\": null,\n            \"PidsLimit\": null,\n            \"Ulimits\": null,\n            \"CpuCount\": 0,\n            \"CpuPercent\": 0,\n            \"IOMaximumIOps\": 0,\n            \"IOMaximumBandwidth\": 0,\n            \"MaskedPaths\": [\n                \"/proc/acpi\",\n                \"/proc/asound\",\n                \"/proc/interrupts\",\n                \"/proc/kcore\",\n                \"/proc/keys\",\n                \"/proc/latency_stats\",\n                \"/proc/sched_debug\",\n                \"/proc/scsi\",\n                \"/proc/timer_list\",\n                \"/proc/timer_stats\",\n                \"/sys/devices/virtual/powercap\",\n                \"/sys/firmware\"\n            ],\n            \"ReadonlyPaths\": [\n                \"/proc/bus\",\n                \"/proc/fs\",\n                \"/proc/irq\",\n                \"/proc/sys\",\n                \"/proc/sysrq-trigger\"\n            ]\n        },\n        \"Storage\": {\n            \"RootFS\": {\n                \"Snapshot\": {\n                    \"Name\": \"overlayfs\"\n                }\n            }\n        },\n        \"Mounts\": [\n            {\n                \"Type\": \"bind\",\n                \"Source\": \"/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/faults\",\n                \"Destination\": \"/faults\",\n                \"Mode\": \"ro\",\n                \"RW\": false,\n                \"Propagation\": \"rprivate\"\n            },\n            {\n                \"Type\": \"bind\",\n                \"Source\": \"/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/registry\",\n                \"Destination\": \"/registry\",\n                \"Mode\": \"rw\",\n                \"RW\": true,\n                \"Propagation\": \"rprivate\"\n            },\n            {\n                \"Type\": \"bind\",\n                \"Source\": \"/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/watchdog\",\n                \"Destination\": \"/watchdog\",\n                \"Mode\": \"ro\",\n                \"RW\": false,\n                \"Propagation\": \"rprivate\"\n            },\n            {\n                \"Type\": \"bind\",\n                \"Source\": \"/Users/hekai/.orbstack/run/docker.sock\",\n                \"Destination\": \"/var/run/docker.sock\",\n                \"Mode\": \"rw\",\n                \"RW\": true,\n                \"Propagation\": \"rprivate\"\n            }\n        ],\n        \"Config\": {\n            \"Hostname\": \"cf82942d7627\",\n            \"Domainname\": \"\",\n            \"User\": \"\",\n            \"AttachStdin\": false,\n            \"AttachStdout\": true,\n            \"AttachStderr\": true,\n            \"Tty\": false,\n            \"OpenStdin\": false,\n            \"StdinOnce\": false,\n            \"Env\": [\n                \"PATH=/opt/fault:/opt/java/openjdk/bin:/usr/local/bin:/usr/bin:/bin\",\n                \"PROBE_RUN=iw8m-5619e88a6144\",\n                \"MANAGER_KEY=synthetic-manager-key\",\n                \"JAVA_HOME=/opt/java/openjdk\",\n                \"LANG=en_US.UTF-8\",\n                \"LANGUAGE=en_US:en\",\n                \"LC_ALL=en_US.UTF-8\",\n                \"JAVA_VERSION=jdk-21.0.12.1+1\"\n            ],\n            \"Cmd\": null,\n            \"Image\": \"iwork-sandbox-probe:local\",\n            \"Volumes\": null,\n            \"WorkingDir\": \"/app\",\n            \"Entrypoint\": [\n                \"java\",\n                \"-Djava.io.tmpdir=/tmp/codex\",\n                \"-cp\",\n                \"/app/classes:/app/lib/*\",\n                \"ManagerProbe\"\n            ],\n            \"Labels\": {\n                \"com.docker.compose.config-hash\": \"98e0408502aa4e9210144626f603a120f5492cea53aa18712982f698f9a470d6\",\n                \"com.docker.compose.container-number\": \"1\",\n                \"com.docker.compose.depends_on\": \"\",\n                \"com.docker.compose.image\": \"sha256:523f9b984055cc70182a672707d9e818a71fb7c0f81bad55aeb635fb2db41830\",\n                \"com.docker.compose.oneoff\": \"False\",\n                \"com.docker.compose.project\": \"iw8m-5619e88a6144\",\n                \"com.docker.compose.project.config_files\": \"/Users/hekai/Developer/personal/iWork/prototypes/sandbox-validation/compose.managed.yaml\",\n                \"com.docker.compose.project.working_dir\": \"/Users/hekai/Developer/personal/iWork/prototypes/sandbox-validation\",\n                \"com.docker.compose.service\": \"manager\",\n                \"com.docker.compose.version\": \"5.5.0\",\n                \"org.opencontainers.image.created\": \"2026-10-06T20:38:12.175309+00:00\",\n                \"org.opencontainers.image.description\": \"The Ubuntu container image maintained by Canonical\\n\\nUbuntu is a Debian-based Linux operating system that runs from the desktop to the cloud, to all your internet connected things.\\nIt is the world's most popular operating system across public clouds and OpenStack clouds.\\nIt is the number one platform for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers at scale.\\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\\n\",\n                \"org.opencontainers.image.title\": \"ubuntu\",\n                \"org.opencontainers.image.version\": \"26.04\"\n            }\n        },\n        \"NetworkSettings\": {\n            \"SandboxID\": \"64d6774190b00ba10600fe413e78e0c0a4595092826596e53c9849b375399d07\",\n            \"SandboxKey\": \"/var/run/docker/netns/64d6774190b0\",\n            \"Ports\": {},\n            \"Networks\": {\n                \"iw8m-5619e88a6144_control\": {\n                    \"IPAMConfig\": null,\n                    \"Links\": null,\n                    \"Aliases\": [\n                        \"iw8m-5619e88a6144-manager-1\",\n                        \"manager\"\n                    ],\n                    \"DriverOpts\": null,\n                    \"GwPriority\": 0,\n                    \"NetworkID\": \"b95a0a696b1f59dd9231d9395e2b9e2aa48756aad80e6afa34dddb8e9ad77448\",\n                    \"EndpointID\": \"c31f982c8468bfa51acb24a4c8a8580a89278a1729c7b421fb008f24bfb85b19\",\n                    \"Gateway\": \"\",\n                    \"IPAddress\": \"192.168.229.2\",\n                    \"MacAddress\": \"d2:1b:f7:39:e4:9a\",\n                    \"IPPrefixLen\": 24,\n                    \"IPv6Gateway\": \"\",\n                    \"GlobalIPv6Address\": \"\",\n                    \"GlobalIPv6PrefixLen\": 0,\n                    \"DNSNames\": [\n                        \"iw8m-5619e88a6144-manager-1\",\n                        \"manager\",\n                        \"cf82942d7627\"\n                    ]\n                }\n            }\n        },\n        \"ImageManifestDescriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.manifest.v1+json\",\n            \"digest\": \"sha256:523f9b984055cc70182a672707d9e818a71fb7c0f81bad55aeb635fb2db41830\",\n            \"size\": 2385,\n            \"platform\": {\n                \"architecture\": \"arm64\",\n                \"os\": \"linux\"\n            }\n        }\n    }\n]\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "inspect",
+      "9adaec3f14ac4a107024bc16197c8d4c318f37cded0cfbeabc1282794a6336ad"
+    ],
+    "returncode": 0,
+    "output": "[\n    {\n        \"Id\": \"9adaec3f14ac4a107024bc16197c8d4c318f37cded0cfbeabc1282794a6336ad\",\n        \"Created\": \"2026-11-12T14:08:39.43315284Z\",\n        \"Path\": \"java\",\n        \"Args\": [\n            \"-Djava.io.tmpdir=/tmp/codex\",\n            \"-cp\",\n            \"/app/classes:/app/lib/*\",\n            \"WatchdogProbe\"\n        ],\n        \"State\": {\n            \"Status\": \"running\",\n            \"Running\": true,\n            \"Paused\": false,\n            \"Restarting\": false,\n            \"OOMKilled\": false,\n            \"Dead\": false,\n            \"Pid\": 2285864,\n            \"ExitCode\": 0,\n            \"Error\": \"\",\n            \"StartedAt\": \"2026-11-12T14:08:39.538388424Z\",\n            \"FinishedAt\": \"0001-01-01T00:00:00Z\"\n        },\n        \"Image\": \"sha256:b1f32a6be4dab803d306fc467dd69597ae669a7d20d26840ee3e67b6d9f2549f\",\n        \"ResolvConfPath\": \"/var/lib/docker/containers/9adaec3f14ac4a107024bc16197c8d4c318f37cded0cfbeabc1282794a6336ad/resolv.conf\",\n        \"HostnamePath\": \"/var/lib/docker/containers/9adaec3f14ac4a107024bc16197c8d4c318f37cded0cfbeabc1282794a6336ad/hostname\",\n        \"HostsPath\": \"/var/lib/docker/containers/9adaec3f14ac4a107024bc16197c8d4c318f37cded0cfbeabc1282794a6336ad/hosts\",\n        \"LogPath\": \"/var/lib/docker/containers/9adaec3f14ac4a107024bc16197c8d4c318f37cded0cfbeabc1282794a6336ad/9adaec3f14ac4a107024bc16197c8d4c318f37cded0cfbeabc1282794a6336ad-json.log\",\n        \"Name\": \"/iw8m-5619e88a6144-watchdog-1\",\n        \"RestartCount\": 0,\n        \"Driver\": \"overlayfs\",\n        \"Platform\": \"linux\",\n        \"MountLabel\": \"\",\n        \"ProcessLabel\": \"\",\n        \"AppArmorProfile\": \"\",\n        \"ExecIDs\": null,\n        \"HostConfig\": {\n            \"Binds\": [\n                \"/Users/hekai/.orbstack/run/docker.sock:/var/run/docker.sock:rw\",\n                \"/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/watchdog:/watchdog:rw\"\n            ],\n            \"ContainerIDFile\": \"\",\n            \"LogConfig\": {\n                \"Type\": \"json-file\",\n                \"Config\": {\n                    \"max-file\": \"5\",\n                    \"max-size\": \"20m\"\n                }\n            },\n            \"NetworkMode\": \"none\",\n            \"PortBindings\": {},\n            \"RestartPolicy\": {\n                \"Name\": \"unless-stopped\",\n                \"MaximumRetryCount\": 0\n            },\n            \"AutoRemove\": false,\n            \"VolumeDriver\": \"\",\n            \"VolumesFrom\": null,\n            \"ConsoleSize\": [\n                0,\n                0\n            ],\n            \"CapAdd\": null,\n            \"CapDrop\": [\n                \"ALL\"\n            ],\n            \"CgroupnsMode\": \"private\",\n            \"Dns\": null,\n            \"DnsOptions\": null,\n            \"DnsSearch\": null,\n            \"ExtraHosts\": [],\n            \"GroupAdd\": null,\n            \"IpcMode\": \"private\",\n            \"Cgroup\": \"\",\n            \"Links\": null,\n            \"OomScoreAdj\": 0,\n            \"PidMode\": \"\",\n            \"Privileged\": false,\n            \"PublishAllPorts\": false,\n            \"ReadonlyRootfs\": true,\n            \"SecurityOpt\": [\n                \"no-new-privileges:true\"\n            ],\n            \"Tmpfs\": {\n                \"/tmp/codex\": \"rw,noexec,nosuid,size=16m,mode=1777\"\n            },\n            \"UTSMode\": \"\",\n            \"UsernsMode\": \"\",\n            \"ShmSize\": 8408530944,\n            \"Runtime\": \"runc\",\n            \"Isolation\": \"\",\n            \"CpuShares\": 0,\n            \"Memory\": 0,\n            \"NanoCpus\": 0,\n            \"CgroupParent\": \"\",\n            \"BlkioWeight\": 0,\n            \"BlkioWeightDevice\": null,\n            \"BlkioDeviceReadBps\": null,\n            \"BlkioDeviceWriteBps\": null,\n            \"BlkioDeviceReadIOps\": null,\n            \"BlkioDeviceWriteIOps\": null,\n            \"CpuPeriod\": 0,\n            \"CpuQuota\": 0,\n            \"CpuRealtimePeriod\": 0,\n            \"CpuRealtimeRuntime\": 0,\n            \"CpusetCpus\": \"\",\n            \"CpusetMems\": \"\",\n            \"Devices\": null,\n            \"DeviceCgroupRules\": null,\n            \"DeviceRequests\": null,\n            \"MemoryReservation\": 0,\n            \"MemorySwap\": 0,\n            \"MemorySwappiness\": null,\n            \"OomKillDisable\": null,\n            \"PidsLimit\": null,\n            \"Ulimits\": null,\n            \"CpuCount\": 0,\n            \"CpuPercent\": 0,\n            \"IOMaximumIOps\": 0,\n            \"IOMaximumBandwidth\": 0,\n            \"MaskedPaths\": [\n                \"/proc/acpi\",\n                \"/proc/asound\",\n                \"/proc/interrupts\",\n                \"/proc/kcore\",\n                \"/proc/keys\",\n                \"/proc/latency_stats\",\n                \"/proc/sched_debug\",\n                \"/proc/scsi\",\n                \"/proc/timer_list\",\n                \"/proc/timer_stats\",\n                \"/sys/devices/virtual/powercap\",\n                \"/sys/firmware\"\n            ],\n            \"ReadonlyPaths\": [\n                \"/proc/bus\",\n                \"/proc/fs\",\n                \"/proc/irq\",\n                \"/proc/sys\",\n                \"/proc/sysrq-trigger\"\n            ]\n        },\n        \"Storage\": {\n            \"RootFS\": {\n                \"Snapshot\": {\n                    \"Name\": \"overlayfs\"\n                }\n            }\n        },\n        \"Mounts\": [\n            {\n                \"Type\": \"bind\",\n                \"Source\": \"/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/watchdog\",\n                \"Destination\": \"/watchdog\",\n                \"Mode\": \"rw\",\n                \"RW\": true,\n                \"Propagation\": \"rprivate\"\n            },\n            {\n                \"Type\": \"bind\",\n                \"Source\": \"/Users/hekai/.orbstack/run/docker.sock\",\n                \"Destination\": \"/var/run/docker.sock\",\n                \"Mode\": \"rw\",\n                \"RW\": true,\n                \"Propagation\": \"rprivate\"\n            }\n        ],\n        \"Config\": {\n            \"Hostname\": \"9adaec3f14ac\",\n            \"Domainname\": \"\",\n            \"User\": \"\",\n            \"AttachStdin\": false,\n            \"AttachStdout\": true,\n            \"AttachStderr\": true,\n            \"Tty\": false,\n            \"OpenStdin\": false,\n            \"StdinOnce\": false,\n            \"Env\": [\n                \"PROBE_RUN=iw8m-5619e88a6144\",\n                \"PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n                \"JAVA_HOME=/opt/java/openjdk\",\n                \"LANG=en_US.UTF-8\",\n                \"LANGUAGE=en_US:en\",\n                \"LC_ALL=en_US.UTF-8\",\n                \"JAVA_VERSION=jdk-21.0.12.1+1\"\n            ],\n            \"Cmd\": null,\n            \"Image\": \"iwork-sandbox-probe:local\",\n            \"Volumes\": null,\n            \"WorkingDir\": \"/app\",\n            \"Entrypoint\": [\n                \"java\",\n                \"-Djava.io.tmpdir=/tmp/codex\",\n                \"-cp\",\n                \"/app/classes:/app/lib/*\",\n                \"WatchdogProbe\"\n            ],\n            \"Labels\": {\n                \"com.docker.compose.config-hash\": \"3957e97dcf888c5938bc9f6f1a8be4c88d1c39330cf3de2eea30677d25402c77\",\n                \"com.docker.compose.container-number\": \"1\",\n                \"com.docker.compose.depends_on\": \"\",\n                \"com.docker.compose.image\": \"sha256:523f9b984055cc70182a672707d9e818a71fb7c0f81bad55aeb635fb2db41830\",\n                \"com.docker.compose.oneoff\": \"False\",\n                \"com.docker.compose.project\": \"iw8m-5619e88a6144\",\n                \"com.docker.compose.project.config_files\": \"/Users/hekai/Developer/personal/iWork/prototypes/sandbox-validation/compose.managed.yaml\",\n                \"com.docker.compose.project.working_dir\": \"/Users/hekai/Developer/personal/iWork/prototypes/sandbox-validation\",\n                \"com.docker.compose.service\": \"watchdog\",\n                \"com.docker.compose.version\": \"5.5.0\",\n                \"org.opencontainers.image.created\": \"2026-10-06T20:38:12.175309+00:00\",\n                \"org.opencontainers.image.description\": \"The Ubuntu container image maintained by Canonical\\n\\nUbuntu is a Debian-based Linux operating system that runs from the desktop to the cloud, to all your internet connected things.\\nIt is the world's most popular operating system across public clouds and OpenStack clouds.\\nIt is the number one platform for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers at scale.\\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\\n\",\n                \"org.opencontainers.image.title\": \"ubuntu\",\n                \"org.opencontainers.image.version\": \"26.04\"\n            }\n        },\n        \"NetworkSettings\": {\n            \"SandboxID\": \"2a370ca3bd1685282e0288ed937bf22633c820d56aca1c1e7cc462614da542df\",\n            \"SandboxKey\": \"/var/run/docker/netns/2a370ca3bd16\",\n            \"Ports\": {},\n            \"Networks\": {\n                \"none\": {\n                    \"IPAMConfig\": null,\n                    \"Links\": null,\n                    \"Aliases\": null,\n                    \"DriverOpts\": null,\n                    \"GwPriority\": 0,\n                    \"NetworkID\": \"d3012d8c2e7665b418e9b5a329da6b8f90e9e5e6aa8c318a75dae9168904fddd\",\n                    \"EndpointID\": \"6d42ff259ef5d7a7b789e435fca1d3a4e7d75a25d172a3f81f4c59eb129ac552\",\n                    \"Gateway\": \"\",\n                    \"IPAddress\": \"\",\n                    \"MacAddress\": \"\",\n                    \"IPPrefixLen\": 0,\n                    \"IPv6Gateway\": \"\",\n                    \"GlobalIPv6Address\": \"\",\n                    \"GlobalIPv6PrefixLen\": 0,\n                    \"DNSNames\": null\n                }\n            }\n        },\n        \"ImageManifestDescriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.manifest.v1+json\",\n            \"digest\": \"sha256:523f9b984055cc70182a672707d9e818a71fb7c0f81bad55aeb635fb2db41830\",\n            \"size\": 2385,\n            \"platform\": {\n                \"architecture\": \"arm64\",\n                \"os\": \"linux\"\n            }\n        }\n    }\n]\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "iw8m-5619e88a6144-foreign",
+      "--label",
+      "iwork.probe=iw8m-5619e88a6144",
+      "--label",
+      "iwork.manager=iw8m-5619e88a6144-foreign",
+      "--network",
+      "none",
+      "--read-only",
+      "--cap-drop=ALL",
+      "--memory=32m",
+      "--pids-limit=16",
+      "iwork-sandbox-worker:local",
+      "sleep",
+      "180"
+    ],
+    "returncode": 0,
+    "output": "8691bc199997feb1e96456f89feeda424272ae371c8e440309a62eaf9a088331\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "run",
+      "-d",
+      "--name",
+      "iw8m-5619e88a6144-main",
+      "app",
+      "suite"
+    ],
+    "returncode": 0,
+    "output": " Container iw8m-5619e88a6144-main Creating \n Container iw8m-5619e88a6144-main Created \nb2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "inspect",
+      "b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635"
+    ],
+    "returncode": 0,
+    "output": "[\n    {\n        \"Id\": \"b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635\",\n        \"Created\": \"2026-11-12T14:08:40.893954203Z\",\n        \"Path\": \"java\",\n        \"Args\": [\n            \"-Djava.io.tmpdir=/tmp/codex\",\n            \"-cp\",\n            \"/app/classes:/app/lib/*\",\n            \"ManagerClientProbe\",\n            \"suite\"\n        ],\n        \"State\": {\n            \"Status\": \"running\",\n            \"Running\": true,\n            \"Paused\": false,\n            \"Restarting\": false,\n            \"OOMKilled\": false,\n            \"Dead\": false,\n            \"Pid\": 2286109,\n            \"ExitCode\": 0,\n            \"Error\": \"\",\n            \"StartedAt\": \"2026-11-12T14:08:40.947268521Z\",\n            \"FinishedAt\": \"0001-01-01T00:00:00Z\"\n        },\n        \"Image\": \"sha256:b1f32a6be4dab803d306fc467dd69597ae669a7d20d26840ee3e67b6d9f2549f\",\n        \"ResolvConfPath\": \"/var/lib/docker/containers/b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635/resolv.conf\",\n        \"HostnamePath\": \"/var/lib/docker/containers/b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635/hostname\",\n        \"HostsPath\": \"/var/lib/docker/containers/b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635/hosts\",\n        \"LogPath\": \"/var/lib/docker/containers/b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635/b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635-json.log\",\n        \"Name\": \"/iw8m-5619e88a6144-main\",\n        \"RestartCount\": 0,\n        \"Driver\": \"overlayfs\",\n        \"Platform\": \"linux\",\n        \"MountLabel\": \"\",\n        \"ProcessLabel\": \"\",\n        \"AppArmorProfile\": \"\",\n        \"ExecIDs\": null,\n        \"HostConfig\": {\n            \"Binds\": [\n                \"/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/app:/evidence:rw\"\n            ],\n            \"ContainerIDFile\": \"\",\n            \"LogConfig\": {\n                \"Type\": \"json-file\",\n                \"Config\": {\n                    \"max-file\": \"5\",\n                    \"max-size\": \"20m\"\n                }\n            },\n            \"NetworkMode\": \"iw8m-5619e88a6144_control\",\n            \"PortBindings\": {},\n            \"RestartPolicy\": {\n                \"Name\": \"no\",\n                \"MaximumRetryCount\": 0\n            },\n            \"AutoRemove\": false,\n            \"VolumeDriver\": \"\",\n            \"VolumesFrom\": null,\n            \"ConsoleSize\": [\n                0,\n                0\n            ],\n            \"CapAdd\": null,\n            \"CapDrop\": [\n                \"ALL\"\n            ],\n            \"CgroupnsMode\": \"private\",\n            \"Dns\": null,\n            \"DnsOptions\": null,\n            \"DnsSearch\": null,\n            \"ExtraHosts\": [],\n            \"GroupAdd\": null,\n            \"IpcMode\": \"private\",\n            \"Cgroup\": \"\",\n            \"Links\": null,\n            \"OomScoreAdj\": 0,\n            \"PidMode\": \"\",\n            \"Privileged\": false,\n            \"PublishAllPorts\": false,\n            \"ReadonlyRootfs\": true,\n            \"SecurityOpt\": [\n                \"no-new-privileges:true\"\n            ],\n            \"Tmpfs\": {\n                \"/tmp/codex\": \"rw,noexec,nosuid,size=32m,mode=1777\"\n            },\n            \"UTSMode\": \"\",\n            \"UsernsMode\": \"\",\n            \"ShmSize\": 8408530944,\n            \"Runtime\": \"runc\",\n            \"Isolation\": \"\",\n            \"CpuShares\": 0,\n            \"Memory\": 0,\n            \"NanoCpus\": 0,\n            \"CgroupParent\": \"\",\n            \"BlkioWeight\": 0,\n            \"BlkioWeightDevice\": null,\n            \"BlkioDeviceReadBps\": null,\n            \"BlkioDeviceWriteBps\": null,\n            \"BlkioDeviceReadIOps\": null,\n            \"BlkioDeviceWriteIOps\": null,\n            \"CpuPeriod\": 0,\n            \"CpuQuota\": 0,\n            \"CpuRealtimePeriod\": 0,\n            \"CpuRealtimeRuntime\": 0,\n            \"CpusetCpus\": \"\",\n            \"CpusetMems\": \"\",\n            \"Devices\": null,\n            \"DeviceCgroupRules\": null,\n            \"DeviceRequests\": null,\n            \"MemoryReservation\": 0,\n            \"MemorySwap\": 0,\n            \"MemorySwappiness\": null,\n            \"OomKillDisable\": null,\n            \"PidsLimit\": null,\n            \"Ulimits\": null,\n            \"CpuCount\": 0,\n            \"CpuPercent\": 0,\n            \"IOMaximumIOps\": 0,\n            \"IOMaximumBandwidth\": 0,\n            \"MaskedPaths\": [\n                \"/proc/acpi\",\n                \"/proc/asound\",\n                \"/proc/interrupts\",\n                \"/proc/kcore\",\n                \"/proc/keys\",\n                \"/proc/latency_stats\",\n                \"/proc/sched_debug\",\n                \"/proc/scsi\",\n                \"/proc/timer_list\",\n                \"/proc/timer_stats\",\n                \"/sys/devices/virtual/powercap\",\n                \"/sys/firmware\"\n            ],\n            \"ReadonlyPaths\": [\n                \"/proc/bus\",\n                \"/proc/fs\",\n                \"/proc/irq\",\n                \"/proc/sys\",\n                \"/proc/sysrq-trigger\"\n            ]\n        },\n        \"Storage\": {\n            \"RootFS\": {\n                \"Snapshot\": {\n                    \"Name\": \"overlayfs\"\n                }\n            }\n        },\n        \"Mounts\": [\n            {\n                \"Type\": \"bind\",\n                \"Source\": \"/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/app\",\n                \"Destination\": \"/evidence\",\n                \"Mode\": \"rw\",\n                \"RW\": true,\n                \"Propagation\": \"rprivate\"\n            }\n        ],\n        \"Config\": {\n            \"Hostname\": \"b2a7ecc37d04\",\n            \"Domainname\": \"\",\n            \"User\": \"1000:1000\",\n            \"AttachStdin\": true,\n            \"AttachStdout\": true,\n            \"AttachStderr\": true,\n            \"Tty\": false,\n            \"OpenStdin\": true,\n            \"StdinOnce\": true,\n            \"Env\": [\n                \"DB_PASSWORD=synthetic-db-only\",\n                \"MODEL_API_KEY=synthetic-model-only\",\n                \"MANAGER_KEY=synthetic-manager-key\",\n                \"PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n                \"JAVA_HOME=/opt/java/openjdk\",\n                \"LANG=en_US.UTF-8\",\n                \"LANGUAGE=en_US:en\",\n                \"LC_ALL=en_US.UTF-8\",\n                \"JAVA_VERSION=jdk-21.0.12.1+1\"\n            ],\n            \"Cmd\": [\n                \"suite\"\n            ],\n            \"Image\": \"iwork-sandbox-probe:local\",\n            \"Volumes\": null,\n            \"WorkingDir\": \"/app\",\n            \"Entrypoint\": [\n                \"java\",\n                \"-Djava.io.tmpdir=/tmp/codex\",\n                \"-cp\",\n                \"/app/classes:/app/lib/*\",\n                \"ManagerClientProbe\"\n            ],\n            \"Labels\": {\n                \"com.docker.compose.config-hash\": \"6975e55241daf015aef8b92fb11a2f1b0807ecbe74291575c4338f3e57dc87d0\",\n                \"com.docker.compose.depends_on\": \"\",\n                \"com.docker.compose.image\": \"sha256:523f9b984055cc70182a672707d9e818a71fb7c0f81bad55aeb635fb2db41830\",\n                \"com.docker.compose.oneoff\": \"True\",\n                \"com.docker.compose.project\": \"iw8m-5619e88a6144\",\n                \"com.docker.compose.project.config_files\": \"/Users/hekai/Developer/personal/iWork/prototypes/sandbox-validation/compose.managed.yaml\",\n                \"com.docker.compose.project.working_dir\": \"/Users/hekai/Developer/personal/iWork/prototypes/sandbox-validation\",\n                \"com.docker.compose.service\": \"app\",\n                \"com.docker.compose.slug\": \"4baaa39b479ab927a69f188c1a04fc364508e660c062aea876981afffa58fe0e\",\n                \"com.docker.compose.version\": \"5.5.0\",\n                \"org.opencontainers.image.created\": \"2026-10-06T20:38:12.175309+00:00\",\n                \"org.opencontainers.image.description\": \"The Ubuntu container image maintained by Canonical\\n\\nUbuntu is a Debian-based Linux operating system that runs from the desktop to the cloud, to all your internet connected things.\\nIt is the world's most popular operating system across public clouds and OpenStack clouds.\\nIt is the number one platform for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers at scale.\\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\\n\",\n                \"org.opencontainers.image.title\": \"ubuntu\",\n                \"org.opencontainers.image.version\": \"26.04\"\n            }\n        },\n        \"NetworkSettings\": {\n            \"SandboxID\": \"d03427bdb23fd8f5d4aaf3b550be1aa70c11d3089c89c8f7f118dc6e63dcf700\",\n            \"SandboxKey\": \"/var/run/docker/netns/d03427bdb23f\",\n            \"Ports\": {},\n            \"Networks\": {\n                \"iw8m-5619e88a6144_control\": {\n                    \"IPAMConfig\": null,\n                    \"Links\": null,\n                    \"Aliases\": [\n                        \"iw8m-5619e88a6144-main\"\n                    ],\n                    \"DriverOpts\": null,\n                    \"GwPriority\": 0,\n                    \"NetworkID\": \"b95a0a696b1f59dd9231d9395e2b9e2aa48756aad80e6afa34dddb8e9ad77448\",\n                    \"EndpointID\": \"45dd548f609536179156113ec0ccdc8e12ce9b99279b305ba8d2d1fc435930d4\",\n                    \"Gateway\": \"\",\n                    \"IPAddress\": \"192.168.229.3\",\n                    \"MacAddress\": \"32:c6:50:ba:11:19\",\n                    \"IPPrefixLen\": 24,\n                    \"IPv6Gateway\": \"\",\n                    \"GlobalIPv6Address\": \"\",\n                    \"GlobalIPv6PrefixLen\": 0,\n                    \"DNSNames\": [\n                        \"iw8m-5619e88a6144-main\",\n                        \"b2a7ecc37d04\"\n                    ]\n                }\n            }\n        },\n        \"ImageManifestDescriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.manifest.v1+json\",\n            \"digest\": \"sha256:523f9b984055cc70182a672707d9e818a71fb7c0f81bad55aeb635fb2db41830\",\n            \"size\": 2385,\n            \"platform\": {\n                \"architecture\": \"arm64\",\n                \"os\": \"linux\"\n            }\n        }\n    }\n]\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "network",
+      "inspect",
+      "iw8m-5619e88a6144_control"
+    ],
+    "returncode": 0,
+    "output": "[\n    {\n        \"Name\": \"iw8m-5619e88a6144_control\",\n        \"Id\": \"b95a0a696b1f59dd9231d9395e2b9e2aa48756aad80e6afa34dddb8e9ad77448\",\n        \"Created\": \"2026-11-12T22:08:40.043076665+08:00\",\n        \"Scope\": \"local\",\n        \"Driver\": \"bridge\",\n        \"EnableIPv4\": true,\n        \"EnableIPv6\": false,\n        \"IPAM\": {\n            \"Driver\": \"default\",\n            \"Options\": null,\n            \"Config\": [\n                {\n                    \"Subnet\": \"192.168.229.0/24\",\n                    \"Gateway\": \"192.168.229.1\"\n                }\n            ]\n        },\n        \"Internal\": true,\n        \"Attachable\": false,\n        \"Ingress\": false,\n        \"ConfigFrom\": {\n            \"Network\": \"\"\n        },\n        \"ConfigOnly\": false,\n        \"Options\": {},\n        \"Labels\": {\n            \"com.docker.compose.config-hash\": \"299d24b0e915f41ea173418874cfe40fd4dc3939fbc83434ab521c193d57fc35\",\n            \"com.docker.compose.network\": \"control\",\n            \"com.docker.compose.project\": \"iw8m-5619e88a6144\",\n            \"com.docker.compose.version\": \"5.5.0\"\n        },\n        \"Containers\": {\n            \"b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635\": {\n                \"Name\": \"iw8m-5619e88a6144-main\",\n                \"EndpointID\": \"45dd548f609536179156113ec0ccdc8e12ce9b99279b305ba8d2d1fc435930d4\",\n                \"MacAddress\": \"32:c6:50:ba:11:19\",\n                \"IPv4Address\": \"192.168.229.3/24\",\n                \"IPv6Address\": \"\"\n            },\n            \"cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142\": {\n                \"Name\": \"iw8m-5619e88a6144-manager-1\",\n                \"EndpointID\": \"c31f982c8468bfa51acb24a4c8a8580a89278a1729c7b421fb008f24bfb85b19\",\n                \"MacAddress\": \"d2:1b:f7:39:e4:9a\",\n                \"IPv4Address\": \"192.168.229.2/24\",\n                \"IPv6Address\": \"\"\n            }\n        },\n        \"Status\": {\n            \"IPAM\": {\n                \"Subnets\": {\n                    \"192.168.229.0/24\": {\n                        \"IPsInUse\": 5,\n                        \"DynamicIPsAvailable\": 251\n                    }\n                }\n            }\n        }\n    }\n]\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "wait",
+      "b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635"
+    ],
+    "returncode": 0,
+    "output": "0\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635"
+    ],
+    "returncode": 0,
+    "output": "SLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGED_SUITE_OK\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "run",
+      "-d",
+      "--name",
+      "iw8m-5619e88a6144-main-crash",
+      "app",
+      "crash"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:08:52+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-main-crash Creating \n Container iw8m-5619e88a6144-main-crash Created \ndfa2e264d04b63a359d72d98bd2d09e0f1ef99233a240234fc5f015c8c48eade\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-q",
+      "--filter",
+      "label=iwork.lease=dc50cfd7-15f9-4974-acf7-d675ba86f058"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "62d3dcfb5c9f",
+      "sh",
+      "-c",
+      "test -f /workspace/child-heartbeat && echo ready || true"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "62d3dcfb5c9f",
+      "sh",
+      "-c",
+      "test -f /workspace/child-heartbeat && echo ready || true"
+    ],
+    "returncode": 0,
+    "output": "ready\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "62d3dcfb5c9f",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "2"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "62d3dcfb5c9f",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "6"
+  },
+  {
+    "argv": [
+      "docker",
+      "kill",
+      "--signal=KILL",
+      "dfa2e264d04b63a359d72d98bd2d09e0f1ef99233a240234fc5f015c8c48eade"
+    ],
+    "returncode": 0,
+    "output": "dfa2e264d04b63a359d72d98bd2d09e0f1ef99233a240234fc5f015c8c48eade\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "62d3dcfb5c9f",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "7"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "62d3dcfb5c9f",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "11"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": "62d3dcfb5c9f\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=62d3dcfb5c9f"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "run",
+      "-d",
+      "--name",
+      "iw8m-5619e88a6144-live-orphans",
+      "app",
+      "multi-crash"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:08:58+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-main-crash, iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-live-orphans Creating \n Container iw8m-5619e88a6144-live-orphans Created \n6cf0f2a9df0d747da84a64349e39359106373d9a8036265c133f41f7c14911a8\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-q",
+      "--filter",
+      "label=iwork.lease=983f470b-797b-4146-8b7e-3dd763ef7cba"
+    ],
+    "returncode": 0,
+    "output": "2ad91da8634d\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-q",
+      "--filter",
+      "label=iwork.lease=0eda1105-27b7-4002-b46c-9cfdfd2e901f"
+    ],
+    "returncode": 0,
+    "output": "9f0b3efdf3b2\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "kill",
+      "--signal=KILL",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "kill",
+      "--signal=KILL",
+      "6cf0f2a9df0d747da84a64349e39359106373d9a8036265c133f41f7c14911a8"
+    ],
+    "returncode": 0,
+    "output": "6cf0f2a9df0d747da84a64349e39359106373d9a8036265c133f41f7c14911a8\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "2ad91da8634d",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "3"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "2ad91da8634d",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "7"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "9f0b3efdf3b2",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "5"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "9f0b3efdf3b2",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "9"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=2ad91da8634d"
+    ],
+    "returncode": 0,
+    "output": "2ad91da8634d\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=9f0b3efdf3b2"
+    ],
+    "returncode": 0,
+    "output": "9f0b3efdf3b2\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "up",
+      "-d",
+      "manager"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:09:01+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-live-orphans, iw8m-5619e88a6144-main-crash, iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-manager-1 Starting \n Container iw8m-5619e88a6144-manager-1 Started \n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nRECOVER_REMOVED 9f0b3efdf3b2\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nRECOVER_REMOVED 9f0b3efdf3b2\nRECOVER_REMOVED 2ad91da8634d\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGER_READY\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=2ad91da8634d"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nRECOVER_REMOVED 9f0b3efdf3b2\nRECOVER_REMOVED 2ad91da8634d\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGER_READY\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=9f0b3efdf3b2"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nRECOVER_REMOVED 9f0b3efdf3b2\nRECOVER_REMOVED 2ad91da8634d\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGER_READY\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "run",
+      "--rm",
+      "-T",
+      "app",
+      "recovered-multi"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:09:01+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-live-orphans, iw8m-5619e88a6144-main-crash, iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-app-run-124e7c7356bd Creating \n Container iw8m-5619e88a6144-app-run-124e7c7356bd Created \nLIVE_RECOVERY_OK\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=8691bc199997feb1e96456f89feeda424272ae371c8e440309a62eaf9a088331"
+    ],
+    "returncode": 0,
+    "output": "8691bc199997\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "run",
+      "-d",
+      "--name",
+      "iw8m-5619e88a6144-deny-cleanup",
+      "app",
+      "cleanup-failure"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:09:02+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-live-orphans, iw8m-5619e88a6144-main-crash, iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-deny-cleanup Creating \n Container iw8m-5619e88a6144-deny-cleanup Created \n27682225bea6347f4b84ab673341b75652e00876b610007da3c260796983030a\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-q",
+      "--filter",
+      "label=iwork.lease=85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b"
+    ],
+    "returncode": 0,
+    "output": "e95c028b90b6\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e95c028b90b6",
+      "sh",
+      "-c",
+      "test -f /workspace/child-heartbeat && echo ready || true"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e95c028b90b6",
+      "sh",
+      "-c",
+      "test -f /workspace/child-heartbeat && echo ready || true"
+    ],
+    "returncode": 0,
+    "output": "ready\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e95c028b90b6",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "4"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e95c028b90b6",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "8"
+  },
+  {
+    "argv": [
+      "docker",
+      "wait",
+      "27682225bea6347f4b84ab673341b75652e00876b610007da3c260796983030a"
+    ],
+    "returncode": 0,
+    "output": "0\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "27682225bea6347f4b84ab673341b75652e00876b610007da3c260796983030a"
+    ],
+    "returncode": 0,
+    "output": "CLEANUP_RETRY_OK\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e95c028b90b6"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "run",
+      "-d",
+      "--name",
+      "iw8m-5619e88a6144-daemon-offline",
+      "app",
+      "cleanup-failure"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:09:06+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-deny-cleanup, iw8m-5619e88a6144-live-orphans, iw8m-5619e88a6144-main-crash, iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-daemon-offline Creating \n Container iw8m-5619e88a6144-daemon-offline Created \n64b4c55239c30395304a931d98a4ffb71bb832df70e4620e742b5edfddf15624\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-q",
+      "--filter",
+      "label=iwork.lease=5eadc97e-8d5f-4328-923e-1402cc0d360f"
+    ],
+    "returncode": 0,
+    "output": "ed40febd6896\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ed40febd6896",
+      "sh",
+      "-c",
+      "test -f /workspace/child-heartbeat && echo ready || true"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ed40febd6896",
+      "sh",
+      "-c",
+      "test -f /workspace/child-heartbeat && echo ready || true"
+    ],
+    "returncode": 0,
+    "output": "ready\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ed40febd6896",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "3"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "ed40febd6896",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "7"
+  },
+  {
+    "argv": [
+      "docker",
+      "wait",
+      "64b4c55239c30395304a931d98a4ffb71bb832df70e4620e742b5edfddf15624"
+    ],
+    "returncode": 0,
+    "output": "0\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "64b4c55239c30395304a931d98a4ffb71bb832df70e4620e742b5edfddf15624"
+    ],
+    "returncode": 0,
+    "output": "CLEANUP_RETRY_OK\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=ed40febd6896"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "run",
+      "-d",
+      "--name",
+      "iw8m-5619e88a6144-external-deadline",
+      "app",
+      "crash"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:09:09+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-daemon-offline, iw8m-5619e88a6144-deny-cleanup, iw8m-5619e88a6144-live-orphans, iw8m-5619e88a6144-main-crash, iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-external-deadline Creating \n Container iw8m-5619e88a6144-external-deadline Created \ndd70acfe4e7205a18ea007de212ce13cbc7f711de7cfbb9021024ee862120b5e\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-q",
+      "--filter",
+      "label=iwork.lease=8f48141b-b19a-4252-a9e9-4b7aa23f7bb1"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e9be3265af74",
+      "sh",
+      "-c",
+      "test -f /workspace/child-heartbeat && echo ready || true"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e9be3265af74",
+      "sh",
+      "-c",
+      "test -f /workspace/child-heartbeat && echo ready || true"
+    ],
+    "returncode": 0,
+    "output": "ready\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "inspect",
+      "e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "[\n    {\n        \"Id\": \"e9be3265af74437db9ab1d7be8bde95a0405e07df762a87f1f71761e58cc227f\",\n        \"Created\": \"2026-11-12T14:09:09.846674304Z\",\n        \"Path\": \"sh\",\n        \"Args\": [\n            \"-c\",\n            \"trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done\"\n        ],\n        \"State\": {\n            \"Status\": \"running\",\n            \"Running\": true,\n            \"Paused\": false,\n            \"Restarting\": false,\n            \"OOMKilled\": false,\n            \"Dead\": false,\n            \"Pid\": 2292574,\n            \"ExitCode\": 0,\n            \"Error\": \"\",\n            \"StartedAt\": \"2026-11-12T14:09:09.919004864Z\",\n            \"FinishedAt\": \"0001-01-01T00:00:00Z\"\n        },\n        \"Image\": \"sha256:f471860e18f90c080155b976c82a9e1487adf13a51ce1b86f7f904a8e825a59f\",\n        \"ResolvConfPath\": \"/var/lib/docker/containers/e9be3265af74437db9ab1d7be8bde95a0405e07df762a87f1f71761e58cc227f/resolv.conf\",\n        \"HostnamePath\": \"/var/lib/docker/containers/e9be3265af74437db9ab1d7be8bde95a0405e07df762a87f1f71761e58cc227f/hostname\",\n        \"HostsPath\": \"/var/lib/docker/containers/e9be3265af74437db9ab1d7be8bde95a0405e07df762a87f1f71761e58cc227f/hosts\",\n        \"LogPath\": \"/var/lib/docker/containers/e9be3265af74437db9ab1d7be8bde95a0405e07df762a87f1f71761e58cc227f/e9be3265af74437db9ab1d7be8bde95a0405e07df762a87f1f71761e58cc227f-json.log\",\n        \"Name\": \"/agentscope-sandbox-iw8m-5619e88a6144-managed-8f48141b-b19a-4252-a9e9-4b7aa23f7bb1\",\n        \"RestartCount\": 0,\n        \"Driver\": \"overlayfs\",\n        \"Platform\": \"linux\",\n        \"MountLabel\": \"\",\n        \"ProcessLabel\": \"\",\n        \"AppArmorProfile\": \"\",\n        \"ExecIDs\": [\n            \"a3b1c7b967bb9a024212f0bfceccd7f070010e5bee35c9c5045a61fc229ceb4d\"\n        ],\n        \"HostConfig\": {\n            \"Binds\": null,\n            \"ContainerIDFile\": \"\",\n            \"LogConfig\": {\n                \"Type\": \"json-file\",\n                \"Config\": {\n                    \"max-file\": \"5\",\n                    \"max-size\": \"20m\"\n                }\n            },\n            \"NetworkMode\": \"none\",\n            \"PortBindings\": {},\n            \"RestartPolicy\": {\n                \"Name\": \"no\",\n                \"MaximumRetryCount\": 0\n            },\n            \"AutoRemove\": true,\n            \"VolumeDriver\": \"\",\n            \"VolumesFrom\": null,\n            \"ConsoleSize\": [\n                0,\n                0\n            ],\n            \"CapAdd\": null,\n            \"CapDrop\": [\n                \"ALL\"\n            ],\n            \"CgroupnsMode\": \"private\",\n            \"Dns\": null,\n            \"DnsOptions\": [],\n            \"DnsSearch\": [],\n            \"ExtraHosts\": null,\n            \"GroupAdd\": null,\n            \"IpcMode\": \"private\",\n            \"Cgroup\": \"\",\n            \"Links\": null,\n            \"OomScoreAdj\": 0,\n            \"PidMode\": \"\",\n            \"Privileged\": false,\n            \"PublishAllPorts\": false,\n            \"ReadonlyRootfs\": true,\n            \"SecurityOpt\": [\n                \"no-new-privileges\"\n            ],\n            \"Tmpfs\": {\n                \"/tmp/codex\": \"rw,noexec,nosuid,size=4m,uid=1000,gid=1000,mode=0700\",\n                \"/workspace\": \"rw,noexec,nosuid,size=8m,uid=1000,gid=1000,mode=0700\"\n            },\n            \"UTSMode\": \"\",\n            \"UsernsMode\": \"\",\n            \"ShmSize\": 8408530944,\n            \"Runtime\": \"runc\",\n            \"Isolation\": \"\",\n            \"CpuShares\": 0,\n            \"Memory\": 67108864,\n            \"NanoCpus\": 500000000,\n            \"CgroupParent\": \"\",\n            \"BlkioWeight\": 0,\n            \"BlkioWeightDevice\": [],\n            \"BlkioDeviceReadBps\": [],\n            \"BlkioDeviceWriteBps\": [],\n            \"BlkioDeviceReadIOps\": [],\n            \"BlkioDeviceWriteIOps\": [],\n            \"CpuPeriod\": 0,\n            \"CpuQuota\": 0,\n            \"CpuRealtimePeriod\": 0,\n            \"CpuRealtimeRuntime\": 0,\n            \"CpusetCpus\": \"\",\n            \"CpusetMems\": \"\",\n            \"Devices\": [],\n            \"DeviceCgroupRules\": null,\n            \"DeviceRequests\": null,\n            \"MemoryReservation\": 0,\n            \"MemorySwap\": 67108864,\n            \"MemorySwappiness\": null,\n            \"OomKillDisable\": null,\n            \"PidsLimit\": 32,\n            \"Ulimits\": null,\n            \"CpuCount\": 0,\n            \"CpuPercent\": 0,\n            \"IOMaximumIOps\": 0,\n            \"IOMaximumBandwidth\": 0,\n            \"MaskedPaths\": [\n                \"/proc/acpi\",\n                \"/proc/asound\",\n                \"/proc/interrupts\",\n                \"/proc/kcore\",\n                \"/proc/keys\",\n                \"/proc/latency_stats\",\n                \"/proc/sched_debug\",\n                \"/proc/scsi\",\n                \"/proc/timer_list\",\n                \"/proc/timer_stats\",\n                \"/sys/devices/virtual/powercap\",\n                \"/sys/firmware\"\n            ],\n            \"ReadonlyPaths\": [\n                \"/proc/bus\",\n                \"/proc/fs\",\n                \"/proc/irq\",\n                \"/proc/sys\",\n                \"/proc/sysrq-trigger\"\n            ]\n        },\n        \"Storage\": {\n            \"RootFS\": {\n                \"Snapshot\": {\n                    \"Name\": \"overlayfs\"\n                }\n            }\n        },\n        \"Mounts\": [],\n        \"Config\": {\n            \"Hostname\": \"e9be3265af74\",\n            \"Domainname\": \"\",\n            \"User\": \"1000:1000\",\n            \"AttachStdin\": false,\n            \"AttachStdout\": false,\n            \"AttachStderr\": false,\n            \"Tty\": false,\n            \"OpenStdin\": false,\n            \"StdinOnce\": false,\n            \"Env\": [\n                \"PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n                \"LANG=C.UTF-8\",\n                \"GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305\",\n                \"PYTHON_VERSION=3.13.18\",\n                \"PYTHON_SHA256=abb0102e6d4ae027509bcb82327d9dd85515b44a3ba8ad538cfc5e9847029f68\"\n            ],\n            \"Cmd\": [\n                \"sh\",\n                \"-c\",\n                \"trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done\"\n            ],\n            \"Image\": \"iwork-sandbox-worker:local\",\n            \"Volumes\": null,\n            \"WorkingDir\": \"/\",\n            \"Entrypoint\": null,\n            \"Labels\": {\n                \"iwork.lease\": \"8f48141b-b19a-4252-a9e9-4b7aa23f7bb1\",\n                \"iwork.manager\": \"iw8m-5619e88a6144\",\n                \"iwork.probe\": \"iw8m-5619e88a6144\",\n                \"iwork.task\": \"managed-8f48141b-b19a-4252-a9e9-4b7aa23f7bb1\"\n            }\n        },\n        \"NetworkSettings\": {\n            \"SandboxID\": \"91649002169b609b0f0ad5e81457b0b7c7ebba598142c880fa010e0076d2b0b4\",\n            \"SandboxKey\": \"/var/run/docker/netns/91649002169b\",\n            \"Ports\": {},\n            \"Networks\": {\n                \"none\": {\n                    \"IPAMConfig\": null,\n                    \"Links\": null,\n                    \"Aliases\": null,\n                    \"DriverOpts\": null,\n                    \"GwPriority\": 0,\n                    \"NetworkID\": \"d3012d8c2e7665b418e9b5a329da6b8f90e9e5e6aa8c318a75dae9168904fddd\",\n                    \"EndpointID\": \"027b4aa9d42aa91ca609664b1c676a893c3939eb27221c0e8e3eecc569c3852f\",\n                    \"Gateway\": \"\",\n                    \"IPAddress\": \"\",\n                    \"MacAddress\": \"\",\n                    \"IPPrefixLen\": 0,\n                    \"IPv6Gateway\": \"\",\n                    \"GlobalIPv6Address\": \"\",\n                    \"GlobalIPv6PrefixLen\": 0,\n                    \"DNSNames\": null\n                }\n            }\n        },\n        \"ImageManifestDescriptor\": {\n            \"mediaType\": \"application/vnd.oci.image.manifest.v1+json\",\n            \"digest\": \"sha256:aa63463adbb6d3ccc93fa6542621d1281303561686c6b0511b3aea9a46e434a5\",\n            \"size\": 1242,\n            \"platform\": {\n                \"architecture\": \"arm64\",\n                \"os\": \"linux\"\n            }\n        }\n    }\n]\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e9be3265af74",
+      "sh",
+      "-c",
+      "test ! -e /opt/task-init && test ! -e /var/run/docker.sock && test ! -e /watchdog && echo 9999999999999 > /workspace/deadline"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e9be3265af74",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "1"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e9be3265af74",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "5"
+  },
+  {
+    "argv": [
+      "docker",
+      "kill",
+      "--signal=KILL",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "kill",
+      "--signal=KILL",
+      "dd70acfe4e7205a18ea007de212ce13cbc7f711de7cfbb9021024ee862120b5e"
+    ],
+    "returncode": 0,
+    "output": "dd70acfe4e7205a18ea007de212ce13cbc7f711de7cfbb9021024ee862120b5e\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e9be3265af74",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "8"
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "e9be3265af74",
+      "cat",
+      "/workspace/child-heartbeat"
+    ],
+    "returncode": 0,
+    "output": "12"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": "e9be3265af74\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=e9be3265af74"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "9adaec3f14ac4a107024bc16197c8d4c318f37cded0cfbeabc1282794a6336ad"
+    ],
+    "returncode": 0,
+    "output": "{\"ageAtConfirmedRemovalMs\":15235,\"removed\":\"e9be3265af74\",\"confirmedAbsentAt\":\"2026-11-12T14:09:25.082651379Z\",\"ageMs\":15142,\"created\":\"2026-11-12T14:09:09.846674304Z\"}\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "id=8691bc199997feb1e96456f89feeda424272ae371c8e440309a62eaf9a088331"
+    ],
+    "returncode": 0,
+    "output": "8691bc199997\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nRECOVER_REMOVED 9f0b3efdf3b2\nRECOVER_REMOVED 2ad91da8634d\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGER_READY\nCLEANUP_RETRY_PENDING 85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b\nCONVERT_FAILED 85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCLEANUP_RETRY_PENDING 5eadc97e-8d5f-4328-923e-1402cc0d360f\nCONVERT_FAILED 5eadc97e-8d5f-4328-923e-1402cc0d360f io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "up",
+      "-d",
+      "manager"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:09:25+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-external-deadline, iw8m-5619e88a6144-daemon-offline, iw8m-5619e88a6144-deny-cleanup, iw8m-5619e88a6144-live-orphans, iw8m-5619e88a6144-main-crash, iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-manager-1 Starting \n Container iw8m-5619e88a6144-manager-1 Started \n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nRECOVER_REMOVED 9f0b3efdf3b2\nRECOVER_REMOVED 2ad91da8634d\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGER_READY\nCLEANUP_RETRY_PENDING 85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b\nCONVERT_FAILED 85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCLEANUP_RETRY_PENDING 5eadc97e-8d5f-4328-923e-1402cc0d360f\nCONVERT_FAILED 5eadc97e-8d5f-4328-923e-1402cc0d360f io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nRECOVER_REMOVED 9f0b3efdf3b2\nRECOVER_REMOVED 2ad91da8634d\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGER_READY\nCLEANUP_RETRY_PENDING 85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b\nCONVERT_FAILED 85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCLEANUP_RETRY_PENDING 5eadc97e-8d5f-4328-923e-1402cc0d360f\nCONVERT_FAILED 5eadc97e-8d5f-4328-923e-1402cc0d360f io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nRECOVER_REMOVED 9f0b3efdf3b2\nRECOVER_REMOVED 2ad91da8634d\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGER_READY\nCLEANUP_RETRY_PENDING 85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b\nCONVERT_FAILED 85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCLEANUP_RETRY_PENDING 5eadc97e-8d5f-4328-923e-1402cc0d360f\nCONVERT_FAILED 5eadc97e-8d5f-4328-923e-1402cc0d360f io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGER_READY\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "run",
+      "--rm",
+      "-T",
+      "app",
+      "recovered"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:09:26+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-external-deadline, iw8m-5619e88a6144-daemon-offline, iw8m-5619e88a6144-deny-cleanup, iw8m-5619e88a6144-live-orphans, iw8m-5619e88a6144-main-crash, iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-app-run-12693c44c90f Creating \n Container iw8m-5619e88a6144-app-run-12693c44c90f Created \nMANAGED_RECOVERY_OK\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "stop",
+      "watchdog"
+    ],
+    "returncode": 0,
+    "output": " Container iw8m-5619e88a6144-watchdog-1 Stopping \n Container iw8m-5619e88a6144-watchdog-1 Stopped \n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "run",
+      "--rm",
+      "-T",
+      "app",
+      "admission-denied"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:09:29+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-external-deadline, iw8m-5619e88a6144-daemon-offline, iw8m-5619e88a6144-deny-cleanup, iw8m-5619e88a6144-live-orphans, iw8m-5619e88a6144-main-crash, iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-app-run-e96c8cb7e59c Creating \n Container iw8m-5619e88a6144-app-run-e96c8cb7e59c Created \nADMISSION_DENIED\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "start",
+      "watchdog"
+    ],
+    "returncode": 0,
+    "output": " Container iw8m-5619e88a6144-watchdog-1 Starting \n Container iw8m-5619e88a6144-watchdog-1 Started \n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "run",
+      "--rm",
+      "-T",
+      "app",
+      "admission-restored"
+    ],
+    "returncode": 0,
+    "output": "time=\"2026-11-12T22:09:30+08:00\" level=warning msg=\"Found orphan containers (iw8m-5619e88a6144-external-deadline, iw8m-5619e88a6144-daemon-offline, iw8m-5619e88a6144-deny-cleanup, iw8m-5619e88a6144-live-orphans, iw8m-5619e88a6144-main-crash, iw8m-5619e88a6144-main) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.\"\n Container iw8m-5619e88a6144-app-run-6a8e7d6aff8b Creating \n Container iw8m-5619e88a6144-app-run-6a8e7d6aff8b Created \nADMISSION_RESTORED\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "label=iwork.manager=iw8m-5619e88a6144"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "9adaec3f14ac4a107024bc16197c8d4c318f37cded0cfbeabc1282794a6336ad"
+    ],
+    "returncode": 0,
+    "output": "{\"ageAtConfirmedRemovalMs\":15235,\"removed\":\"e9be3265af74\",\"confirmedAbsentAt\":\"2026-11-12T14:09:25.082651379Z\",\"ageMs\":15142,\"created\":\"2026-11-12T14:09:09.846674304Z\"}\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "rm",
+      "-f",
+      "8691bc199997feb1e96456f89feeda424272ae371c8e440309a62eaf9a088331"
+    ],
+    "returncode": 0,
+    "output": "8691bc199997feb1e96456f89feeda424272ae371c8e440309a62eaf9a088331\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "logs",
+      "cf82942d7627dafec7276b17575c6ba8140297835d429b1e6d569cae677f7142"
+    ],
+    "returncode": 0,
+    "output": "MANAGER_READY\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nCONVERT_FAILED 9d927389-162f-4136-ad54-345f2a7a8990 io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCONVERT_FAILED e61e42bc-f9e0-4556-80cc-ca2ddf19b8fc io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 23: \nCONVERT_FAILED fdc4616b-3733-46c8-a717-9eb0ee46c593 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nCONVERT_FAILED dc50cfd7-15f9-4974-acf7-d675ba86f058 io.agentscope.harness.agent.sandbox.SandboxException$ExecTimeoutException: Command timed out after 6s: python /opt/worker.py convert\nRECOVER_REMOVED 9f0b3efdf3b2\nRECOVER_REMOVED 2ad91da8634d\nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGER_READY\nCLEANUP_RETRY_PENDING 85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b\nCONVERT_FAILED 85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nCLEANUP_RETRY_PENDING 5eadc97e-8d5f-4328-923e-1402cc0d360f\nCONVERT_FAILED 5eadc97e-8d5f-4328-923e-1402cc0d360f io.agentscope.harness.agent.sandbox.SandboxException$ExecException: Command exited with code 137: \nSLF4J(W): No SLF4J providers were found.\nSLF4J(W): Defaulting to no-operation (NOP) logger implementation\nSLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.\nMANAGER_READY\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "label=iwork.manager=iw8m-5619e88a6144"
+    ],
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "rm",
+      "-f",
+      "b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635"
+    ],
+    "returncode": 0,
+    "output": "b2a7ecc37d04769e9f9d6797f1bbc5d271d2f6f570b51992bb25250241c28635\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "rm",
+      "-f",
+      "dfa2e264d04b63a359d72d98bd2d09e0f1ef99233a240234fc5f015c8c48eade"
+    ],
+    "returncode": 0,
+    "output": "dfa2e264d04b63a359d72d98bd2d09e0f1ef99233a240234fc5f015c8c48eade\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "rm",
+      "-f",
+      "6cf0f2a9df0d747da84a64349e39359106373d9a8036265c133f41f7c14911a8"
+    ],
+    "returncode": 0,
+    "output": "6cf0f2a9df0d747da84a64349e39359106373d9a8036265c133f41f7c14911a8\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "rm",
+      "-f",
+      "27682225bea6347f4b84ab673341b75652e00876b610007da3c260796983030a"
+    ],
+    "returncode": 0,
+    "output": "27682225bea6347f4b84ab673341b75652e00876b610007da3c260796983030a\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "rm",
+      "-f",
+      "64b4c55239c30395304a931d98a4ffb71bb832df70e4620e742b5edfddf15624"
+    ],
+    "returncode": 0,
+    "output": "64b4c55239c30395304a931d98a4ffb71bb832df70e4620e742b5edfddf15624\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "rm",
+      "-f",
+      "dd70acfe4e7205a18ea007de212ce13cbc7f711de7cfbb9021024ee862120b5e"
+    ],
+    "returncode": 0,
+    "output": "dd70acfe4e7205a18ea007de212ce13cbc7f711de7cfbb9021024ee862120b5e\n"
+  },
+  {
+    "argv": [
+      "docker",
+      "compose",
+      "-f",
+      "compose.managed.yaml",
+      "-p",
+      "iw8m-5619e88a6144",
+      "down",
+      "--remove-orphans"
+    ],
+    "returncode": 0,
+    "output": " Container iw8m-5619e88a6144-watchdog-1 Stopping \n Container iw8m-5619e88a6144-manager-1 Stopping \n Container iw8m-5619e88a6144-watchdog-1 Stopped \n Container iw8m-5619e88a6144-watchdog-1 Removing \n Container iw8m-5619e88a6144-watchdog-1 Removed \n Container iw8m-5619e88a6144-manager-1 Stopped \n Container iw8m-5619e88a6144-manager-1 Removing \n Container iw8m-5619e88a6144-manager-1 Removed \n Network iw8m-5619e88a6144_control Removing \n Network iw8m-5619e88a6144_control Removed \n"
+  }
+]

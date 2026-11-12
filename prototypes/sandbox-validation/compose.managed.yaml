@@ -10,10 +10,28 @@ services:
     environment:
       PROBE_RUN: ${PROBE_RUN:?set run ID}
       MANAGER_KEY: synthetic-manager-key
+      PATH: /opt/fault:/opt/java/openjdk/bin:/usr/local/bin:/usr/bin:/bin
     volumes:
       - ${DOCKER_SOCKET:?set local socket}:/var/run/docker.sock
       - ${PROBE_EVIDENCE:?set evidence directory}/registry:/registry
+      - ${PROBE_EVIDENCE:?set evidence directory}/watchdog:/watchdog:ro
+      - ${PROBE_EVIDENCE:?set evidence directory}/faults:/faults:ro
     networks: [control]
+  watchdog:
+    image: iwork-sandbox-probe:local
+    entrypoint: [java, -Djava.io.tmpdir=/tmp/codex, -cp, '/app/classes:/app/lib/*', WatchdogProbe]
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp/codex:rw,noexec,nosuid,size=16m,mode=1777
+    environment:
+      PROBE_RUN: ${PROBE_RUN:?set run ID}
+    volumes:
+      - ${DOCKER_SOCKET:?set local socket}:/var/run/docker.sock
+      - ${PROBE_EVIDENCE:?set evidence directory}/watchdog:/watchdog
   app:
     image: iwork-sandbox-probe:local
     entrypoint: [java, -Djava.io.tmpdir=/tmp/codex, -cp, '/app/classes:/app/lib/*', ManagerClientProbe]

@@ -84,11 +84,8 @@ public final class ManagerClientProbe {
         check(task("GET", alice, bob.path("token").asText()).code == 404, "cross-task read denied");
         check(task("DELETE", alice, bob.path("token").asText()).code == 404, "cross-task cancellation denied");
         check(task("GET", alice, null).code == 404, "missing task capability denied");
-        // Business cancellation wins before asking the manager to stop processing.
-        String business = "CANCELLED";
         JsonNode cancelled = task("DELETE", alice, alice.path("token").asText()).body;
         check(cancelled.path("state").asText().equals("CANCELLED") && cancelled.path("cleaned").asBoolean(), "cancel returns after verified cleanup");
-        check(!business.equals("RUNNING"), "late publication rejected by main business state");
         check(terminal(bob).path("draft").asText().contains("BOB_ONLY"), "other task remains independent");
         JsonNode failure = terminal(create("__IW8_FAIL_FIXTURE__"));
         check(failure.path("state").asText().equals("FAILED") && failure.path("draft").asText().isEmpty(), "processor failure cannot publish partial output");
@@ -97,6 +94,7 @@ public final class ManagerClientProbe {
         check(Files.readString(OUT.resolve("managed-version.md")).equals(old), "old version preserved after all failures");
         JSON.writerWithDefaultPrettyPrinter().writeValue(OUT.resolve("manager-client.json").toFile(),
                 Map.of("checks", CHECKS, "sdkReply", JSON.valueToTree(reply), "timeout", timeout, "cancel", cancelled));
+        lateResultPublication();
         System.out.println("MANAGED_SUITE_OK");
     }
     static void crashReady() throws Exception {
@@ -105,10 +103,81 @@ public final class ManagerClientProbe {
         System.out.println("CLIENT_CRASH_READY");
         Thread.sleep(60000);
     }
+    static void lateResultPublication() throws Exception {
+        JsonNode original = terminal(create("OLD_PUBLISHED_VERSION"));
+        SandboxProbe.Task baseline = new SandboxProbe.Task("publication-baseline", "alice");
+        check(baseline.publish(original.path("draft").asText(), false), "real publication entry accepts normal result");
+        byte[] old = Files.readAllBytes(OUT.resolve("version.md"));
+        JsonNode lease = create("NEW_RESULT_MUST_NOT_PUBLISH");
+        check(terminal(lease).path("state").asText().equals("SUCCEEDED"), "remote processing completed before cancellation");
+        SandboxProbe.Task business = new SandboxProbe.Task("publication-cancelled", "alice");
+        business.cancel();
+        long cancelledAt = System.nanoTime();
+        // A fresh HTTP retrieval after cancellation models a queued/retried success delivery.
+        JsonNode late = status(lease);
+        long receivedAt = System.nanoTime();
+        check(late.path("state").asText().equals("SUCCEEDED"), "late successful remote result actually delivered");
+        boolean published = business.publish(late.path("draft").asText(), false);
+        check(!published, "real publication entry rejects late successful result");
+        check(Arrays.equals(old, Files.readAllBytes(OUT.resolve("version.md"))), "published bytes unchanged after late delivery");
+        check(!Files.exists(OUT.resolve("version.next")), "no unpublished version file left");
+        check(!business.publish(late.path("draft").asText(), false), "duplicate delivery also rejected");
+        JSON.writerWithDefaultPrettyPrinter().writeValue(OUT.resolve("late-publication.json").toFile(),
+                Map.of("remoteState", late.path("state").asText(), "businessState", business.state,
+                        "receivedAfterCancel", receivedAt > cancelledAt, "published", published,
+                        "preservedVersion", Files.readString(OUT.resolve("version.md")), "stagingAbsent", true));
+    }
+    static void multiCrash() throws Exception {
+        List<JsonNode> leases = List.of(create("__IW8_SLOW_FIXTURE__"), create("__IW8_SLOW_FIXTURE__"));
+        JSON.writeValue(OUT.resolve("client-multi.local.json").toFile(), leases);
+        System.out.println("MULTI_CRASH_READY");
+        Thread.sleep(60000);
+    }
+    static void recoverMulti() throws Exception {
+        var results = JSON.createArrayNode();
+        for (JsonNode lease : JSON.readTree(OUT.resolve("client-multi.local.json").toFile())) {
+            JsonNode result = status(lease);
+            check(result.path("state").asText().equals("INTERRUPTED") && result.path("cleaned").asBoolean(), "live orphan recovered");
+            results.add(result);
+        }
+        JSON.writerWithDefaultPrettyPrinter().writeValue(OUT.resolve("live-recovery.json").toFile(), results);
+        System.out.println("LIVE_RECOVERY_OK");
+    }
+    static void cleanupFailure() throws Exception {
+        JsonNode lease = create("__IW8_SLOW_FIXTURE__");
+        JSON.writeValue(OUT.resolve("client-failure.local.json").toFile(), lease);
+        long until = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+        while (!Files.exists(OUT.resolve("cancel-now"))) {
+            if (System.nanoTime() > until) throw new AssertionError("missing fault injection gate");
+            Thread.sleep(50);
+        }
+        Reply cancelled = task("DELETE", lease, lease.path("token").asText());
+        JsonNode pending = cancelled.body;
+        check(cancelled.code == 202 && pending.path("state").asText().equals("CANCELLED"), "business cancellation accepted despite cleanup failure");
+        check(!pending.path("cleaned").asBoolean() && pending.path("processState").asText().equals("UNKNOWN")
+                && pending.path("cleanupState").asText().equals("RETRY_PENDING"), "cleanup failure remains explicitly unconfirmed");
+        check(request("POST", "/tasks", Map.of("source", "SHOULD_NOT_START"), KEY, null).code == 503, "unconfirmed cleanup blocks new admission");
+        JSON.writerWithDefaultPrettyPrinter().writeValue(OUT.resolve("cleanup-pending.json").toFile(), pending);
+        JsonNode settled = terminal(lease);
+        check(settled.path("state").asText().equals("CANCELLED") && settled.path("processState").asText().equals("STOPPED"), "retry confirms cleanup without rewriting business cancellation");
+        JSON.writerWithDefaultPrettyPrinter().writeValue(OUT.resolve("cleanup-retried.json").toFile(), settled);
+        System.out.println("CLEANUP_RETRY_OK");
+    }
     public static void main(String[] args) throws Exception {
         switch (args[0]) {
             case "suite" -> suite();
             case "crash" -> crashReady();
+            case "multi-crash" -> multiCrash();
+            case "recovered-multi" -> recoverMulti();
+            case "cleanup-failure" -> cleanupFailure();
+            case "admission-restored" -> {
+                check(terminal(create("SUPERVISION_RESTORED")).path("state").asText().equals("SUCCEEDED"), "admission restored after supervision recovery");
+                System.out.println("ADMISSION_RESTORED");
+            }
+            case "admission-denied" -> {
+                check(request("POST", "/tasks", Map.of("source", "MUST_NOT_START"), KEY, null).code == 503, "stale watchdog rejects admission");
+                System.out.println("ADMISSION_DENIED");
+            }
             case "recovered" -> {
                 JsonNode lease = JSON.readTree(OUT.resolve("client-lease.local.json").toFile());
                 JsonNode result = status(lease);

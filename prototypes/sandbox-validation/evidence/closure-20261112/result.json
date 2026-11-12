@@ -1,0 +1,324 @@
+{
+  "run": "iw8m-5619e88a6144",
+  "host": "macOS-27.2-arm64-arm-64bit",
+  "sourceHashes": {
+    ".gitignore": "1141064ed2630abfb4a4b52385d7e6c5676a9a51c3c01a4884a7cdaf05609a74",
+    "Dockerfile.app": "030941c0e44de900f8bf9f31ef9d3fcea3b663725188f44b8df8d24b9f5695b5",
+    "Dockerfile.worker": "8522d48fcd70e7fbb43add5f4af65b4b544ad915ea44557bcc0e9355ecfd0691",
+    "README.md": "e93f5185d8f551152360b2059f17c7ea994e4b3b44df11037a3d79bc8465bb90",
+    "compose.managed.yaml": "0c8870f9a67490138cfcf473be99e1712653630ce45f64fc85158de4b092fb37",
+    "compose.yaml": "2bac82ade22a52d2478f8795b004f8c18289fbd59bde022b16e1d25125dfd38c",
+    "fault-docker.sh": "de105c0e94bbb82db24b63b226a2136a207bc52f0dba8870eab640ee3b620dc9",
+    "pom.xml": "c12056560c796bd8671894063e6f50ce2689260ce220d2cf30b183c276330545",
+    "settings.xml": "ee6885c097c2a81b59682d70e2f94843103a476345501b1e66f8f5fa0bdf3719",
+    "src/main/java/ManagerClientProbe.java": "0c6b27bec7a281efaca84a92036763a02cbc06d752713ce85ec8894c3be11279",
+    "src/main/java/ManagerProbe.java": "990df85d8de2446d6fe260835c9b4ea1ecb6bc05feb556f766aa112b71f7d835",
+    "src/main/java/SandboxProbe.java": "b06fbb25e55c954bd16a73d952ef5080ea329734ec841d94edbdb3fa35a9d570",
+    "src/main/java/WatchdogProbe.java": "a7ad01c8e6e15ec905f87882ca3be2287e1c74b36eed8b8898e28a8639bc8f63",
+    "verify.py": "b0b00a7c37abc2a3e64eadd293632591d96d833d50cb804301e39da32242d42c",
+    "verify_managed.py": "97cc7f4404d643728621cd68cba325458c570a3f76a064f51b629c0f5e51ca3f",
+    "worker.py": "adc72c3d2035c9c383104de42b87bcdf62dc1fbf01139c1617f1683d248c904a"
+  },
+  "images": [
+    {
+      "Id": "sha256:f471860e18f90c080155b976c82a9e1487adf13a51ce1b86f7f904a8e825a59f",
+      "RepoTags": [
+        "iwork-sandbox-worker:local"
+      ],
+      "RepoDigests": [
+        "iwork-sandbox-worker@sha256:f471860e18f90c080155b976c82a9e1487adf13a51ce1b86f7f904a8e825a59f"
+      ],
+      "Comment": "buildkit.dockerfile.v0",
+      "Created": "2026-11-12T21:44:29.591329123+08:00",
+      "Config": {
+        "User": "1000:1000",
+        "Env": [
+          "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "LANG=C.UTF-8",
+          "GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305",
+          "PYTHON_VERSION=3.13.18",
+          "PYTHON_SHA256=abb0102e6d4ae027509bcb82327d9dd85515b44a3ba8ad538cfc5e9847029f68"
+        ],
+        "Cmd": [
+          "python3"
+        ],
+        "WorkingDir": "/"
+      },
+      "Architecture": "arm64",
+      "Os": "linux",
+      "Size": 74349483,
+      "RootFS": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:3d971ddbca237031066ab6609a11ae2e9e5b109da24d5c5d94d2e584dd94bd54",
+          "sha256:867b1974c4f78993069f7ada7359eec2ab64c216d746945db65a5c7aca3bb84a",
+          "sha256:3092cbd873290cdb51fb888686227d0d248e87bef599dfd3e349e180f89dab2b",
+          "sha256:83ca6df93417b05f92ec69d0a818a7317a22533037f7c3c1a055bcb3c1b6ccfd",
+          "sha256:5ee35af5a653d2f4bfc1bf946955bc7011e97ff1206a8a94603b4318dc424b0c"
+        ]
+      },
+      "Metadata": {
+        "LastTagTime": "2026-11-12T14:08:37.699158621Z"
+      },
+      "Descriptor": {
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "digest": "sha256:f471860e18f90c080155b976c82a9e1487adf13a51ce1b86f7f904a8e825a59f",
+        "size": 856
+      },
+      "Identity": {
+        "Build": [
+          {
+            "Ref": "8d2j4juytgpnmopxps9o3o3ym",
+            "CreatedAt": "2026-11-12T22:08:37.707952069+08:00"
+          }
+        ]
+      }
+    },
+    {
+      "Id": "sha256:b1f32a6be4dab803d306fc467dd69597ae669a7d20d26840ee3e67b6d9f2549f",
+      "RepoTags": [
+        "iwork-sandbox-probe:local"
+      ],
+      "RepoDigests": [
+        "iwork-sandbox-probe@sha256:b1f32a6be4dab803d306fc467dd69597ae669a7d20d26840ee3e67b6d9f2549f"
+      ],
+      "Comment": "buildkit.dockerfile.v0",
+      "Created": "2026-11-12T22:08:38.39907607+08:00",
+      "Config": {
+        "Env": [
+          "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "JAVA_HOME=/opt/java/openjdk",
+          "LANG=en_US.UTF-8",
+          "LANGUAGE=en_US:en",
+          "LC_ALL=en_US.UTF-8",
+          "JAVA_VERSION=jdk-21.0.12.1+1"
+        ],
+        "Entrypoint": [
+          "java",
+          "-Djava.io.tmpdir=/tmp/codex",
+          "-cp",
+          "/app/classes:/app/lib/*",
+          "SandboxProbe"
+        ],
+        "WorkingDir": "/app",
+        "Labels": {
+          "org.opencontainers.image.created": "2026-10-06T20:38:12.175309+00:00",
+          "org.opencontainers.image.description": "The Ubuntu container image maintained by Canonical\n\nUbuntu is a Debian-based Linux operating system that runs from the desktop to the cloud, to all your internet connected things.\nIt is the world's most popular operating system across public clouds and OpenStack clouds.\nIt is the number one platform for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers at scale.\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\n",
+          "org.opencontainers.image.title": "ubuntu",
+          "org.opencontainers.image.version": "26.04"
+        }
+      },
+      "Architecture": "arm64",
+      "Os": "linux",
+      "Size": 596407469,
+      "RootFS": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:862e6cfe4341019f54f4dc7c3325a967558a7102a32ceff4edaadf02796c5c07",
+          "sha256:900b24069e64aca5d65cf951635e7513f7f6d447debcfc1b99f73878cc039f59",
+          "sha256:647119b1a3d842729c88dc491eef41a48f14e41223072e2825057ab2e082c0f9",
+          "sha256:582970787d84b0eae2494cea9a04271fb1b22f0e80b9187e632ad74bf38238e3",
+          "sha256:9a1e1523dd3f347e09c053856bf745113e715f7345e5041e948ca326dbd63889",
+          "sha256:6715ee91c5c2331e67725a2dcb7bb698d287ec4793afd7cb640894744e880f23",
+          "sha256:431b198eab70a81309ebd026e4abadf17819d26279334360aeb9472b2604706f",
+          "sha256:83bafba251c46eb65925bcf6451e52472ca9aae8b271c39cecc0046c826332eb",
+          "sha256:34fef73605e9bf7832d4690c7283ab4dec9d252fdec2cde4152a2b546489aeb5",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+          "sha256:93e2c45da302b99eb4fb364946c438b31ebe7c6db405248b8e6ef3be0b922c8c"
+        ]
+      },
+      "Metadata": {
+        "LastTagTime": "2026-11-12T14:08:38.923894895Z"
+      },
+      "Descriptor": {
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "digest": "sha256:b1f32a6be4dab803d306fc467dd69597ae669a7d20d26840ee3e67b6d9f2549f",
+        "size": 856
+      },
+      "Identity": {
+        "Build": [
+          {
+            "Ref": "ae0sqgyehsv9fbetp7436qyf2",
+            "CreatedAt": "2026-11-12T22:08:39.047385464+08:00"
+          }
+        ]
+      }
+    }
+  ],
+  "boundary": {
+    "mainMounts": [
+      {
+        "Type": "bind",
+        "Source": "/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/app",
+        "Destination": "/evidence",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ],
+    "mainUser": "1000:1000",
+    "managerMounts": [
+      {
+        "Type": "bind",
+        "Source": "/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/faults",
+        "Destination": "/faults",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/registry",
+        "Destination": "/registry",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/watchdog",
+        "Destination": "/watchdog",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/Users/hekai/.orbstack/run/docker.sock",
+        "Destination": "/var/run/docker.sock",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ],
+    "managerHasBusinessCredentials": false,
+    "internalControlNetwork": true,
+    "hostPorts": [],
+    "watchdogMounts": [
+      {
+        "Type": "bind",
+        "Source": "/var/folders/0b/vzhc3wmj17jcp_v8fvrfddjm0000gn/T/codex/iwork-managed-3iefgafv/watchdog",
+        "Destination": "/watchdog",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/Users/hekai/.orbstack/run/docker.sock",
+        "Destination": "/var/run/docker.sock",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ],
+    "watchdogNetwork": "none"
+  },
+  "mainCrash": {
+    "childBeforeKill": [
+      2,
+      6
+    ],
+    "childAfterKill": [
+      7,
+      11
+    ],
+    "removedAfterSeconds": 4.596229625000003,
+    "managerState": "FAILED"
+  },
+  "liveRecovery": {
+    "containersAliveBeforeRestart": [
+      "2ad91da8634d",
+      "9f0b3efdf3b2"
+    ],
+    "childHeartbeats": [
+      [
+        3,
+        7
+      ],
+      [
+        5,
+        9
+      ]
+    ],
+    "managerRemovedEach": true,
+    "foreignContainerUntouched": true
+  },
+  "deny-cleanup": {
+    "pending": {
+      "id": "85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b",
+      "state": "CANCELLED",
+      "draft": "",
+      "cleaned": false,
+      "cleanupState": "RETRY_PENDING",
+      "processState": "UNKNOWN"
+    },
+    "persistedPending": true,
+    "processStillProgressed": [
+      4,
+      8
+    ],
+    "retried": {
+      "id": "85a2cfdc-c9e3-4230-ac20-cfeff2c3dd0b",
+      "state": "CANCELLED",
+      "draft": "",
+      "cleaned": true,
+      "cleanupState": "CONFIRMED",
+      "processState": "STOPPED"
+    }
+  },
+  "daemon-offline": {
+    "pending": {
+      "id": "5eadc97e-8d5f-4328-923e-1402cc0d360f",
+      "state": "CANCELLED",
+      "draft": "",
+      "cleaned": false,
+      "cleanupState": "RETRY_PENDING",
+      "processState": "UNKNOWN"
+    },
+    "persistedPending": true,
+    "processStillProgressed": [
+      3,
+      7
+    ],
+    "retried": {
+      "id": "5eadc97e-8d5f-4328-923e-1402cc0d360f",
+      "state": "CANCELLED",
+      "draft": "",
+      "cleaned": true,
+      "cleanupState": "CONFIRMED",
+      "processState": "STOPPED"
+    }
+  },
+  "externalDeadline": {
+    "childBeforeKill": [
+      1,
+      5
+    ],
+    "childAfterKill": [
+      8,
+      12
+    ],
+    "removedWithoutMainOrManagerAfterSeconds": 13.558870999999996,
+    "dockerCreated": "2026-11-12T14:09:09.846674304Z",
+    "watchdogReceipt": {
+      "ageAtConfirmedRemovalMs": 15235,
+      "removed": "e9be3265af74",
+      "confirmedAbsentAt": "2026-11-12T14:09:25.082651379Z",
+      "ageMs": 15142,
+      "created": "2026-11-12T14:09:09.846674304Z"
+    },
+    "workerLocalDeadlineTamperIgnored": true,
+    "workerTimerAbsent": true,
+    "foreignContainerUntouched": true
+  },
+  "watchdogAdmission": {
+    "staleHeartbeatRejected": true,
+    "noTaskCreatedWhileStopped": true,
+    "resumedAfterWatchdogRecovery": true
+  },
+  "probePassed": true,
+  "productionAccepted": false,
+  "remainingTaskContainers": 0,
+  "scope": "live-orphan recovery, late publication, failed cleanup and independent external deadline"
+}

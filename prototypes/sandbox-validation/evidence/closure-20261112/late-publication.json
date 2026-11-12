@@ -1,0 +1,8 @@
+{
+  "published" : false,
+  "preservedVersion" : "# Synthetic document\n\nOLD_PUBLISHED_VERSION",
+  "businessState" : "CANCELLED",
+  "stagingAbsent" : true,
+  "remoteState" : "SUCCEEDED",
+  "receivedAfterCancel" : true
+}

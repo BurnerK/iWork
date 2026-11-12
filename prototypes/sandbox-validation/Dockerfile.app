@@ -5,3 +5,4 @@ COPY target/classes /app/classes
 COPY target/lib /app/lib
 WORKDIR /app
 ENTRYPOINT ["java", "-Djava.io.tmpdir=/tmp/codex", "-cp", "/app/classes:/app/lib/*", "SandboxProbe"]
+COPY --chmod=0555 fault-docker.sh /opt/fault/docker
