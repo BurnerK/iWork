@@ -1,0 +1,16 @@
+{
+  "name": "iwork",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "26.13.1", "npm": "11.20.0" },
+  "packageManager": "npm@11.20.0",
+  "scripts": {
+    "setup": "node scripts/dev.mjs setup",
+    "dev": "node scripts/dev.mjs all",
+    "dev:infra": "node scripts/dev.mjs infra",
+    "dev:frontend": "node scripts/dev.mjs frontend",
+    "dev:backend": "node scripts/dev.mjs backend",
+    "dev:down": "node scripts/dev.mjs down",
+    "test:dev": "node --test scripts/dev.test.mjs"
+  }
+}

@@ -1,0 +1,33 @@
+services:
+  mysql:
+    image: mysql:8.4.7@sha256:0426ec38c7a10aa45ba383887df7878f74ee70e2fd589c7b69207f3577901903
+    ports:
+      - "127.0.0.1:${IWORK_DB_PORT}:3306"
+    environment:
+      MYSQL_DATABASE: iwork
+      MYSQL_USER: iwork
+      MYSQL_PASSWORD: ${IWORK_DB_PASSWORD:?Run npm run setup}
+      MYSQL_ROOT_PASSWORD: ${IWORK_MYSQL_ROOT_PASSWORD:?Run npm run setup}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql -h 127.0.0.1 -u iwork -D iwork -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  redis:
+    image: redis:8.2.3-alpine@sha256:08ad0b1d280850169a790dba1393ff7a90aef951fc19632cf4d3ce4f78e679ba
+    ports:
+      - "127.0.0.1:${IWORK_REDIS_PORT}:6379"
+    command: [redis-server, --appendonly, "yes", --appendfsync, everysec]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  mysql-data:
+  redis-data:

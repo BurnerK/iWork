@@ -60,15 +60,20 @@ Flyway 随应用启动运行，V1 保留原基线，V2 新增账号与个人会�
 
 ## 本机开发
 
-后端可连接你自行准备的独立 MySQL 8.4.7 测试库；不要复用其他项目账号或数据库。准备好 `iwork` 库与账号后：
+推荐使用根目录的统一 npm 入口，完整操作见 [README 本地开发](../README.md#本地开发推荐)：
 
 ```sh
-export IWORK_DB_PASSWORD='你的本地测试密码'
-export IWORK_FILES_DIRECTORY="$PWD/data/files"
-backend/mvnw -f backend/pom.xml spring-boot:run
+npm run setup
+npm run dev
 ```
 
-还需准备独立 Redis，设置初始管理员密码及本机 Cookie 配置，见下文 #11 配置。另一终端运行 `npm --prefix frontend run dev`，Vite 将 `/api` 与健康请求转发至 127.0.0.1:8080。正式浏览器验证使用 Compose 的已打包入口。
+根目录 `package.json` 不管理前端依赖，前端仍由 `frontend/package-lock.json` 和 `npm ci --prefix frontend` 管理；后端仍由 Maven Wrapper 管理。开发脚本只负责配置加载、Compose 依赖启动、端口检查、前台日志和进程清理，不改变交付构建。
+
+`compose.dev.yaml` 使用独立项目名和 MySQL/Redis 命名卷，依赖端口仅绑定回环地址。开发配置 `.env.development` 的数据库密码与交付 `.env` 分离，文件目录为 `data/dev/files`。脚本只允许本地依赖地址，防止开发迁移误连远程库；不要手动将 IDEA 指向其他环境。
+
+IDEA 调试时先执行 `npm run dev:infra`，将 `.env.development` 作为后端运行配置的环境文件加载，以仓库根目录为工作目录启动 `IWorkApplication`，前端用 `npm run dev:frontend`。Vite 仍将 `/api` 与健康请求转发至 `127.0.0.1:8080`。Java 修改后需要重新运行，未接入 DevTools。独立执行 Maven 命令时也需要自行导出配置；`.env.development` 不由 Spring Boot 自动加载。
+
+开发进程前台运行，Ctrl+C 清理本次应用进程，Compose 依赖保留；`npm run dev:down` 停止依赖且保留数据。脚本没有清库或重置密码入口。修改依赖端口后再次运行 `dev:infra`；修改数据库密码必须同步修改数据库账号，不能仅修改配置文件。
 
 ## 基础排错
 

@@ -14,6 +14,41 @@
 
 `backend/` 是正式 Java 主应用，`frontend/` 是 Vue 入口。`prototypes/` 只保留决策探针，不参与正式构建。模块职责见 [工程说明](docs/development.md)。
 
+## 本地开发（推荐）
+
+先安装上述 Java、Node/npm，并启动 Docker。macOS / Linux 可直接运行，Windows 使用 WSL；使用 nvm 时先执行 `nvm install && nvm use`。
+
+在仓库根目录运行，无需先在根目录执行 `npm install`：
+
+```sh
+npm run setup
+npm run dev
+```
+
+`setup` 安装前端锁定依赖，并首次生成权限为 `0600` 的 `.env.development`，包含随机数据库密码和管理员初始密码。重复执行保留已有配置；前端依赖变更后再次执行即可。根目录 npm 仅作为命令入口，没有额外依赖。
+
+`dev` 检查应用端口，启动并等待独立 MySQL / Redis 就绪，再运行本机 Maven 后端和 Vite 前端；同一终端显示带来源标识的日志。后端 readiness 通过后输出就绪提示。首次 Maven 下载可能较慢，超时后可重试，构建错误保留在终端。
+
+打开 **http://127.0.0.1:5173**，使用 `.env.development` 中的管理员账号和初始密码登录，首次改密后重新登录，并删除文件中的 `IWORK_BOOTSTRAP_PASSWORD` 配置。已有管理员不会被配置覆盖。前端支持热更新；修改 Java 后停止并重新运行，或使用 IDEA 调试。
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run setup` | 安装前端依赖、首次生成开发配置 |
+| `npm run dev` | 启动开发依赖和前后端 |
+| `npm run dev:infra` | 只启动并等待 MySQL / Redis 就绪 |
+| `npm run dev:backend` | 只运行后端，依赖需已启动 |
+| `npm run dev:frontend` | 只运行前端 |
+| `npm run dev:down` | 停止开发依赖，保留数据卷 |
+| `npm run test:dev` | 检查开发脚本的配置保护、端口冲突和进程清理 |
+
+按 **Ctrl+C** 停止本次启动的前后端及其子进程；数据库继续运行。需要停止数据库时，退出开发进程后运行 `npm run dev:down`。
+
+开发依赖由 `compose.dev.yaml` 管理，项目名为配置中的 `iwork-dev-…`，使用独立命名卷，不复用交付环境的数据库或账号。默认 MySQL `127.0.0.1:13306`、Redis `127.0.0.1:16379`、后端 `127.0.0.1:8080`、前端 `127.0.0.1:5173`；文件保存在 `data/dev/files`。依赖端口可在 `.env.development` 中调整，前后端端口固定。应用端口冲突时会报错，不会终止其他项目进程。多个检出目录生成不同 Compose 项目名，但同时运行仍需处理端口冲突。
+
+**IDEA 调试：**运行 `npm run dev:infra`，在后端运行配置中选择 JDK 21，将仓库根目录设为工作目录，并通过 IDEA 的环境文件功能加载 `.env.development`（不支持该功能时将变量填入 Environment variables）；运行 `IWorkApplication`。另一个终端执行 `npm run dev:frontend`。不要同时启动 `dev` 或 `dev:backend` 占用后端端口。
+
+`.env.development` 已被 Git 忽略，仅开发脚本显式读取，普通 Java 启动不会自动加载。不要删除该文件来重置密码：已有 MySQL 卷不会随环境变量自动更改密码。`setup` 不启动数据库，也不会修改原有交付 `.env`。
+
 ## 独立检查与交付构建
 
 在仓库根目录运行；后端测试会启动临时真实 MySQL 和 Redis，需先启动 Docker。
@@ -29,10 +64,10 @@ backend/mvnw -B -f backend/pom.xml -Pdistribution -DskipTests package
 
 独立后端构建无需前端工具。`distribution` 将已构建的 `frontend/dist` 打入 `backend/target/iwork-0.1.0-SNAPSHOT.jar`。完整容器构建自动执行前端检查并生成同一交付包；Java 集成测试在容器构建之外执行，主应用不挂载 Docker socket。
 
-## 本地 Compose 启动
+## 完整应用 Compose 启动（打包联调）
 
 ```sh
-cp .env.example .env
+test -f .env || cp .env.example .env
 # 编辑 .env，为数据库和初始管理员密码填写不同随机值（可分别运行 openssl rand -hex 24）。
 # 仅 localhost HTTP 开发设置 IWORK_COOKIE_SECURE=false；生产 HTTPS 保持 true。
 docker compose build
