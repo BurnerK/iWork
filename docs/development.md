@@ -162,3 +162,7 @@ V9 增加 MySQL conversation_contexts 与模型 context_window。升级后已有
 ## 来源版本与续改（#18）
 
 DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等指纹。固定 read_document_version 只能读本任务选定来源，12000字符分页；正式完成时锁成果并分配新版本号，各版本保留标题、正文与来源关系。旧版续改与并发续改均追加，不覆盖旧文件。个人版本列表 `/api/document-versions?page=0` 每页20项；会话文档列表包含本会话引用成果的历史版本。V10 迁移保留既有版本标题。详见 [版本契约](issue18-version-contract.md)。
+
+## 取消与迟到结果验证（#19）
+
+业务取消、本地worker结束、供应商状态与处理容器清理分别表达；STOPPED不代表供应商停止。正常执行结果复用包内 acceptResult，测试远端回执也经过同一终态/正式提交边界。CancellationClosureTest 和 CancellationFixtureApplication 仅在test源集，正式包不含控制入口。真实容器取消/清理未知验证见 sandbox/verify_cancellation.py 与 [验收记录](validation/issue19-cancellation.md)。

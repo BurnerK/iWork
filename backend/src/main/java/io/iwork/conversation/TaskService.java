@@ -127,17 +127,7 @@ public class TaskService implements ApplicationRunner {
         try {
             if(!get(input.caller(),input.taskId()).status().equals("RUNNING") || stopping) return;
             String reply=runners.getObject().execute(input);
-            if(reply==null || reply.isBlank() || reply.length()>200000) throw new IllegalStateException("Invalid execution result");
-            var draft=input.outputMode().equals("DOCUMENT")?documents.prepareFinal(input):null;
-            tx.executeWithoutResult(status -> {
-                identity.verify(input.caller(),true);
-                var current=query("id=? FOR UPDATE",input.taskId()).getFirst();
-                if(!current.status().equals("RUNNING")) return;
-                if(draft!=null) documents.publish(input,draft);
-                db.update("INSERT INTO messages(task_id,conversation_id,role,content) VALUES(?,?,'assistant',?)",input.taskId(),input.conversationId(),reply);
-                db.update("UPDATE tasks SET status='COMPLETED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",input.taskId());
-                db.update("UPDATE conversations SET updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",input.conversationId());
-            });
+            acceptResult(input,reply);
         } catch(Exception failure) {
             Thread.interrupted();
             String errorCode=executionError(failure);
@@ -148,6 +138,19 @@ public class TaskService implements ApplicationRunner {
             try { persist(() -> db.update("UPDATE tasks SET execution_state='STOPPED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",input.taskId())); }
             finally { try { documents.cleanup(input.taskId()); } finally { workers.remove(input.taskId()); capacity.release(); } }
         }
+    }
+    void acceptResult(TaskRunner.Input input,String reply) {
+        if(reply==null || reply.isBlank() || reply.length()>200000) throw new IllegalStateException("Invalid execution result");
+        var draft=input.outputMode().equals("DOCUMENT")?documents.prepareFinal(input):null;
+        tx.executeWithoutResult(status -> {
+            identity.verify(input.caller(),true);
+            var current=query("id=? FOR UPDATE",input.taskId()).getFirst();
+            if(!current.status().equals("RUNNING")) return;
+            if(draft!=null) documents.publish(input,draft);
+            db.update("INSERT INTO messages(task_id,conversation_id,role,content) VALUES(?,?,'assistant',?)",input.taskId(),input.conversationId(),reply);
+            db.update("UPDATE tasks SET status='COMPLETED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",input.taskId());
+            db.update("UPDATE conversations SET updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",input.conversationId());
+        });
     }
     private static String executionError(Throwable failure) {
         for(int i=0;i<10 && failure!=null;i++,failure=failure.getCause()) if(failure instanceof ApiFailure) return failure.getMessage();
