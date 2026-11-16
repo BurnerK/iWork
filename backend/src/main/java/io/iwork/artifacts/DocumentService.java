@@ -1,0 +1,127 @@
+package io.iwork.artifacts;
+
+import io.agentscope.core.tool.*;
+import io.iwork.conversation.TaskRunner;
+import io.iwork.identity.*;
+import java.io.*;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.security.*;
+import java.util.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
+
+@Service
+public class DocumentService {
+    public static final int MAX_BYTES=256*1024;
+    private final Path workspaces,documents;
+    private final JdbcTemplate db;
+    private final TransactionTemplate tx;
+    private final IdentityService identity;
+    public DocumentService(@Value("${iwork.files-directory}") Path root,JdbcTemplate db,TransactionTemplate tx,IdentityService identity) throws IOException {
+        workspaces=root.resolve("document-workspaces").toAbsolutePath(); documents=root.resolve("documents").toAbsolutePath();
+        Files.createDirectories(workspaces); Files.createDirectories(documents);
+        this.db=db; this.tx=tx; this.identity=identity;
+    }
+    public record Draft(String id,String taskId,String artifactId,String versionId,String title,long byteSize,String sha256) {}
+    private List<Draft> drafts(String task) {
+        return db.query("SELECT * FROM document_drafts WHERE task_id=?",(r,n)->new Draft(r.getString("id"),r.getString("task_id"),r.getString("artifact_id"),r.getString("version_id"),r.getString("title"),r.getLong("byte_size"),r.getString("sha256")),task);
+    }
+    private static String checksum(byte[] bytes) {
+        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
+        catch(NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
+    }
+    private void authorize(TaskRunner.Input input) {
+        identity.verify(input.caller(),true);
+        var rows=db.queryForList("SELECT status,output_mode FROM tasks WHERE id=? AND owner_id=? AND conversation_id=? FOR UPDATE",input.taskId(),input.caller().id(),input.conversationId());
+        if(rows.isEmpty()) throw new ApiFailure(404,"not_found");
+        if(!rows.getFirst().get("status").equals("RUNNING")) throw new ApiFailure(409,"task_not_running");
+        if(!rows.getFirst().get("output_mode").equals("DOCUMENT")) throw new ApiFailure(403,"document_not_authorized");
+    }
+    private void write(Path path,byte[] bytes) throws IOException {
+        Files.createDirectories(path.getParent());
+        Path pending=Files.createTempFile(path.getParent(),".document-",".part");
+        try {
+            Files.write(pending,bytes);
+            try(var channel=FileChannel.open(pending,StandardOpenOption.WRITE)) { channel.force(true); }
+            Files.move(pending,path,StandardCopyOption.ATOMIC_MOVE);
+            try(var channel=FileChannel.open(path.getParent(),StandardOpenOption.READ)) { channel.force(true); }
+        } finally { Files.deleteIfExists(pending); }
+    }
+    private byte[] read(Path path,long size,String hash) {
+        try(var stream=Files.newInputStream(path,LinkOption.NOFOLLOW_LINKS)) {
+            var bytes=stream.readNBytes(MAX_BYTES+1);
+            if(bytes.length!=size || !checksum(bytes).equals(hash)) throw new ApiFailure(503,"document_storage_unavailable");
+            return bytes;
+        } catch(IOException failure) { throw new ApiFailure(503,"document_storage_unavailable"); }
+    }
+    public Map<String,Object> prepare(TaskRunner.Input input,String title,String markdown) {
+        if(title==null || title.isBlank() || title.length()>120 || title.contains("/") || title.contains("\\") || title.chars().anyMatch(Character::isISOControl)
+            || markdown==null || markdown.isBlank() || markdown.indexOf('\0')>=0 || !StandardCharsets.UTF_8.newEncoder().canEncode(markdown)) throw new ApiFailure(400,"invalid_document");
+        byte[] bytes=markdown.getBytes(StandardCharsets.UTF_8);
+        if(bytes.length>MAX_BYTES) throw new ApiFailure(413,"document_too_large");
+        tx.executeWithoutResult(status -> authorize(input));
+        var draft=new Draft(UUID.randomUUID().toString(),input.taskId(),UUID.randomUUID().toString(),UUID.randomUUID().toString(),title,bytes.length,checksum(bytes));
+        try { write(workspaces.resolve(input.taskId()).resolve(draft.id()+".md"),bytes); }
+        catch(IOException failure) { throw new ApiFailure(503,"document_storage_unavailable"); }
+        var accepted=tx.execute(status -> {
+            authorize(input);
+            var old=drafts(input.taskId());
+            if(!old.isEmpty()) {
+                if(!old.getFirst().sha256().equals(draft.sha256()) || !old.getFirst().title().equals(title)) throw new ApiFailure(409,"document_already_prepared");
+                return old.getFirst();
+            }
+            db.update("INSERT INTO document_drafts(id,task_id,artifact_id,version_id,title,byte_size,sha256) VALUES(?,?,?,?,?,?,?)",draft.id(),draft.taskId(),draft.artifactId(),draft.versionId(),draft.title(),draft.byteSize(),draft.sha256());
+            return draft;
+        });
+        return Map.of("draftId",accepted.id(),"state","PREPARED","message","正文已准备；只有业务任务完成提交后才是正式成果。");
+    }
+    public Draft prepareFinal(TaskRunner.Input input) {
+        var draft=tx.execute(status -> {
+            authorize(input); var rows=drafts(input.taskId());
+            if(rows.isEmpty()) throw new ApiFailure(422,"document_not_generated"); return rows.getFirst();
+        });
+        byte[] bytes=read(workspaces.resolve(input.taskId()).resolve(draft.id()+".md"),draft.byteSize(),draft.sha256());
+        var target=documents.resolve(draft.versionId()+".md");
+        try {
+            if(Files.exists(target,LinkOption.NOFOLLOW_LINKS)) read(target,draft.byteSize(),draft.sha256());
+            else write(target,bytes);
+        } catch(IOException failure) { throw new ApiFailure(503,"document_storage_unavailable"); }
+        return draft;
+    }
+    /** Caller holds the task row lock; this participates in the reply/completion transaction. */
+    public void publish(TaskRunner.Input input,Draft draft) {
+        if(!draft.taskId().equals(input.taskId())) throw new ApiFailure(403,"document_not_authorized");
+        db.update("INSERT INTO documents(id,owner_id,conversation_id,title) VALUES(?,?,?,?)",draft.artifactId(),input.caller().id(),input.conversationId(),draft.title());
+        db.update("INSERT INTO document_versions(id,document_id,task_id,version_number,byte_size,sha256) VALUES(?,?,?,1,?,?)",draft.versionId(),draft.artifactId(),input.taskId(),draft.byteSize(),draft.sha256());
+    }
+    public void cleanup(String task) {
+        var directory=workspaces.resolve(task);
+        if(!Files.isDirectory(directory,LinkOption.NOFOLLOW_LINKS)) return;
+        try(var files=Files.list(directory)) {
+            for(var path:files.toList()) if(path.getFileName().toString().matches("[a-f0-9-]{36}\\.md|\\.document-[a-zA-Z0-9-]+\\.part")) Files.deleteIfExists(path);
+            Files.deleteIfExists(directory);
+        } catch(IOException failure) { org.slf4j.LoggerFactory.getLogger(DocumentService.class).warn("Document workspace cleanup pending for task {}",task); }
+    }
+    public final class Tools {
+        private final TaskRunner.Input input;
+        public Tools(TaskRunner.Input input) { this.input=input; }
+        @Tool(name="prepare_document",description="为本任务准备唯一的 UTF-8 Markdown 正文，最多256KiB。仅准备内容，正式保存由任务完成事务决定；不要把准备成功当作已发布。")
+        public Map<String,Object> prepare(@ToolParam(name="title",description="文档标题，无路径或扩展名") String title,@ToolParam(name="markdown",description="完整Markdown正文") String markdown) { return DocumentService.this.prepare(input,title,markdown); }
+    }
+    public List<Map<String,Object>> list(Caller caller,String conversation) {
+        if(db.queryForList("SELECT id FROM conversations WHERE id=? AND owner_id=?",String.class,conversation,caller.id()).isEmpty()) throw new ApiFailure(404,"not_found");
+        return db.queryForList("SELECT d.id,d.title,v.id AS versionId,v.version_number AS versionNumber,v.task_id AS taskId,v.byte_size AS byteSize,v.created_at AS createdAt FROM documents d JOIN document_versions v ON v.document_id=d.id WHERE d.owner_id=? AND d.conversation_id=? ORDER BY v.created_at DESC",caller.id(),conversation);
+    }
+    public Map<String,Object> version(Caller caller,String id) {
+        var rows=db.queryForList("SELECT d.id,d.title,v.id AS versionId,v.version_number AS versionNumber,v.task_id AS taskId,v.byte_size AS byteSize,v.sha256 FROM document_versions v JOIN documents d ON d.id=v.document_id WHERE v.id=? AND d.owner_id=?",id,caller.id());
+        if(rows.isEmpty()) throw new ApiFailure(404,"not_found"); return rows.getFirst();
+    }
+    public byte[] content(Caller caller,String id) {
+        var version=version(caller,id);
+        return read(documents.resolve(version.get("versionId")+".md"),((Number)version.get("byteSize")).longValue(),(String)version.get("sha256"));
+    }
+}

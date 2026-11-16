@@ -144,3 +144,11 @@ V4 增加任务、消息与请求身份；会话页面可提交、观察、取�
 支持 TXT/Markdown UTF-8 文本，最大 2 MiB；原文保持不变，解析结果是任务材料，按 12,000 字符分段读取。用户在“资料处理”查看状态、清理确认与解析文本。取消或失败不把未确认的容器报告为已清理；管理端持续重试，独立看门狗按 Docker 创建时间执行 60 秒期限。该上限依赖 Docker/宿主可用，生产时间尚待 #25 标定。
 
 验证：`sandbox/verify.py URL KEY_FILE COMPOSE_FILE issue16实例名` 在可丢弃真实 Docker 实例检查身份/任务令牌、解析、隔离、取消竞态、监督失效与到期回收；会暂停该测试实例看门狗。业务 API 集成测试 `MaterialParsingTest` 需 `IWORK_SANDBOX_TEST_URL` 与 `IWORK_SANDBOX_TEST_KEY_FILE`，未配置则显式跳过；真实身份/MySQL/Redis/文件/Harness，仅模型 HTTP 传输为替身。测试替身入口 `ParsingFixtureApplication` 不进入交付 JAR。
+
+## #17 Markdown 正式文档
+
+任务提交可设置 `outputMode: DOCUMENT`，默认/旧请求仍为 `TEXT`。文档任务开放固定 `prepare_document` 工具，先准备正文，再由 TaskService 在任务状态事务内发布成果/版本并完成任务；没有可保存正文则失败，不把模型回复当作正式成果。V8 为成果、版本、准备记录建立独立索引；同任务最多一个正式版本。
+
+首版输出 UTF-8 Markdown，正文上限 256 KiB、标题最多 120 字符。会话“正式文档”提供只读原样预览及 `.md` 附件下载，不执行 HTML/代码。版本读取按 owner 查询并检查字节数/SHA-256；修改后的不完整文件返回 503，不静默返回坏内容。正式目录 `documents` 与 `originals`、`document-workspaces` 分开；TaskService 正常终止与启动中断归档后只清理文档工作区。
+
+保存顺序为完整文件先落盘、数据库事务后登记；取消与发布共用任务行锁。数据库提交结果不明或失败时可能留下完整无引用文件，保留它避免误删已登记版本；只能在停止服务并核对数据库索引后清理。不得直接删除整个 files 根目录。首次版本为 1，继续修改形成新版本由 #18 接入。合同见 [#17 设计](issue-17-design.md)。

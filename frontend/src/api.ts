@@ -24,6 +24,11 @@ export async function request<T>(path: string, method = 'GET', body?: object | U
 export function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '操作失败，请重试。'
   const messages: Record<string, string> = {
+    invalid_document: '请提供有效标题和非空 Markdown 正文。',
+    document_too_large: '文档正文不能超过 256 KiB。',
+    document_not_generated: '没有取得可保存的文档正文，本次任务未发布成果。',
+    document_storage_unavailable: '文档保存或读取失败，已有正式版本保持不变。',
+    document_already_prepared: '本次任务已经准备正文，不能重复生成不同文档。',
     sandbox_unavailable: '资料处理服务暂不可用，清理结果以处理状态为准。',
     sandbox_timeout: '资料解析超时，已请求清理处理容器。',
     material_parse_failed: '资料无法解析，请检查是否为有效的 UTF-8 文本。',

@@ -38,7 +38,7 @@ public class GovernedModel {
             public String getModelName() { return input.modelId(); }
             public Flux<ChatResponse> stream(List<Msg> messages,List<ToolSchema> tools,GenerateOptions ignored) {
                 return Flux.defer(() -> {
-                    if(tools!=null && tools.stream().anyMatch(tool -> !purpose.equals("MAIN") || !Set.of("read_task_material").contains(tool.getName()))) return Flux.error(new ApiFailure(403,"model_tools_not_authorized"));
+                    if(tools!=null && tools.stream().anyMatch(tool -> !purpose.equals("MAIN") || !Set.of("read_task_material","prepare_document").contains(tool.getName()) || tool.getName().equals("prepare_document") && !input.outputMode().equals("DOCUMENT"))) return Flux.error(new ApiFailure(403,"model_tools_not_authorized"));
                     int bytes=JsonUtils.getJsonCodec().toJson(Map.of("messages",messages,"tools",tools==null?List.of():tools)).getBytes(StandardCharsets.UTF_8).length;
                     var call=ledger.begin(input,purpose,bytes);
                     try {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import DocumentPanel from './DocumentPanel.vue'
 import ParsingPanel from './ParsingPanel.vue'
 import UsagePanel from './UsagePanel.vue'
 import MaterialPanel from './MaterialPanel.vue'
@@ -9,10 +10,10 @@ const emit = defineEmits<{ failure: [cause: unknown] }>()
 type Task = { id: string; requestId: string; status: string; executionState: string; errorCode: string | null }
 type Message = { id: number; taskId: string; role: string; content: string }
 type Page<T> = { items: T[]; hasMore: boolean }
-const models = ref<{ id: string; name: string }[]>([]), modelId = ref(''), message = ref('')
+const models = ref<{ id: string; name: string }[]>([]), modelId = ref(''), message = ref(''), outputMode = ref('TEXT')
 const tasks = ref<Task[]>([]), messages = ref<Message[]>([]), busy = ref(false), loading = ref(false), error = ref('')
 const materialIds = ref<string[]>([]), materialBusy = ref(false)
-const pending = ref<{ requestId: string; modelId: string; message: string; materialIds?: string[] } | null>(null)
+const pending = ref<{ requestId: string; modelId: string; message: string; materialIds?: string[]; outputMode?: string } | null>(null)
 const storageKey = `iwork-pending:${props.ownerId}:${props.conversationId}`
 function clearPending() { localStorage.removeItem(storageKey); pending.value = null }
 const usageTaskId = ref(''), parsingTaskId = ref('')
@@ -50,7 +51,7 @@ async function submit() {
   if (busy.value || materialBusy.value || active.value && !pending.value) return
   busy.value = true; error.value = ''
   try {
-    pending.value ||= { requestId: crypto.randomUUID(), modelId: modelId.value, message: message.value, materialIds: [...materialIds.value] }
+    pending.value ||= { requestId: crypto.randomUUID(), modelId: modelId.value, message: message.value, outputMode: outputMode.value, materialIds: [...materialIds.value] }
     localStorage.setItem(storageKey, JSON.stringify(pending.value))
     await request(`/api/conversations/${props.conversationId}/tasks`, 'POST', pending.value)
     clearPending(); message.value = ''; await load()
@@ -80,7 +81,7 @@ onMounted(async () => {
     if (stored) {
       const restored = JSON.parse(stored)
       if (typeof restored.requestId === 'string' && typeof restored.modelId === 'string' && typeof restored.message === 'string') {
-        pending.value = restored; modelId.value = restored.modelId; message.value = restored.message; materialIds.value = Array.isArray(restored.materialIds) ? restored.materialIds : []
+        pending.value = restored; outputMode.value = restored.outputMode || 'TEXT'; modelId.value = restored.modelId; message.value = restored.message; materialIds.value = Array.isArray(restored.materialIds) ? restored.materialIds : []
       } else localStorage.removeItem(storageKey)
     }
   } catch (cause) { await failure(cause) }
@@ -99,9 +100,11 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
     <ParsingPanel v-if="parsingTaskId" :key="parsingTaskId" :task-id="parsingTaskId" />
     <UsagePanel v-if="usageTaskId" :key="usageTaskId" :task-id="usageTaskId" :running="tasks.some(task => task.id === usageTaskId && task.status === 'RUNNING')" />
     <button v-if="moreTasks" type="button" class="secondary" :disabled="busy" @click="earlierTasks">较早的任务</button>
+    <DocumentPanel :conversation-id="conversationId" :revision="tasks.map(task => task.id + task.status).join(',')" />
     <MaterialPanel v-model="materialIds" :disabled="busy || !!pending || active" @failure="failure" @uploading="materialBusy = $event" />
     <form method="post" :action="`/api/conversations/${conversationId}/tasks`" aria-label="提交任务" @submit.prevent="submit">
       <label for="task-model">模型（必选）</label><select id="task-model" v-model="modelId" name="modelId" required :disabled="busy || !!pending || active"><option value="">请选择模型</option><option v-for="model in models" :key="model.id" :value="model.id">{{ model.name }}</option></select>
+      <label for="task-output">成果形式</label><select id="task-output" v-model="outputMode" name="outputMode" :disabled="busy || !!pending || active"><option value="TEXT">文字回复</option><option value="DOCUMENT">Markdown 文档（.md）</option></select>
       <label for="task-message">工作要求（必填）</label><textarea id="task-message" v-model="message" name="message" required maxlength="20000" rows="4" :disabled="busy || !!pending || active"></textarea>
       <p v-if="pending" class="hint">尚未确认受理结果。重试使用同一请求，不会重复执行。</p>
       <p v-else-if="active" class="hint">当前会话已有运行任务。关闭页面不会取消任务。</p>

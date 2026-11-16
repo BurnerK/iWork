@@ -11,7 +11,7 @@ it('retries an uncertain submission with the same request identity and never can
       if (bodies.length === 1) return Promise.reject(new TypeError('connection lost'))
       return Promise.resolve(new Response('{"id":"task-one","status":"RUNNING","executionState":"RUNNING"}', { status: 202 }))
     }
-    return Promise.resolve(new Response(JSON.stringify(url === '/api/models' ? [{ id: 'model', name: '模型' }] : { items: [], hasMore: false })))
+    return Promise.resolve(new Response(JSON.stringify(url === '/api/models' ? [{ id: 'model', name: '模型' }] : url.endsWith('/documents') ? [] : { items: [], hasMore: false })))
   })
   vi.stubGlobal('fetch', fetch)
   const panel = mount(TaskPanel, { props: { conversationId: 'conversation', ownerId: 'owner' } }); await flushPromises()
@@ -28,7 +28,7 @@ it('keeps an uncertain request identity after reopening the same conversation', 
   vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
     if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
     if (init?.method === 'POST') { bodies.push(String(init.body)); return Promise.reject(new TypeError('lost')) }
-    return Promise.resolve(new Response(JSON.stringify(url === '/api/models' ? [{ id: 'model', name: '模型' }] : { items: [], hasMore: false })))
+    return Promise.resolve(new Response(JSON.stringify(url === '/api/models' ? [{ id: 'model', name: '模型' }] : url.endsWith('/documents') ? [] : { items: [], hasMore: false })))
   }))
   let panel = mount(TaskPanel, { props: { conversationId: 'reopen', ownerId: 'owner' } }); await flushPromises()
   await panel.get('select').setValue('model'); await panel.get('textarea').setValue('要求')
@@ -44,7 +44,7 @@ it('waits for an in-flight upload before accepting the task input', async () => 
   const fetch = vi.fn((url: string, init?: RequestInit) => {
     if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
     if (url === '/api/materials' && init?.method === 'POST') return new Promise<Response>(resolve => { finish = resolve })
-    return Promise.resolve(new Response(JSON.stringify(url === '/api/models' ? [{ id: 'model', name: '模型' }] : { items: [], hasMore: false })))
+    return Promise.resolve(new Response(JSON.stringify(url === '/api/models' ? [{ id: 'model', name: '模型' }] : url.endsWith('/documents') ? [] : { items: [], hasMore: false })))
   })
   vi.stubGlobal('fetch', fetch)
   const panel = mount(TaskPanel, { props: { conversationId: 'upload', ownerId: 'owner' } }); await flushPromises()
@@ -59,4 +59,23 @@ it('waits for an in-flight upload before accepting the task input', async () => 
   finish(new Response('{"id":"saved","name":"source.txt","byteSize":6}')); await flushPromises()
   expect(form.get('button').attributes('disabled')).toBeUndefined()
   panel.unmount()
+})
+it('preserves explicit document output when retrying an uncertain request', async () => {
+  localStorage.clear()
+  const bodies: string[] = []
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+    if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+    if (init?.method === 'POST') { bodies.push(String(init.body)); return Promise.reject(new TypeError('lost')) }
+    return Promise.resolve(new Response(JSON.stringify(url === '/api/models' ? [{ id: 'model', name: '模型' }] : url.endsWith('/documents') ? [] : { items: [], hasMore: false })))
+  }))
+  let panel = mount(TaskPanel, { props: { conversationId: 'document', ownerId: 'owner' } }); await flushPromises()
+  await panel.get('select[name="modelId"]').setValue('model')
+  await panel.get('select[name="outputMode"]').setValue('DOCUMENT')
+  await panel.get('textarea').setValue('生成文档')
+  await panel.get('form[aria-label="提交任务"]').trigger('submit'); await flushPromises(); panel.unmount()
+  panel = mount(TaskPanel, { props: { conversationId: 'document', ownerId: 'owner' } }); await flushPromises()
+  expect((panel.get('select[name="outputMode"]').element as HTMLSelectElement).value).toBe('DOCUMENT')
+  await panel.get('form[aria-label="提交任务"]').trigger('submit'); await flushPromises()
+  expect(JSON.parse(bodies[0]!).outputMode).toBe('DOCUMENT'); expect(bodies[0]).toBe(bodies[1])
+  panel.unmount(); localStorage.clear()
 })

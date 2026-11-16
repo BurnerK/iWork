@@ -31,7 +31,7 @@ async function upload() {
     const saved = await request<Material>('/api/materials', 'POST', file.value)
     notice.value = `已保存：${saved.name}`
     if (props.modelValue.length < 5) emit('update:modelValue', [...props.modelValue, saved.id])
-    file.value = undefined; if (input.value) input.value.value = ''
+    file.value = undefined; input.value?.form?.reset()
     page.value = 0
   } catch (cause) { await fail(cause); return } finally { busy.value = false; emit('uploading', false) }
   await load()
