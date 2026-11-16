@@ -170,3 +170,7 @@ DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等
 ## 重启恢复（#20）
 
 业务 API 在启动恢复完成前返回503。依次归档未完成任务、幂等关闭调用与释放预占，再启动容器状态核对；不会自动续跑。原 requestId 仍返回中断任务，显式新请求重新准入。摘要/快照只有成功来源且历史核对通过才恢复。真实强杀与两个活容器进程树回收见 [契约](issue20-recovery-contract.md) 与 [验证](validation/issue20-recovery.md)。
+
+## 清理故障与独立监督（#21）
+
+清理失败保留UNKNOWN并拒绝新增处理，恢复后按持久关联重试。看门狗健康记录超过2秒不接纳新处理，恢复后按Docker原创建时间检查60秒期限；不重置。实际确认删除输出sandbox_expired_removed回执，仅含标识与毫秒时间。部署应采集该日志并保留条件性期限边界；见 [监督契约](issue21-supervision-contract.md)。

@@ -100,7 +100,13 @@ public final class SandboxControl {
                 for(var id:containers()) {
                     var info=JSON.readTree(docker("inspect",id)).get(0);
                     if(!INSTANCE.equals(info.path("Config").path("Labels").path("iwork.sandbox").asText())) throw new IOException("Foreign container");
-                    if(Duration.between(Instant.parse(info.path("Created").asText()),Instant.now()).getSeconds()>=TTL) remove(info.path("Name").asText().substring(1));
+                    var created=Instant.parse(info.path("Created").asText());
+                    if(Duration.between(created,Instant.now()).getSeconds()>=TTL) {
+                        long expiredAt=System.currentTimeMillis();
+                        remove(info.path("Name").asText().substring(1));
+                        System.out.println(JSON.writeValueAsString(Map.of("event","sandbox_expired_removed","instance",INSTANCE,
+                            "container",info.path("Id").asText(),"createdAt",created.toEpochMilli(),"expiredAt",expiredAt,"confirmedAt",System.currentTimeMillis())));
+                    }
                 }
                 save(HEALTH,Map.of("instance",INSTANCE,"at",System.currentTimeMillis(),"ttl",TTL));
             } catch(Exception failure) { Files.deleteIfExists(HEALTH); System.err.println("Watchdog supervision unavailable"); }
