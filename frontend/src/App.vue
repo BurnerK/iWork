@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import TaskPanel from './TaskPanel.vue'
 import ModelPanel from './ModelPanel.vue'
 import { ApiError, errorMessage, request } from './api'
 
@@ -185,7 +186,7 @@ onMounted(loadIdentity)
         <p v-else-if="!conversations.length">还没有会话。新建一段会话，开始整理你的工作。</p>
         <ul v-else class="rows" role="list"><li v-for="conversation in conversations" :key="conversation.id"><RouterLink :to="`/conversations/${conversation.id}`">{{ conversation.title }}<small>{{ new Date(conversation.updatedAt).toLocaleString() }}</small></RouterLink></li></ul>
       </aside>
-      <article class="detail"><template v-if="selected"><h2>{{ selected.title }}</h2><p>会话已创建，暂时没有消息。</p></template><template v-else><h2>准备好新的开始</h2><p>从左侧打开会话，或新建一段会话。</p></template></article>
+      <article class="detail"><template v-if="selected"><h2>{{ selected.title }}</h2><TaskPanel :key="selected.id" :conversation-id="selected.id" :owner-id="user?.id || ''" @failure="failure" /></template><template v-else><h2>准备好新的开始</h2><p>从左侧打开会话，或新建一段会话。</p></template></article>
     </section>
     <nav v-if="ready && ['admin', 'conversations', 'conversation'].includes(String(route.name))" class="pagination" aria-label="分页">
       <button type="button" class="secondary" :disabled="page === 0 || loading || busy" @click="paginate(-1)">上一页</button><span>第 {{ page + 1 }} 页</span><button type="button" class="secondary" :disabled="!hasMore || loading || busy" @click="paginate(1)">下一页</button>

@@ -23,6 +23,14 @@ export async function request<T>(path: string, method = 'GET', body?: object | U
 export function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '操作失败，请重试。'
   const messages: Record<string, string> = {
+    invalid_task: '请填写模型和不超过 20000 字符的工作要求。',
+    execution_unavailable: '任务执行服务尚未就绪，请稍后重试。',
+    model_not_authorized: '模型已停用或你没有使用权限，请刷新模型列表。',
+    conversation_busy: '当前会话已有任务，请等待结束或取消后再提交。',
+    idempotency_conflict: '请求标识已用于不同内容，请先核对已有任务。',
+    task_capacity_exceeded: '当前执行容量已满，请稍后重试。',
+    execution_failed: '任务执行失败，已保存内容保持不变。',
+    process_restarted: '服务重启使任务中断，请明确发起新任务。',
     invalid_model_url: '服务地址须为 HTTPS，不能包含账号、查询参数或片段。',
     invalid_amount: '金额须为非负十进制数，最多 12 位整数和 6 位小数。',
     invalid_currency: '请填写有效的三位币种代码，例如 CNY。',

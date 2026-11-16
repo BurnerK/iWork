@@ -93,5 +93,12 @@ class ModelConfigurationTest {
         changed.put("baseUrl",input.get("baseUrl")); changed.put("credentialRef","IWORK_MODEL_KEY_MISSING");
         assertThat(admin.request("POST","/api/admin/models",json.writeValueAsString(changed),true).statusCode()).isEqualTo(400);
 
+        var conversation=admin.request("POST","/api/conversations","{}",true);
+        var conversationId=json.readTree(conversation.body()).get("id").asText();
+        var noRunner=admin.request("POST","/api/conversations/"+conversationId+"/tasks",json.writeValueAsString(Map.of("requestId","no-runner","modelId",id,"message","No synthetic production execution")),true);
+        assertThat(noRunner.statusCode()).isEqualTo(503);
+        assertThat(noRunner.body()).contains("execution_unavailable");
+        assertThat(json.readTree(admin.request("GET","/api/conversations/"+conversationId+"/tasks",null,false).body()).get("items").size()).isZero();
+
     }
 }

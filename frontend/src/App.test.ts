@@ -51,16 +51,19 @@ it('submits login with CSRF and prevents duplicate submissions while waiting', a
   expect(page.text()).toContain('还没有会话')
 })
 
-it('opens a direct conversation link and never renders message input', async () => {
+it('opens a direct conversation link with its task composer', async () => {
   vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
     url.endsWith('/me') ? { id: 'one', displayName: 'Alice', role: 'USER', mustChangePassword: false }
+      : url.endsWith('/api/models') ? []
+      : url.includes('/tasks') || url.includes('/messages') ? { items: [], hasMore: false }
       : url.includes('?') ? { items: [{ id: 'abc', title: '新会话', updatedAt: '2026-11-16T00:00:00Z' }], hasMore: false }
       : { id: 'abc', title: '新会话', updatedAt: '2026-11-16T00:00:00Z' }
   )))))
   const router = makeRouter(createMemoryHistory()); await router.push('/conversations/abc')
   const page = mount(App, { global: { plugins: [router] } }); await flushPromises()
   expect(page.get('article').text()).toContain('暂时没有消息')
-  expect(page.find('textarea').exists()).toBe(false)
+  expect(page.find('textarea').exists()).toBe(true)
+  page.unmount()
   expect(page.text()).not.toContain('用户管理')
 })
 
