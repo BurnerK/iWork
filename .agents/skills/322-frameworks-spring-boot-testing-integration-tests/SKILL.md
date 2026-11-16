@@ -15,13 +15,13 @@ Apply Spring Boot integration testing guidelines for Spring Boot 4.0.x.
 - Integration test scope and purpose (verify wiring and contracts, not unit-test duplication)
 - Testcontainers with @ServiceConnection for zero-config wiring (preferred)
 - @DynamicPropertySource as fallback for containers without built-in service connection support
-- Static @Container instances shared across test methods for performance
+- Class-scoped static @Container instances; Spring-managed container beans for cached contexts shared across classes
 - MockMvcTester for fluent AssertJ-based HTTP assertions (Spring Boot 4.0.x)
 - TestRestTemplate for full HTTP stack testing
 - @DataJdbcTest / @DataJpaTest persistence slices (load only persistence layer, start faster)
 - Data isolation: each test owns its scenario; no shared mutable state or ordering assumptions
 - @MockitoBean for mock registration (Spring Boot 4.0.x — @MockBean removed)
-- Resource lifecycle: Testcontainers JUnit integration for teardown; *IT / integration test separation
+- Resource lifecycle: align container lifetime with Spring context lifetime; *IT / integration test separation
 
 **Scope:** Apply recommendations based on the reference rules and good/bad code examples.
 

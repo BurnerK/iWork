@@ -16,13 +16,13 @@ You are a Senior software engineer with extensive experience in integration test
 
 Integration tests prove real wiring: HTTP boundaries, databases, brokers, and other infrastructure. They should stay independent, reproducible (prefer Testcontainers over shared developer databases), and focused on contracts—not a second copy of exhaustive unit-test logic. Use `MockMvcTester` (Spring Boot 4.0.x) for fluent AssertJ-based HTTP assertions, and `@DataJdbcTest`/`@DataJpaTest` slices to test persistence in isolation.
 
-**Choosing Testcontainers wiring (read this before `@ServiceConnection` vs `@DynamicPropertySource` vs beans)**:
-- **`@ServiceConnection` + JUnit `static @Container` fields** — Default for databases, Redis, Kafka, RabbitMQ, and other images Spring Boot maps to connection details. Spring sets `spring.datasource.*`, `spring.kafka.*`, `spring.data.redis.*`, etc. Prefer **one static field per service** on the test class or on an abstract base (see below). Do not duplicate the same properties with `@DynamicPropertySource` when `@ServiceConnection` already covers them.
-- **`@DynamicPropertySource`** — Use when there is **no** `ServiceConnection` for that dependency (arbitrary `GenericContainer`, tools without a connection detail), or you must publish **non-connection** properties (for example a WireMock base URL, custom ports, feature flags). Keep the method small; never hand-wire `spring.datasource.*` for PostgreSQL when `@ServiceConnection` on `PostgreSQLContainer` would suffice.
-- **Sharing containers across many `*IT` classes** — Prefer an **abstract `BaseIntegrationTest`** (or stack-specific base such as `PostgreSQLTestBase`) that declares `static @Container` fields with `@ServiceConnection`; concrete `*IT` classes extend it and inherit one container setup. Alternatively, extract `static @Container` definitions into a **declaration class** and register it with `@ImportTestcontainers(ThatClass.class)` on the test or base (Spring Boot imports static container fields into the test context—use this when you want reuse without inheritance). Do not copy-paste identical `@Container` blocks into every class.
-- **`@Bean` methods that return a `Container`** — Spring Boot can apply `@ServiceConnection` to container **beans**, but lifecycle and **slice** tests (`@DataJdbcTest`, `@WebMvcTest`) behave differently than JUnit-managed fields; some combinations need extra auto-configuration. **Prefer `static @Container` + `@ServiceConnection`** for the patterns in this rule unless the project already standardizes on container `@Bean` factories.
+**Choosing Testcontainers wiring**:
+- Use `@ServiceConnection` for supported services; use `@DynamicPropertySource` for unsupported connections or additional non-connection properties. Do not configure the same connection twice.
+- For a single test class, JUnit `static @Container` fields reuse containers across methods. JUnit stops them after that class; they must not back a cached Spring context reused by another class.
+- For cached contexts shared across classes, use container `@Bean` methods in an imported `@TestConfiguration`, or import container declarations with `@ImportTestcontainers`. Let Spring own their lifecycle; do not also manage them with the JUnit extension.
+- An inherited JUnit-managed static container is not a suite-wide lifecycle. A base class is optional for shared annotations, not required merely to remove duplication.
 
-**Shared integration infrastructure**: When multiple `*IT` classes need the same `@SpringBootTest` setup, Testcontainers, and `TestRestTemplate`/`MockMvcTester`, implement an **abstract** `BaseIntegrationTest` (or project-specific name) first—place it under `src/test/java/{root-package}/`—then add concrete `*IT` classes that extend it and hold only feature-specific tests. This parallels `BaseAcceptanceTest` in `@323-frameworks-spring-boot-testing-acceptance-tests`. A single one-off test can stay a standalone class; introduce a base when you would otherwise duplicate annotations, containers, or cleanup.
+See Spring Boot's [container lifecycle guidance](https://docs.spring.io/spring-boot/4.0/reference/testing/testcontainers.html). Inspect the project's pinned Spring Boot version and test dependencies before copying examples. Boot 4 test support is modular: use the matching test starter for each slice. `TestRestTemplate` requires `spring-boot-resttestclient`, a REST client implementation (for example `spring-boot-starter-restclient`), and `@AutoConfigureTestRestTemplate`.
 
 ## Constraints
 
@@ -50,7 +50,7 @@ Before applying any recommendations, ensure the project is in a valid state by r
 - Example 9: Test naming conventions: *Test, *IT, *AT
 - Example 10: Maven Surefire / Failsafe split for *Test, *IT, *AT
 - Example 11: Test-specific beans and configuration
-- Example 12: Abstract BaseIntegrationTest, then concrete *IT classes
+- Example 12: Spring-managed containers shared with the cached context
 
 ### Example 1: Scope and purpose of integration tests
 
@@ -102,7 +102,7 @@ class OverlappingProductLogicIT {
 ### Example 2: Testcontainers for dependencies
 
 Title: @ServiceConnection for zero-config wiring (Spring Boot 4.0.x)
-Description: Use Testcontainers for databases, brokers, and similar services. Prefer `static @Container` for class-scoped reuse. Pin Docker image tags. Use `@ServiceConnection` (Spring Boot 4.0.x) to auto-configure all connection properties — no `@DynamicPropertySource` boilerplate needed for supported containers (PostgreSQL, MySQL, Redis, Kafka, RabbitMQ, and many more). Fall back to `@DynamicPropertySource` only for containers that do not have a built-in service connection, or for **additional** properties that connection details do not express. Do not rely on a pre-existing database on localhost for CI or teammates. **Quick decision**: Supported image (Postgres, Kafka, …) → `static @Container` + `@ServiceConnection`. WireMock or ad-hoc URL → `@DynamicPropertySource`. Same containers for many tests → abstract base with `static @Container` or `@ImportTestcontainers` on a declaration class. Avoid container `@Bean` methods unless the team already uses that style—field-based containers match the examples here and behave predictably with slices.
+Description: Use Testcontainers for databases, brokers, and similar services. Prefer `static @Container` for class-scoped reuse. Pin Docker image tags. Use `@ServiceConnection` (Spring Boot 4.0.x) to auto-configure all connection properties — no `@DynamicPropertySource` boilerplate needed for supported containers (PostgreSQL, MySQL, Redis, Kafka, RabbitMQ, and many more). Fall back to `@DynamicPropertySource` only for containers that do not have a built-in service connection, or for **additional** properties that connection details do not express. Do not rely on a pre-existing database on localhost for CI or teammates. For sharing across classes, use Spring-managed containers as in Example 12.
 
 **Good example:**
 
@@ -176,7 +176,8 @@ Description: Use `TestRestTemplate` against a running local port (`RANDOM_PORT`)
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -188,6 +189,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 record ResourceDto(int id, String name, String data) {}
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 class MyApiControllerIT {
 
     @Autowired
@@ -229,7 +231,8 @@ class MyApiControllerIT {
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.http.ResponseEntity;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -243,6 +246,7 @@ class ResourceDto {
 }
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 class ApiTestAntiPatternsIT {
 
     @Autowired
@@ -367,7 +371,7 @@ class VagueUserActionsIT {
 ### Example 6: Performance and container cleanup
 
 Title: Static @Container per class with @ServiceConnection; avoid per-method starts
-Description: Container startup dominates runtime: use a `static` `@Container` so one container serves all tests in the class. The JUnit Jupiter Testcontainers extension stops containers after the class. Add `@ServiceConnection` for supported containers so Spring auto-wires connection details. Avoid starting and stopping a container in `@BeforeEach`/`@AfterEach` unless you have a rare isolation requirement.
+Description: Container startup dominates runtime: use a `static` `@Container` so one container serves all tests in the class. The JUnit Jupiter Testcontainers extension stops containers after the class. For cached contexts reused by other classes, use Spring-managed containers instead (Example 12). Add `@ServiceConnection` for supported containers so Spring auto-wires connection details. Avoid starting and stopping a container in `@BeforeEach`/`@AfterEach` unless you have a rare isolation requirement.
 
 **Good example:**
 
@@ -447,8 +451,8 @@ Description: Use `@DataJdbcTest` (or `@DataJpaTest`) to load only the persistenc
 ```java
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.data.jdbc.DataJdbcTest;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.data.jdbc.test.autoconfigure.DataJdbcTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -527,7 +531,7 @@ Description: `MockMvcTester` (introduced in Spring Boot 3.4 / Spring Framework 6
 ```java
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
@@ -570,7 +574,7 @@ class UserControllerIT {
     void shouldReturn400WhenRequestBodyIsInvalid() throws Exception {
         assertThat(mockMvc.post().uri("/api/users")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"name": "", "email": "not-an-email"}"""))
+                .content("{\"name\": \"\", \"email\": \"not-an-email\"}"))
             .hasStatus(400);
     }
 }
@@ -581,7 +585,7 @@ class UserControllerIT {
 ```java
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;  // removed in Spring Boot 4 — use @MockitoBean
 import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.Mockito.when;
@@ -839,10 +843,10 @@ class FakeExternalServiceClient implements ExternalServiceClient { }
 ```
 
 
-### Example 12: Abstract BaseIntegrationTest, then concrete *IT classes
+### Example 12: Spring-managed containers shared with the cached context
 
-Title: Share Spring context, containers, and TestRestTemplate—same idea as BaseAcceptanceTest
-Description: **Workflow**: (1) Add an `abstract class BaseIntegrationTest` with shared `@SpringBootTest` (often `RANDOM_PORT` for HTTP), `@Testcontainers`, static `@Container` fields with `@ServiceConnection`, `@Autowired` `TestRestTemplate` or `MockMvcTester`, and shared `@BeforeEach` cleanup (for example `WireMock.resetAll()` if the suite uses WireMock). (2) Implement each feature as a concrete `*IT` class extending `BaseIntegrationTest`, containing only scenario-specific setup and assertions. Standalone `*IT` classes without a base are fine for isolated slices (`@DataJdbcTest`) or one-off tests. Use a base when two or more integration tests would repeat the same stack.
+Title: Let Spring manage shared container lifetime
+Description: Import the same test configuration into tests that share a Spring context. Spring starts the container before dependent beans and stops it when that context closes. Do not add JUnit `@Testcontainers` to manage these beans. Each test still owns its data and cleanup.
 
 **Good example:**
 
@@ -850,48 +854,55 @@ Description: **Workflow**: (1) Add an `abstract class BaseIntegrationTest` with 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public abstract class BaseIntegrationTest {
-
-    @Container
+@TestConfiguration(proxyBeanMethods = false)
+class IntegrationContainers {
+    @Bean
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
-
-    @Autowired
-    protected TestRestTemplate restTemplate;
+    PostgreSQLContainer postgres() {
+        return new PostgreSQLContainer("postgres:16-alpine");
+    }
 }
 
-class OrderApiIT extends BaseIntegrationTest {
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
+@Import(IntegrationContainers.class)
+class OrderApiIT {
+    @Autowired
+    TestRestTemplate restTemplate;
 
     @Test
     void shouldCreateOrder() {
-        // Given / When / Then — only order-flow specifics; infra inherited
+        // Arrange / Act / Assert — order-flow specifics and test-owned data
     }
 }
+
+// Other HTTP test classes import IntegrationContainers with the same context
+// configuration. Spring reuses the context and its live container together.
 ```
 
 **Bad example:**
 
 ```java
-// Bad: three *IT classes each copy-pasting @SpringBootTest, @Testcontainers,
-// @Container @ServiceConnection postgres, and @Autowired TestRestTemplate —
-// fix by extracting BaseIntegrationTest and extending it.
+// An abstract base declares a JUnit-managed static @Container. The first
+// subclass finishes and stops it, but another subclass reuses a Spring
+// context whose connection details still point to that stopped container.
 ```
 
 
 ## Output Format
 
-- **ANALYZE** integration tests: scope (IT vs unit overlap), Testcontainers wiring (`@ServiceConnection` vs `@DynamicPropertySource` vs unnecessary `@Bean` containers), HTTP assertion quality, data isolation, naming, container lifecycle, and whether duplicated stacks should become an abstract `BaseIntegrationTest` or a shared `@ImportTestcontainers` declaration
+- **ANALYZE** integration tests: scope (IT vs unit overlap), Testcontainers wiring (`@ServiceConnection` vs `@DynamicPropertySource` vs Spring-managed containers), HTTP assertion quality, data isolation, naming, container lifecycle, and whether container lifetime covers cached context reuse
 - **CATEGORIZE** by impact (FLAKINESS, SPEED, CLARITY) and by concern (infra, HTTP, persistence)
-- **APPLY** fixes: replace manual `spring.datasource.*` (or equivalent) `@DynamicPropertySource` blocks with `@ServiceConnection` on `static @Container` where the image is supported; keep `@DynamicPropertySource` only for unsupported or extra properties; consolidate duplicate container setups into a base class or `@ImportTestcontainers`; pin Docker image tags; use `MockMvcTester` + `@MockitoBean` (Spring Boot 4.0.x standard); add `@DataJdbcTest`/`@DataJpaTest` for persistence slices; improve `TestRestTemplate` assertions with records and AssertJ; add `@Transactional` or cleanup; rename/split vague tests; use static `@Container`
-- **IMPLEMENT** incrementally; keep `mvn verify` green; align Surefire/Failsafe conventions for `*IT` if the project uses them; when several `*IT` classes share the same full-stack setup, **define an abstract `BaseIntegrationTest` first**, then concrete `*IT` subclasses (parallel to `BaseAcceptanceTest` in `@323-frameworks-spring-boot-testing-acceptance-tests`)
+- **APPLY** fixes: replace manual `spring.datasource.*` (or equivalent) `@DynamicPropertySource` blocks with `@ServiceConnection` on `static @Container` where the image is supported; keep `@DynamicPropertySource` only for unsupported or extra properties; share container setups through Spring-managed beans or `@ImportTestcontainers`; pin Docker image tags; use `MockMvcTester` + `@MockitoBean` (Spring Boot 4.0.x standard); add `@DataJdbcTest`/`@DataJpaTest` for persistence slices; improve `TestRestTemplate` assertions with records and AssertJ; add `@Transactional` or cleanup; rename/split vague tests; use static `@Container` only for class-scoped lifecycle
+- **IMPLEMENT** incrementally; keep `mvn verify` green; align Surefire/Failsafe conventions for `*IT` if the project uses them; when classes share a cached context, share Spring-managed containers with it (Example 12)
 - **EXPLAIN** when to use `@321-frameworks-spring-boot-testing-unit-tests` vs full-stack integration
 - **VALIDATE** with `./mvnw compile` before and `./mvnw clean verify` after changes
 
