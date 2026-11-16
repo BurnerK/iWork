@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise a disposable Compose project; never stop an existing iWork instance."""
+import http.cookiejar
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 
 root = Path(__file__).resolve().parents[1]
 scratch = Path(tempfile.gettempdir()) / "codex"
@@ -20,16 +22,17 @@ with socket.socket() as port:
     port.bind(("127.0.0.1", 0))
     http_port = port.getsockname()[1]
 env = dict(os.environ, IWORK_DATA_DIR=str(work), IWORK_HTTP_PORT=str(http_port),
-           IWORK_DB_PASSWORD=secrets.token_hex(24), IWORK_MYSQL_ROOT_PASSWORD=secrets.token_hex(24))
+           IWORK_DB_PASSWORD=secrets.token_hex(24), IWORK_MYSQL_ROOT_PASSWORD=secrets.token_hex(24),
+           IWORK_BOOTSTRAP_PASSWORD=secrets.token_urlsafe(24), IWORK_COOKIE_SECURE="false")
 env_file = work / ".env"
 env_file.touch(mode=0o600)
 command = ["docker", "compose", "--env-file", str(env_file), "-f", str(root / "compose.yaml"),
            "-p", work.name]
 
 
-def compose(*args, capture=False):
+def compose(*args, capture=False, input=None):
     return subprocess.run(command + list(args), env=env, cwd=root, check=True,
-                          text=True, stdout=subprocess.PIPE if capture else None).stdout
+                          text=True, input=input, stdout=subprocess.PIPE if capture else None).stdout
 
 
 def request(path):
@@ -53,6 +56,33 @@ def health(path, status, body):
     raise AssertionError(f"{path} did not reach {status}/{body}")
 
 
+class Browser:
+    def __init__(self):
+        self.cookies = http.cookiejar.CookieJar()
+        self.http = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
+
+    def request(self, path, method="GET", body=None):
+        headers = {}
+        if method != "GET":
+            code, csrf = self.request("/api/auth/csrf")
+            assert code == 200
+            headers["X-CSRF-TOKEN"] = csrf["token"]
+            headers["Content-Type"] = "application/x-www-form-urlencoded" if path.endswith("/login") else "application/json"
+        data = (urllib.parse.urlencode(body) if path.endswith("/login") else json.dumps(body)).encode() if body is not None else None
+        req = urllib.request.Request(f"http://127.0.0.1:{http_port}{path}", data=data, headers=headers, method=method)
+        try:
+            with self.http.open(req, timeout=20) as response:
+                content = response.read()
+                return response.status, json.loads(content) if content else None
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read())
+
+    def login(self, password):
+        code, body = self.request("/api/auth/login", "POST", {"username": "admin", "password": password})
+        assert code == 200, code
+        return body
+
+
 def migration_count():
     return compose("exec", "-T", "mysql", "sh", "-c",
                    'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u iwork -D iwork -N -e '
@@ -70,20 +100,53 @@ try:
     code, page = request("/")
     assert code == 200 and '<div id="app">' in page
     assert request("/actuator/env")[0] == 403
-    assert request("/api/tasks")[0] == 403
+    assert request("/api/tasks")[0] == 401
     assert migration_count() == "1"
+    browser = Browser()
+    assert browser.login(env["IWORK_BOOTSTRAP_PASSWORD"])["mustChangePassword"]
+    password = secrets.token_urlsafe(24)
+    assert browser.request("/api/auth/password", "POST", {"currentPassword": env["IWORK_BOOTSTRAP_PASSWORD"], "newPassword": password})[0] == 200
+    code, conversation = browser.request("/api/conversations", "POST", {})
+    assert code == 201
+    conversation_path = "/api/conversations/" + conversation["id"]
     compose("exec", "-T", "app", "sh", "-c", 'printf retained > /data/files/smoke-marker')
     compose("up", "-d", "--force-recreate", "--wait", "--wait-timeout", "180")
     assert migration_count() == "1"
     assert compose("exec", "-T", "app", "cat", "/data/files/smoke-marker", capture=True) == "retained"
+    assert browser.request("/api/auth/me")[0] == 200
+    assert browser.request(conversation_path)[1]["title"] == "新会话"
+    # Bootstrap is idempotent: recreation must not replace the changed password.
+    assert not Browser().login(password)["mustChangePassword"]
+    assert Browser().request("/api/auth/login", "POST", {"username": "admin", "password": env["IWORK_BOOTSTRAP_PASSWORD"]})[0] == 401
     compose("stop", "mysql")
+    assert browser.request("/api/auth/me")[0] == 503
     health("/actuator/health/readiness", 503, "DOWN")
     health("/actuator/health/liveness", 200, "UP")
     compose("start", "mysql")
     health("/actuator/health/readiness", 200, "UP")
+    assert browser.request(conversation_path)[0] == 200
+    compose("stop", "redis")
+    assert browser.request("/api/auth/me")[0] == 503
+    health("/actuator/health/readiness", 503, "DOWN")
+    health("/actuator/health/liveness", 200, "UP")
+    compose("start", "redis")
+    health("/actuator/health/readiness", 200, "UP")
+    assert browser.request("/api/auth/me")[0] == 200
+    # Only this disposable project's session store is cleared.
+    compose("exec", "-T", "redis", "redis-cli", "FLUSHDB", capture=True)
+    assert browser.request("/api/auth/me")[0] == 401
+    browser.login(password)
+    assert browser.request(conversation_path)[0] == 200
+    recovered_password = secrets.token_urlsafe(24)
+    compose("exec", "-T", "app", "sh", "-c", "umask 077; cat > /tmp/recovery-password", input=recovered_password)
+    compose("exec", "-T", "-e", "IWORK_RECOVERY_PASSWORD_FILE=/tmp/recovery-password", "app", "java", "-jar", "/app/iwork.jar", "--recover-admin", capture=True)
+    compose("exec", "-T", "app", "rm", "/tmp/recovery-password")
+    assert browser.request("/api/auth/me")[0] == 401
+    assert browser.login(recovered_password)["mustChangePassword"]
+    assert browser.request("/api/conversations")[0] == 403
     logs = compose("logs", "--no-color", capture=True)
-    assert env["IWORK_DB_PASSWORD"] not in logs and env["IWORK_MYSQL_ROOT_PASSWORD"] not in logs
-    (work / "result.txt").write_text("PASS: entry, migration, recreation, file retention, database outage/recovery, log secrets\n")
-    print("PASS: Compose startup, migration, persistence and database outage/recovery", flush=True)
+    assert all(secret not in logs for secret in [env["IWORK_DB_PASSWORD"], env["IWORK_MYSQL_ROOT_PASSWORD"], env["IWORK_BOOTSTRAP_PASSWORD"], password, recovered_password])
+    (work / "result.txt").write_text("PASS: entry, migrations, bootstrap idempotence, app/Redis recreation with login retention, conversations, file retention, MySQL/Redis outage and recovery, Redis loss, admin recovery and revocation, log secrets\n")
+    print("PASS: Compose identity, persistence, dependency failures and administrator recovery", flush=True)
 finally:
-    compose("down", "--timeout", "15")
+    compose("down", "--volumes", "--timeout", "15")

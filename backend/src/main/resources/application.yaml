@@ -11,6 +11,16 @@ spring:
       connection-timeout: 3000
       validation-timeout: 1000
       maximum-pool-size: 5
+  data:
+    redis:
+      host: ${IWORK_REDIS_HOST:localhost}
+      port: ${IWORK_REDIS_PORT:6379}
+      timeout: 3s
+      connect-timeout: 3s
+  session:
+    timeout: 7d
+    redis:
+      namespace: iwork:session
   flyway:
     clean-disabled: true
     validate-on-migrate: true
@@ -38,8 +48,12 @@ management:
         liveness:
           include: livenessState
         readiness:
-          include: readinessState,db,fileStorage
+          include: readinessState,db,redis,fileStorage
 iwork:
+  cookie-secure: ${IWORK_COOKIE_SECURE:true}
+  bootstrap:
+    username: ${IWORK_BOOTSTRAP_USERNAME:admin}
+    password: ${IWORK_BOOTSTRAP_PASSWORD:}
   files-directory: ${IWORK_FILES_DIRECTORY:./data/files}
 logging:
   level:
