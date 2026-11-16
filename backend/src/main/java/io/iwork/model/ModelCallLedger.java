@@ -36,6 +36,9 @@ public class ModelCallLedger implements ApplicationRunner {
             authorization.require(input.caller().id(),input.modelId());
             if(db.queryForObject("SELECT COUNT(*) FROM model_calls WHERE task_id=?",Integer.class,input.taskId())>=4) throw new ApiFailure(429,"model_attempt_limit");
             var model=db.queryForMap("SELECT * FROM models WHERE id=?",input.modelId());
+            var window=(Number)model.get("context_window");
+            if(window==null) throw new ApiFailure(409,"context_window_not_configured");
+            if(inputBytes+512+MAX_OUTPUT>window.intValue()) throw new ApiFailure(413,"model_context_limit");
             var reservation=cost(inputBytes+512,MAX_OUTPUT,(BigDecimal)model.get("input_price"),(BigDecimal)model.get("output_price"));
             var budgets=db.queryForList("SELECT * FROM budgets WHERE user_id=? FOR UPDATE",input.caller().id());
             if(budgets.isEmpty()) throw new ApiFailure(402,"budget_exhausted");

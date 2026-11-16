@@ -16,7 +16,7 @@
 
 ## Harness 目标方案与当前实现
 
-首版采用 HarnessAgent，边界见 [ADR 0004](adr/0004-harness-runtime-and-context.md)。当前引入同版本 core、harness 与 extensions-model-openai，默认工具、记忆、子智能体和压缩均关闭。2.0.4 仍注册 wait_async_results，因此构建后显式移除并断言工具集合严格匹配本任务配置（有授权资料时仅 read_task_material）。主调用及辅助调用经 GovernedModel 逐次授权、预占和记录；#27 再接 MySQL 上下文恢复与自动压缩。具体计量规则见 [#14 设计](issue-14-design.md)。真实供应商兼容性仍由 #26 验证。
+首版采用 HarnessAgent，边界见 [ADR 0004](adr/0004-harness-runtime-and-context.md)。当前引入同版本 core、harness 与 extensions-model-openai；默认通用工具、长期记忆及子智能体关闭。2.0.4 仍注册 wait_async_results，因此构建后显式移除并断言工具集合严格匹配本任务配置（授权资料读取、DOCUMENT 模式正文准备）。主调用及辅助调用经 GovernedModel 逐次授权、预占和记录。#27 通过 MySQL 保存成功任务的文本上下文，并在显式新任务前调用官方 ConversationCompactor；不恢复历史权限或待执行工具。见 [上下文契约](issue27-context-contract.md)与 [#14 计量规则](issue-14-design.md)。真实供应商兼容性仍由 #26 验证。
 
 完整业务消息、运行上下文快照和会话摘要统一保存在 MySQL；SDK 快照不是业务状态权威，不携带可恢复的历史授权，不自动续跑任务。关闭不需要的 SDK 工具、长期记忆及独立会话日志；主推理与压缩统一授权、计量和取消。原始资料、工作文件及成果仍独立保存，具体实现与 T17–T19 验收由开发票承接。
 
@@ -152,3 +152,9 @@ V4 增加任务、消息与请求身份；会话页面可提交、观察、取�
 首版输出 UTF-8 Markdown，正文上限 256 KiB、标题最多 120 字符。会话“正式文档”提供只读原样预览及 `.md` 附件下载，不执行 HTML/代码。版本读取按 owner 查询并检查字节数/SHA-256；修改后的不完整文件返回 503，不静默返回坏内容。正式目录 `documents` 与 `originals`、`document-workspaces` 分开；TaskService 正常终止与启动中断归档后只清理文档工作区。
 
 保存顺序为完整文件先落盘、数据库事务后登记；取消与发布共用任务行锁。数据库提交结果不明或失败时可能留下完整无引用文件，保留它避免误删已登记版本；只能在停止服务并核对数据库索引后清理。不得直接删除整个 files 根目录。首次版本为 1，继续修改形成新版本由 #18 接入。合同见 [#17 设计](issue-17-design.md)。
+
+## 长会话上下文（#27）
+
+V9 增加 MySQL conversation_contexts 与模型 context_window。升级后已有模型窗口为空，管理员需在模型管理中按供应商确认规格填写 8192–131072；更大模型也只启用首版上限，空值会返回 context_window_not_configured。不要把确定性测试替身的参数复制到真实模型。
+
+业务历史与可用快照参与协调备份，不属于可清理的临时工作目录。损坏快照可按完整成功业务记录重建；无法确认或超限时明确失败。中断任务不自动续跑，只响应新的显式任务。测试入口 ConversationContextTest 与仅用于本地验收的 ContextFixtureApplication，后者不进入正式 JAR。

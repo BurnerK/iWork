@@ -132,7 +132,7 @@ class MaterialParsingTest {
         var admin=new Browser(); admin.login("admin","Initial-password-16");
         admin.send("POST","/api/auth/password","{\"currentPassword\":\"Initial-password-16\",\"newPassword\":\"Changed-password-16\"}"); admin.login("admin","Changed-password-16");
         String uid=json.readTree(admin.send("GET","/api/auth/me",null).body()).get("id").asText();
-        String model=json.readTree(admin.send("POST","/api/admin/models",json.writeValueAsString(Map.of("name","Parser test","baseUrl","https://models.example.test/v1","modelName","writer","credentialRef","IWORK_MODEL_KEY_TEST","inputPrice","1","outputPrice","2","enabled",true))).body()).get("id").asText();
+        String model=json.readTree(admin.send("POST","/api/admin/models",json.writeValueAsString(Map.of("name","Parser test","baseUrl","https://models.example.test/v1","modelName","writer","credentialRef","IWORK_MODEL_KEY_TEST","inputPrice","1","outputPrice","2","enabled",true,"contextWindow",131072))).body()).get("id").asText();
         admin.send("PUT","/api/admin/users/"+uid+"/model-access",json.writeValueAsString(Map.of("modelIds",List.of(model))));
         admin.send("PUT","/api/admin/users/"+uid+"/budget","{\"limit\":\"1\"}");
         var material=admin.upload("\ufeff# 资料\r\n<script>不要执行</script>\r原文".getBytes(java.nio.charset.StandardCharsets.UTF_8));

@@ -24,12 +24,12 @@ class ModelController {
         this.db=db; this.identity=identity; this.environment=environment;
     }
     record Model(String id, String name, String baseUrl, String modelName, String credentialRef,
-                 String inputPrice, String outputPrice, boolean enabled) {}
+                 String inputPrice, String outputPrice, boolean enabled, Integer contextWindow) {}
     private List<Model> models(String condition, Object... args) {
         return db.query("SELECT * FROM models WHERE "+condition+" ORDER BY name,id", (r,n) -> new Model(
             r.getString("id"),r.getString("name"),r.getString("base_url"),r.getString("model_name"),
             r.getString("credential_ref"),r.getBigDecimal("input_price").toPlainString(),
-            r.getBigDecimal("output_price").toPlainString(),r.getBoolean("enabled")),args);
+            r.getBigDecimal("output_price").toPlainString(),r.getBoolean("enabled"),(Integer)r.getObject("context_window")),args);
     }
     private void admin(Caller caller) {
         var live=identity.verify(caller,true);
@@ -41,12 +41,13 @@ class ModelController {
     Model create(@AuthenticationPrincipal Caller caller, @RequestBody Map<String,Object> input) {
         admin(caller); var m=validated(UUID.randomUUID().toString(),input);
         db.queryForObject("SELECT currency FROM model_settings WHERE id=1 FOR UPDATE",String.class);
-        db.update("INSERT INTO models(id,name,base_url,model_name,credential_ref,input_price,output_price,enabled) VALUES(?,?,?,?,?,?,?,?)",
-            m.id(),m.name(),m.baseUrl(),m.modelName(),m.credentialRef(),m.inputPrice(),m.outputPrice(),m.enabled());
+        db.update("INSERT INTO models(id,name,base_url,model_name,credential_ref,input_price,output_price,enabled,context_window) VALUES(?,?,?,?,?,?,?,?,?)",
+            m.id(),m.name(),m.baseUrl(),m.modelName(),m.credentialRef(),m.inputPrice(),m.outputPrice(),m.enabled(),m.contextWindow());
         return models("id=?",m.id()).getFirst();
     }
     private Model validated(String id, Map<String,Object> input) {
-        if(!input.keySet().equals(Set.of("name","baseUrl","modelName","credentialRef","inputPrice","outputPrice","enabled"))
+        var keys=new java.util.HashSet<>(input.keySet()); keys.remove("contextWindow");
+        if(!keys.equals(Set.of("name","baseUrl","modelName","credentialRef","inputPrice","outputPrice","enabled"))
             || !(input.get("enabled") instanceof Boolean enabled)) throw new ApiFailure(400,"invalid_input");
         String name=text(input,"name",100), url=text(input,"baseUrl",1000), model=text(input,"modelName",200), ref=text(input,"credentialRef",100);
         try {
@@ -57,14 +58,19 @@ class ModelController {
         if(!ref.matches("IWORK_MODEL_KEY_[A-Z0-9_]{1,80}")) throw new ApiFailure(400,"invalid_credential_reference");
         var credential=environment.getProperty(ref);
         if(credential==null || credential.isBlank()) throw new ApiFailure(400,"credential_not_configured");
-        return new Model(id,name,url,model,ref,money(input.get("inputPrice")),money(input.get("outputPrice")),enabled);
+        Integer window=null;
+        if(input.get("contextWindow")!=null) {
+            if(!(input.get("contextWindow") instanceof Integer number) || number<8192 || number>131072) throw new ApiFailure(400,"invalid_context_window");
+            window=number;
+        }
+        return new Model(id,name,url,model,ref,money(input.get("inputPrice")),money(input.get("outputPrice")),enabled,window);
     }
     @PutMapping("/api/admin/models/{id}") @Transactional
     Model update(@AuthenticationPrincipal Caller caller, @PathVariable String id, @RequestBody Map<String,Object> input) {
         admin(caller); var m=validated(id,input);
         if(models("id=?",id).isEmpty()) throw new ApiFailure(404,"not_found");
-        db.update("UPDATE models SET name=?,base_url=?,model_name=?,credential_ref=?,input_price=?,output_price=?,enabled=? WHERE id=?",
-            m.name(),m.baseUrl(),m.modelName(),m.credentialRef(),m.inputPrice(),m.outputPrice(),m.enabled(),id);
+        db.update("UPDATE models SET name=?,base_url=?,model_name=?,credential_ref=?,input_price=?,output_price=?,enabled=?,context_window=? WHERE id=?",
+            m.name(),m.baseUrl(),m.modelName(),m.credentialRef(),m.inputPrice(),m.outputPrice(),m.enabled(),m.contextWindow(),id);
         return models("id=?",id).getFirst();
     }
     record Settings(String currency, boolean locked) {}

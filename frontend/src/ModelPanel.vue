@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { request } from './api'
-type Model = { id: string; name: string; inputPrice: string; outputPrice: string; baseUrl: string; modelName: string; credentialRef: string; enabled: boolean }
+type Model = { id: string; name: string; inputPrice: string; outputPrice: string; baseUrl: string; modelName: string; credentialRef: string; enabled: boolean; contextWindow: number | null }
 type Budget = { currency: string; limit: string; spent: string; reserved: string; available: string }
 const props = defineProps<{ admin: boolean }>()
 const emit = defineEmits<{ failure: [cause: unknown] }>()
@@ -9,7 +9,7 @@ const models = ref<Model[]>([]), budget = ref<Budget | null>(null), loading = re
 const users = ref<{ id: string; username: string }[]>([]), userPage = ref(0), hasMore = ref(false)
 const selectedUser = ref(''), grants = ref<string[]>([]), limit = ref('0.000000'), userBudget = ref<Budget | null>(null)
 const currency = ref('CNY'), currencyLocked = ref(false), busy = ref(false), notice = ref(''), editing = ref('')
-const emptyModel = () => ({ name: '', baseUrl: '', modelName: '', credentialRef: '', inputPrice: '0.000000', outputPrice: '0.000000', enabled: true })
+const emptyModel = () => ({ name: '', baseUrl: '', modelName: '', credentialRef: '', inputPrice: '0.000000', outputPrice: '0.000000', enabled: true, contextWindow: null as number | null })
 const draft = ref(emptyModel())
 async function loadUsers(nextPage = userPage.value) {
   const result = await request<{ items: typeof users.value; hasMore: boolean }>(`/api/admin/users?page=${nextPage}`)
@@ -76,6 +76,8 @@ onMounted(load)
           <label for="model-name">显示名称（必填）</label><input id="model-name" v-model="draft.name" name="name" required maxlength="100" :disabled="busy">
           <label for="model-url">服务地址（必填，HTTPS）</label><input id="model-url" v-model="draft.baseUrl" name="baseUrl" type="url" required maxlength="1000" autocorrect="off" autocapitalize="none" :spellcheck="false" :disabled="busy">
           <label for="model-upstream">上游模型标识（必填）</label><input id="model-upstream" v-model="draft.modelName" name="modelName" required maxlength="200" autocorrect="off" autocapitalize="none" :spellcheck="false" :disabled="busy">
+          <label for="model-window">获准上下文窗口（必填，Token）</label><input id="model-window" v-model.number="draft.contextWindow" name="contextWindow" type="number" min="8192" max="131072" step="1" required aria-describedby="window-help" :disabled="busy">
+          <p id="window-help" class="hint">按供应商确认的模型窗口填写；首版最多使用 131072 Token。未配置时不能执行任务。</p>
           <label for="model-credential">凭据引用（必填）</label><input id="model-credential" v-model="draft.credentialRef" name="credentialRef" required pattern="IWORK_MODEL_KEY_[A-Z0-9_]{1,80}" maxlength="100" aria-describedby="credential-help" autocorrect="off" autocapitalize="none" :spellcheck="false" :disabled="busy">
           <p id="credential-help" class="hint">填写服务端配置的 IWORK_MODEL_KEY_ 开头的环境变量名。密钥由部署者配置，请勿粘贴密钥。</p>
           <label for="input-price">输入价格（必填，{{ currency }}/百万 Token）</label><input id="input-price" v-model="draft.inputPrice" name="inputPrice" inputmode="decimal" required pattern="[0-9]+(\.[0-9]{1,6})?" :disabled="busy">

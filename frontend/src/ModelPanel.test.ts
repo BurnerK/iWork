@@ -24,6 +24,7 @@ it('lets administrators save a model reference without accepting a secret', asyn
   await panel.get('#model-name').setValue('写作')
   await panel.get('#model-url').setValue('https://models.example.test/v1')
   await panel.get('#model-upstream').setValue('writer')
+  await panel.get('#model-window').setValue(131072)
   await panel.get('#model-credential').setValue('IWORK_MODEL_KEY_WRITER')
   await panel.get('form[aria-label="模型配置"]').trigger('submit'); await flushPromises()
   expect(fetch).toHaveBeenCalledWith('/api/admin/models', expect.objectContaining({ method: 'POST', body: expect.stringContaining('IWORK_MODEL_KEY_WRITER') }))

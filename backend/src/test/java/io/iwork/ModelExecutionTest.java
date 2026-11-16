@@ -76,17 +76,20 @@ class ModelExecutionTest {
             public reactor.core.publisher.Flux<String> stream(io.agentscope.core.model.transport.HttpRequest request) {
                 requests.incrementAndGet();
                 assertThat(request.getBody()).doesNotContain("\"tools\"", "shell", "read_file", "web_search", "subagent", "plan_enter").contains("2048","include_usage");
+                String current="";
+                for(var message:new ObjectMapper().readTree(request.getBody()).path("messages"))
+                    if(message.path("role").asText().equals("user")) current=message.path("content").asText();
                 String content="{\"id\":\"provider-one\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"模型完成\"},\"finish_reason\":null}]}";
                 String usage="{\"id\":\"provider-one\",\"choices\":[],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":20,\"total_tokens\":120}}";
                 String end="{\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}";
-                if(request.getBody().contains("storage")) return reactor.core.publisher.Flux.just(content).concatWith(storageStream.asFlux());
-                if(request.getBody().contains("zero-usage")) return reactor.core.publisher.Flux.just(content,"{\"choices\":[],\"usage\":{\"prompt_tokens\":0,\"completion_tokens\":0}}",end,"[DONE]");
-                if(request.getBody().contains("silent")) return reactor.core.publisher.Flux.error(new IllegalStateException("no observed output"));
-                if(request.getBody().contains("hold-known")) return reactor.core.publisher.Flux.just(content,usage).concatWith(reactor.core.publisher.Flux.never()).doOnCancel(cancellations::incrementAndGet);
-                if(request.getBody().contains("hold")) return reactor.core.publisher.Flux.just(content).concatWith(reactor.core.publisher.Flux.never()).doOnCancel(cancellations::incrementAndGet);
-                if(request.getBody().contains("missing")) return reactor.core.publisher.Flux.just(content,end,"[DONE]");
-                if(request.getBody().contains("partial")) return reactor.core.publisher.Flux.just(content,"{\"choices\":[],\"usage\":{\"prompt_tokens\":100}}",end,"[DONE]");
-                if(request.getBody().contains("error")) return reactor.core.publisher.Flux.just(content,usage).concatWith(reactor.core.publisher.Flux.error(new IllegalStateException("private-provider-failure")));
+                if(current.contains("storage")) return reactor.core.publisher.Flux.just(content).concatWith(storageStream.asFlux());
+                if(current.contains("zero-usage")) return reactor.core.publisher.Flux.just(content,"{\"choices\":[],\"usage\":{\"prompt_tokens\":0,\"completion_tokens\":0}}",end,"[DONE]");
+                if(current.contains("silent")) return reactor.core.publisher.Flux.error(new IllegalStateException("no observed output"));
+                if(current.contains("hold-known")) return reactor.core.publisher.Flux.just(content,usage).concatWith(reactor.core.publisher.Flux.never()).doOnCancel(cancellations::incrementAndGet);
+                if(current.contains("hold")) return reactor.core.publisher.Flux.just(content).concatWith(reactor.core.publisher.Flux.never()).doOnCancel(cancellations::incrementAndGet);
+                if(current.contains("missing")) return reactor.core.publisher.Flux.just(content,end,"[DONE]");
+                if(current.contains("partial")) return reactor.core.publisher.Flux.just(content,"{\"choices\":[],\"usage\":{\"prompt_tokens\":100}}",end,"[DONE]");
+                if(current.contains("error")) return reactor.core.publisher.Flux.just(content,usage).concatWith(reactor.core.publisher.Flux.error(new IllegalStateException("private-provider-failure")));
                 return reactor.core.publisher.Flux.just(content,usage,usage,end,"[DONE]");
             }
             public void close() {}
@@ -97,7 +100,7 @@ class ModelExecutionTest {
         admin.request("POST","/api/auth/password","{\"currentPassword\":\"Initial-password-11\",\"newPassword\":\"Model-password-14\"}",true);
         admin.login("admin","Model-password-14"); admin.csrf();
         var cid=json.readTree(admin.request("POST","/api/conversations","{}",true).body()).get("id").asText();
-        var model=admin.request("POST","/api/admin/models",json.writeValueAsString(Map.of("name","Fixture", "baseUrl","https://models.example.test/v1", "modelName","writer", "credentialRef","IWORK_MODEL_KEY_TEST", "inputPrice","1", "outputPrice","2", "enabled",true)),true);
+        var model=admin.request("POST","/api/admin/models",json.writeValueAsString(Map.of("name","Fixture", "baseUrl","https://models.example.test/v1", "modelName","writer", "credentialRef","IWORK_MODEL_KEY_TEST", "inputPrice","1", "outputPrice","2", "enabled",true,"contextWindow",131072)),true);
         var modelId=json.readTree(model.body()).get("id").asText();
         var uid=json.readTree(admin.request("GET","/api/auth/me",null,false).body()).get("id").asText();
         admin.request("PUT","/api/admin/users/"+uid+"/model-access",json.writeValueAsString(Map.of("modelIds",List.of(modelId))),true);
