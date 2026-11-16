@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ModelPanel from './ModelPanel.vue'
 import { ApiError, errorMessage, request } from './api'
 
 type User = { id: string; username: string; displayName: string; role: string; enabled: boolean; mustChangePassword: boolean }
@@ -43,7 +44,7 @@ async function navigate() {
   temporary.value = null; password.value = ''; newPassword.value = ''; showPassword.value = false
   if (!user.value) { if (route.name !== 'login') await router.replace('/login'); return }
   if (user.value.mustChangePassword && route.name !== 'password') { await router.replace('/password'); return }
-  if (route.name === 'login' || route.name === 'admin' && user.value.role !== 'ADMIN') { await router.replace('/conversations'); return }
+  if (route.name === 'login' || ['admin', 'admin-models'].includes(String(route.name)) && user.value.role !== 'ADMIN') { await router.replace('/conversations'); return }
   page.value = 0; await loadPanel()
   await nextTick(); document.querySelector<HTMLElement>('h1')?.focus()
 }
@@ -105,7 +106,7 @@ function toggleUser(target: User) { return act(async () => {
 }) }
 async function paginate(delta: number) { page.value += delta; await loadPanel() }
 watch(() => route.fullPath, navigate)
-watch(() => route.name, name => { document.title = `${({ login: '登录', password: '修改密码', admin: '用户管理', conversation: '会话', conversations: '个人会话' } as Record<string, string>)[String(name)] || 'iWork'} · iWork` })
+watch(() => route.name, name => { document.title = `${({ login: '登录', password: '修改密码', admin: '用户管理', models: '模型与额度', 'admin-models': '模型管理', conversation: '会话', conversations: '个人会话' } as Record<string, string>)[String(name)] || 'iWork'} · iWork` })
 onMounted(loadIdentity)
 </script>
 
@@ -116,6 +117,8 @@ onMounted(loadIdentity)
       <template v-if="!user.mustChangePassword">
         <RouterLink to="/conversations">个人会话</RouterLink>
         <RouterLink v-if="user.role === 'ADMIN'" to="/admin">用户管理</RouterLink>
+        <RouterLink to="/models">模型与额度</RouterLink>
+        <RouterLink v-if="user.role === 'ADMIN'" to="/admin-models">模型管理</RouterLink>
         <RouterLink to="/password">修改密码</RouterLink>
       </template>
       <span>{{ user.displayName }}</span>
@@ -174,6 +177,7 @@ onMounted(loadIdentity)
         </li>
       </ul>
     </section>
+    <ModelPanel v-else-if="user && ['models', 'admin-models'].includes(String(route.name))" :key="`${user.id}-${String(route.name)}`" :admin="route.name === 'admin-models'" @failure="failure" />
     <section v-else class="workspace">
       <aside>
         <div class="section-title"><h1 tabindex="-1">个人会话</h1><button type="button" :disabled="busy" @click="createConversation">新建会话</button></div>

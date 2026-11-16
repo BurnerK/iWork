@@ -17,10 +17,10 @@ p { margin: 0 0 24px; }
 small { display: block; margin-top: 8px; }
 form { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 24px; }
 form label { display: block; }
-input { width: 100%; min-width: 0; margin-bottom: 16px; border: 1px solid #75758a; border-radius: 4px; padding: 16px; font: inherit; color: #212121; background: #ffffff; }
-input:hover:not(:disabled) { border-color: #212121; }
-input:focus-visible { border-color: #9b60aa; outline: 2px solid #4c6ee6; outline-offset: 2px; }
-input:disabled { background: #eeece7; color: #616161; }
+input, select { width: 100%; min-width: 0; margin-bottom: 16px; border: 1px solid #75758a; border-radius: 4px; padding: 16px; font: inherit; color: #212121; background: #ffffff; }
+select:hover:not(:disabled), input:hover:not(:disabled) { border-color: #212121; }
+select:focus-visible, input:focus-visible { border-color: #9b60aa; outline: 2px solid #4c6ee6; outline-offset: 2px; }
+select:disabled, input:disabled { background: #eeece7; color: #616161; }
 input:user-invalid { border-color: #b30000; }
 button { border: 1px solid transparent; border-radius: 32px; padding: 16px 24px; font: 500 14px/1.71 'Unica77 Cohere Web', Inter, Arial, ui-sans-serif, system-ui; color: #ffffff; background: #17171c; cursor: pointer; }
 button:hover:not(:disabled) { background: #003c33; }
@@ -42,7 +42,7 @@ a.router-link-exact-active { text-decoration-thickness: 2px; }
 .rows li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; padding: 24px 0; border-bottom: 1px solid #d9d9dd; overflow-wrap: anywhere; }
 .rows a { display: block; width: 100%; }
 .create-user { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 24px; }
-.create-user input { margin: 8px 0 0; }
+.create-user input, select { margin: 8px 0 0; }
 .notice { padding: 24px; margin-bottom: 24px; background: #edfce9; border-radius: 8px; }
 .notice code { font: 400 14px/1.4 CohereMono, Arial, ui-sans-serif, system-ui; letter-spacing: .28px; overflow-wrap: anywhere; user-select: all; }
 .pagination { margin-top: 32px; }
@@ -52,3 +52,8 @@ a.router-link-exact-active { text-decoration-thickness: 2px; }
   h1 { font-size: 32px; line-height: 1.2; letter-spacing: -.32px; }
   nav, .section-title { gap: 16px; }
 }
+
+.check-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+.check-row input { width: auto; margin: 0; accent-color: #17171c; }
+.check-row label { padding: 8px; }
+fieldset { border: 1px solid #d9d9dd; border-radius: 4px; padding: 16px; }
