@@ -70,7 +70,7 @@ public class ConversationContext {
     private void compact(TaskRunner.Input input,AgentState state) {
         var window=db.queryForObject("SELECT context_window FROM models WHERE id=?",Integer.class,input.modelId());
         if(window==null) throw new ApiFailure(409,"context_window_not_configured");
-        int original=state.toJson().getBytes(StandardCharsets.UTF_8).length+input.message().getBytes(StandardCharsets.UTF_8).length;
+        int original=state.toJson().getBytes(StandardCharsets.UTF_8).length+input.message().getBytes(StandardCharsets.UTF_8).length+input.instructions().getBytes(StandardCharsets.UTF_8).length;
         int budget=window-4096;
         if(original<budget/2) return;
         var completed=new java.util.concurrent.atomic.AtomicBoolean();
@@ -93,11 +93,11 @@ public class ConversationContext {
         // 2.0.4 converts summary errors and empty output to text; never persist those fallbacks.
         if(completed.get() && failure.get()==null && !summary.toString().isBlank() && compacted!=null && compacted.isPresent()) {
             var candidate=AgentState.builder().userId(input.caller().id()).sessionId(input.conversationId()).context(compacted.get()).summary(summary.toString()).build();
-            if(candidate.toJson().getBytes(StandardCharsets.UTF_8).length+input.message().getBytes(StandardCharsets.UTF_8).length<=budget) {
+            if(candidate.toJson().getBytes(StandardCharsets.UTF_8).length+input.message().getBytes(StandardCharsets.UTF_8).length+input.instructions().getBytes(StandardCharsets.UTF_8).length<=budget) {
                 state.contextMutable().clear(); state.contextMutable().addAll(compacted.get()); state.setSummary(summary.toString());
             }
         } else if(original>budget) throw new ApiFailure(413,"context_compaction_failed");
-        if(state.toJson().getBytes(StandardCharsets.UTF_8).length+input.message().getBytes(StandardCharsets.UTF_8).length>budget)
+        if(state.toJson().getBytes(StandardCharsets.UTF_8).length+input.message().getBytes(StandardCharsets.UTF_8).length+input.instructions().getBytes(StandardCharsets.UTF_8).length>budget)
             throw new ApiFailure(413,"context_limit");
     }
     public void save(TaskRunner.Input input,Prepared prepared) {

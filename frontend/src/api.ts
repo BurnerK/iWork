@@ -24,6 +24,7 @@ export async function request<T>(path: string, method = 'GET', body?: object | U
 export function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '操作失败，请重试。'
   const messages: Record<string, string> = {
+    invalid_agent: '请填写120字符以内的名称、4000字符以内的指令，并选择已授权模型。',
     invalid_document: '请提供有效标题和非空 Markdown 正文。',
     document_too_large: '文档正文不能超过 256 KiB。',
     document_not_generated: '没有取得可保存的文档正文，本次任务未发布成果。',

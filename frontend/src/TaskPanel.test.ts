@@ -15,7 +15,7 @@ it('retries an uncertain submission with the same request identity and never can
   })
   vi.stubGlobal('fetch', fetch)
   const panel = mount(TaskPanel, { props: { conversationId: 'conversation', ownerId: 'owner' } }); await flushPromises()
-  await panel.get('select').setValue('model'); await panel.get('textarea').setValue('整理资料')
+  await panel.get('select[name="modelId"]').setValue('model'); await panel.get('textarea').setValue('整理资料')
   await panel.get('form[aria-label="提交任务"]').trigger('submit'); await flushPromises()
   await panel.get('form[aria-label="提交任务"]').trigger('submit'); await flushPromises()
   expect(bodies).toHaveLength(2); expect(bodies[0]).toBe(bodies[1])
@@ -31,7 +31,7 @@ it('keeps an uncertain request identity after reopening the same conversation', 
     return Promise.resolve(new Response(JSON.stringify(url === '/api/models' ? [{ id: 'model', name: '模型' }] : url.endsWith('/documents') ? [] : { items: [], hasMore: false })))
   }))
   let panel = mount(TaskPanel, { props: { conversationId: 'reopen', ownerId: 'owner' } }); await flushPromises()
-  await panel.get('select').setValue('model'); await panel.get('textarea').setValue('要求')
+  await panel.get('select[name="modelId"]').setValue('model'); await panel.get('textarea').setValue('要求')
   await panel.get('form[aria-label="提交任务"]').trigger('submit'); await flushPromises(); panel.unmount()
   panel = mount(TaskPanel, { props: { conversationId: 'reopen', ownerId: 'owner' } }); await flushPromises()
   expect(panel.text()).toContain('重试确认')
@@ -102,4 +102,23 @@ it('selects a personal version and preserves its source across an uncertain retr
   await panel.get('form[aria-label="提交任务"]').trigger('submit'); await flushPromises()
   expect(JSON.parse(bodies[0]!)).toMatchObject({ baseVersionId: 'source-version', outputMode: 'DOCUMENT' })
   expect(bodies[0]).toBe(bodies[1]); panel.unmount(); localStorage.clear()
+})
+it('retains a selected personal agent across uncertain submission and reopening without overriding its model', async () => {
+  localStorage.clear()
+  const bodies: string[] = []
+  const agent = { id: 'agent', name: '写作助手', modelId: 'model', instructions: '整理行动' }
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+    if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+    if (init?.method === 'POST') { bodies.push(String(init.body)); return Promise.reject(new TypeError('lost')) }
+    const value = url === '/api/models' ? [{ id: 'model', name: '模型' }] : url === '/api/agents/agent' ? agent : url.startsWith('/api/agents') ? { items: [agent], hasMore: false } : url.endsWith('/documents') ? [] : { items: [], hasMore: false }
+    return Promise.resolve(new Response(JSON.stringify(value)))
+  }))
+  let panel = mount(TaskPanel, { props: { conversationId: 'agent-conversation', ownerId: 'owner' } }); await flushPromises()
+  await panel.get('select[name="agentId"]').setValue('agent'); await panel.get('textarea').setValue('写方案')
+  await panel.get('form[aria-label="提交任务"]').trigger('submit'); await flushPromises(); panel.unmount()
+  panel = mount(TaskPanel, { props: { conversationId: 'agent-conversation', ownerId: 'owner' } }); await flushPromises()
+  expect(panel.text()).toContain('写作助手')
+  await panel.get('form[aria-label="提交任务"]').trigger('submit'); await flushPromises()
+  expect(bodies).toHaveLength(2); expect(bodies[0]).toBe(bodies[1]); expect(JSON.parse(bodies[0]!)).toMatchObject({ agentId: 'agent' }); expect(JSON.parse(bodies[0]!)).not.toHaveProperty('modelId')
+  panel.unmount(); localStorage.clear()
 })

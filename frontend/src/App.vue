@@ -3,6 +3,7 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskPanel from './TaskPanel.vue'
 import ModelPanel from './ModelPanel.vue'
+import AgentPanel from './AgentPanel.vue'
 import { ApiError, errorMessage, request } from './api'
 
 type User = { id: string; username: string; displayName: string; role: string; enabled: boolean; mustChangePassword: boolean }
@@ -107,7 +108,7 @@ function toggleUser(target: User) { return act(async () => {
 }) }
 async function paginate(delta: number) { page.value += delta; await loadPanel() }
 watch(() => route.fullPath, navigate)
-watch(() => route.name, name => { document.title = `${({ login: '登录', password: '修改密码', admin: '用户管理', models: '模型与额度', 'admin-models': '模型管理', conversation: '会话', conversations: '个人会话' } as Record<string, string>)[String(name)] || 'iWork'} · iWork` })
+watch(() => route.name, name => { document.title = `${({ agents: '我的智能体', login: '登录', password: '修改密码', admin: '用户管理', models: '模型与额度', 'admin-models': '模型管理', conversation: '会话', conversations: '个人会话' } as Record<string, string>)[String(name)] || 'iWork'} · iWork` })
 onMounted(loadIdentity)
 </script>
 
@@ -118,6 +119,7 @@ onMounted(loadIdentity)
       <template v-if="!user.mustChangePassword">
         <RouterLink to="/conversations">个人会话</RouterLink>
         <RouterLink v-if="user.role === 'ADMIN'" to="/admin">用户管理</RouterLink>
+        <RouterLink to="/agents">我的智能体</RouterLink>
         <RouterLink to="/models">模型与额度</RouterLink>
         <RouterLink v-if="user.role === 'ADMIN'" to="/admin-models">模型管理</RouterLink>
         <RouterLink to="/password">修改密码</RouterLink>
@@ -178,6 +180,7 @@ onMounted(loadIdentity)
         </li>
       </ul>
     </section>
+    <AgentPanel v-else-if="user && route.name === 'agents'" :key="user.id" @failure="failure" />
     <ModelPanel v-else-if="user && ['models', 'admin-models'].includes(String(route.name))" :key="`${user.id}-${String(route.name)}`" :admin="route.name === 'admin-models'" @failure="failure" />
     <section v-else class="workspace">
       <aside>

@@ -7,10 +7,22 @@ import MaterialPanel from './MaterialPanel.vue'
 import { ApiError, errorMessage, request } from './api'
 const props = defineProps<{ conversationId: string; ownerId: string }>()
 const emit = defineEmits<{ failure: [cause: unknown] }>()
-type Task = { id: string; requestId: string; status: string; executionState: string; errorCode: string | null }
+type Task = { agentName?: string; id: string; requestId: string; status: string; executionState: string; errorCode: string | null }
 type Message = { id: number; taskId: string; role: string; content: string }
 type Page<T> = { items: T[]; hasMore: boolean }
 const models = ref<{ id: string; name: string }[]>([]), modelId = ref(''), message = ref(''), outputMode = ref('TEXT')
+type Agent = { id: string; name: string; modelId: string }
+const agents = ref<Agent[]>([]), agentId = ref(''), agentPage = ref(0), moreAgents = ref(false), loadingAgents = ref(false)
+async function loadAgents(next = 0) {
+  loadingAgents.value = true
+  try {
+    const result = await request<Page<Agent>>(`/api/agents?page=${next}`)
+    if (disposed) return
+    agents.value = next ? [...agents.value, ...result.items.filter(item => !agents.value.some(old => old.id === item.id))] : result.items
+    agentPage.value = next; moreAgents.value = result.hasMore
+    if (agentId.value && !agents.value.some(item => item.id === agentId.value)) agents.value.push(await request<Agent>(`/api/agents/${agentId.value}`))
+  } catch (cause) { await failure(cause) } finally { loadingAgents.value = false }
+}
 const tasks = ref<Task[]>([]), messages = ref<Message[]>([]), busy = ref(false), loading = ref(false), error = ref('')
 const materialIds = ref<string[]>([]), materialBusy = ref(false)
 const baseVersion = ref<{ versionId: string; title: string; versionNumber: number }>()
@@ -18,7 +30,7 @@ function selectVersion(version: { versionId: string; title: string; versionNumbe
   if (busy.value || pending.value || active.value) return
   baseVersion.value = version; outputMode.value = 'DOCUMENT'; document.getElementById('task-message')?.focus()
 }
-const pending = ref<{ baseVersionId?: string; requestId: string; modelId: string; message: string; materialIds?: string[]; outputMode?: string } | null>(null)
+const pending = ref<{ baseVersionId?: string; requestId: string; modelId?: string; agentId?: string; message: string; materialIds?: string[]; outputMode?: string } | null>(null)
 const storageKey = `iwork-pending:${props.ownerId}:${props.conversationId}`
 function clearPending() { localStorage.removeItem(storageKey); pending.value = null }
 const usageTaskId = ref(''), parsingTaskId = ref('')
@@ -56,7 +68,7 @@ async function submit() {
   if (busy.value || materialBusy.value || active.value && !pending.value) return
   busy.value = true; error.value = ''
   try {
-    pending.value ||= { requestId: crypto.randomUUID(), modelId: modelId.value, message: message.value, outputMode: outputMode.value, baseVersionId: baseVersion.value?.versionId, materialIds: [...materialIds.value] }
+    pending.value ||= { requestId: crypto.randomUUID(), ...(agentId.value ? { agentId: agentId.value } : { modelId: modelId.value }), message: message.value, outputMode: outputMode.value, baseVersionId: baseVersion.value?.versionId, materialIds: [...materialIds.value] }
     localStorage.setItem(storageKey, JSON.stringify(pending.value))
     await request(`/api/conversations/${props.conversationId}/tasks`, 'POST', pending.value)
     clearPending(); message.value = ''; baseVersion.value = undefined; await load()
@@ -85,13 +97,14 @@ onMounted(async () => {
     const stored = localStorage.getItem(storageKey)
     if (stored) {
       const restored = JSON.parse(stored)
-      if (typeof restored.requestId === 'string' && typeof restored.modelId === 'string' && typeof restored.message === 'string') {
-        pending.value = restored; outputMode.value = restored.outputMode || 'TEXT'; modelId.value = restored.modelId; message.value = restored.message; materialIds.value = Array.isArray(restored.materialIds) ? restored.materialIds : []
+      if (typeof restored.requestId === 'string' && (typeof restored.modelId === 'string' || typeof restored.agentId === 'string') && typeof restored.message === 'string') {
+        pending.value = restored; outputMode.value = restored.outputMode || 'TEXT'; modelId.value = restored.modelId || ''; agentId.value = restored.agentId || ''; message.value = restored.message; materialIds.value = Array.isArray(restored.materialIds) ? restored.materialIds : []
         if (typeof restored.baseVersionId === 'string') baseVersion.value = await request(`/api/document-versions/${restored.baseVersionId}`)
       } else localStorage.removeItem(storageKey)
     }
   } catch (cause) { await failure(cause) }
   try { models.value = await request('/api/models') } catch (cause) { await failure(cause) }
+  await loadAgents()
   await poll()
 })
 onUnmounted(() => { disposed = true; clearTimeout(timer) })
@@ -102,14 +115,17 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
     <p v-if="!messages.length">暂时没有消息。</p>
     <ol class="messages"><li v-for="item in messages" :key="item.id"><small>{{ item.role === 'user' ? '你' : '助手' }}</small><p>{{ item.content }}</p></li></ol>
     <button v-if="moreMessages" type="button" class="secondary" :disabled="loading" @click="load">继续加载消息</button>
-    <ul class="rows" aria-label="任务状态"><li v-for="task in tasks" :key="task.id"><div><span role="status">{{ labels[task.status] || task.status }}</span><small>任务 {{ task.id }}</small><small v-if="task.executionState === 'STOP_REQUESTED'">已请求停止，执行结束尚待确认。</small><small v-if="task.status === 'CANCELLED' && task.executionState === 'STOPPED'">本地执行已结束，不代表供应商已停止。处理容器状态见资料处理。</small><small v-if="task.executionState === 'UNKNOWN'">执行状态未知。</small><small v-if="task.errorCode">{{ errorMessage(new ApiError(400, task.errorCode)) }}</small></div><button v-if="task.status === 'RUNNING'" type="button" class="secondary" :disabled="busy" @click="cancel(task)">取消任务</button><button type="button" class="secondary" :aria-expanded="usageTaskId === task.id" @click="usageTaskId = usageTaskId === task.id ? '' : task.id">查看用量</button><button type="button" class="secondary" :aria-expanded="parsingTaskId === task.id" @click="parsingTaskId = parsingTaskId === task.id ? '' : task.id">资料处理</button></li></ul>
+    <ul class="rows" aria-label="任务状态"><li v-for="task in tasks" :key="task.id"><div><span role="status">{{ labels[task.status] || task.status }}</span><small>任务 {{ task.id }}</small><small v-if="task.agentName">智能体：{{ task.agentName }}（提交时配置）</small><small v-if="task.executionState === 'STOP_REQUESTED'">已请求停止，执行结束尚待确认。</small><small v-if="task.status === 'CANCELLED' && task.executionState === 'STOPPED'">本地执行已结束，不代表供应商已停止。处理容器状态见资料处理。</small><small v-if="task.executionState === 'UNKNOWN'">执行状态未知。</small><small v-if="task.errorCode">{{ errorMessage(new ApiError(400, task.errorCode)) }}</small></div><button v-if="task.status === 'RUNNING'" type="button" class="secondary" :disabled="busy" @click="cancel(task)">取消任务</button><button type="button" class="secondary" :aria-expanded="usageTaskId === task.id" @click="usageTaskId = usageTaskId === task.id ? '' : task.id">查看用量</button><button type="button" class="secondary" :aria-expanded="parsingTaskId === task.id" @click="parsingTaskId = parsingTaskId === task.id ? '' : task.id">资料处理</button></li></ul>
     <ParsingPanel v-if="parsingTaskId" :key="parsingTaskId" :task-id="parsingTaskId" />
     <UsagePanel v-if="usageTaskId" :key="usageTaskId" :task-id="usageTaskId" :running="tasks.some(task => task.id === usageTaskId && task.status === 'RUNNING')" />
     <button v-if="moreTasks" type="button" class="secondary" :disabled="busy" @click="earlierTasks">较早的任务</button>
     <DocumentPanel :conversation-id="conversationId" :disabled="busy || !!pending || active" @select-version="selectVersion" :revision="tasks.map(task => task.id + task.status).join(',')" />
     <MaterialPanel v-model="materialIds" :disabled="busy || !!pending || active" @failure="failure" @uploading="materialBusy = $event" />
     <form method="post" :action="`/api/conversations/${conversationId}/tasks`" aria-label="提交任务" @submit.prevent="submit">
-      <label for="task-model">模型（必选）</label><select id="task-model" v-model="modelId" name="modelId" required :disabled="busy || !!pending || active"><option value="">请选择模型</option><option v-for="model in models" :key="model.id" :value="model.id">{{ model.name }}</option></select>
+      <label for="task-agent">使用方式</label><select id="task-agent" v-model="agentId" name="agentId" :disabled="busy || !!pending || active"><option value="">直接选择模型</option><option v-for="agent in agents" :key="agent.id" :value="agent.id">{{ agent.name }}</option></select>
+      <button v-if="moreAgents" type="button" class="secondary" :disabled="loadingAgents || busy || !!pending || active" @click="loadAgents(agentPage + 1)">加载更多智能体</button>
+      <p v-if="agentId" class="hint">使用所选智能体提交时的配置。模型：{{ models.find(model => model.id === agents.find(agent => agent.id === agentId)?.modelId)?.name || '当前不可用，请检查授权' }}。</p>
+      <template v-else><label for="task-model">模型（必选）</label><select id="task-model" v-model="modelId" name="modelId" required :disabled="busy || !!pending || active"><option value="">请选择模型</option><option v-for="model in models" :key="model.id" :value="model.id">{{ model.name }}</option></select></template>
       <p v-if="baseVersion" role="status">基于《{{ baseVersion.title }}》版本 {{ baseVersion.versionNumber }} 修改。<button type="button" class="secondary" :disabled="busy || !!pending || active" @click="baseVersion = undefined">清除来源版本</button></p>
       <label for="task-output">成果形式</label><select id="task-output" v-model="outputMode" name="outputMode" :disabled="busy || !!pending || active || !!baseVersion"><option value="TEXT">文字回复</option><option value="DOCUMENT">Markdown 文档（.md）</option></select>
       <label for="task-message">工作要求（必填）</label><textarea id="task-message" v-model="message" name="message" required maxlength="20000" rows="4" :disabled="busy || !!pending || active"></textarea>

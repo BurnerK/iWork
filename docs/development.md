@@ -174,3 +174,7 @@ DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等
 ## 清理故障与独立监督（#21）
 
 清理失败保留UNKNOWN并拒绝新增处理，恢复后按持久关联重试。看门狗健康记录超过2秒不接纳新处理，恢复后按Docker原创建时间检查60秒期限；不重置。实际确认删除输出sandbox_expired_removed回执，仅含标识与毫秒时间。部署应采集该日志并保留条件性期限边界；见 [监督契约](issue21-supervision-contract.md)。
+
+## 个人智能体（#22）
+
+`/api/agents`保存当前用户的名称、指令、模型；不含凭据或可编辑工具。任务使用agentId或modelId二选一，受理时保存配置快照，之后编辑不影响当前任务；新任务重查实际模型/资料权限和本人额度。V11新增个人配置与任务快照字段。界面“我的智能体”保存后在会话选择，详见 [契约](issue22-agent-contract.md) 和 [验收](validation/issue22-personal-agents.md)。
