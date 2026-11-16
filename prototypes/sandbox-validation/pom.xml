@@ -2,6 +2,15 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>iwork.prototype</groupId><artifactId>sandbox-validation</artifactId><version>0.1</version>
   <properties><maven.compiler.release>21</maven.compiler.release><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>
+  <dependencyManagement>
+    <dependencies>
+      <!-- Security fixes for AgentScope's transitive dependencies. -->
+      <dependency><groupId>com.fasterxml.jackson</groupId><artifactId>jackson-bom</artifactId><version>2.21.8</version><type>pom</type><scope>import</scope></dependency>
+      <dependency><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-bom</artifactId><version>1.68.0</version><type>pom</type><scope>import</scope></dependency>
+      <dependency><groupId>org.apache.commons</groupId><artifactId>commons-lang3</artifactId><version>3.18.0</version></dependency>
+      <dependency><groupId>commons-codec</groupId><artifactId>commons-codec</artifactId><version>1.23.0</version></dependency>
+    </dependencies>
+  </dependencyManagement>
   <dependencies><dependency><groupId>io.agentscope</groupId><artifactId>agentscope-harness</artifactId><version>2.0.4</version></dependency></dependencies>
   <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.1</version></plugin></plugins></build>
 </project>

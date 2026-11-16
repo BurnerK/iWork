@@ -16,7 +16,23 @@
 
 ## 构建与迁移
 
-Spring Boot 3.5 支持 Java 21（[官方兼容要求](https://docs.spring.io/spring-boot/3.5/system-requirements.html)）。AgentScope core 固定为已有探针验证过的 2.0.4，正式入口只验证依赖可构建和装载，不代表真实模型集成已验收。
+Spring Boot 4.0.9 支持 Java 21（[官方兼容要求](https://docs.spring.io/spring-boot/4.0/system-requirements.html)）。AgentScope core 固定为已有探针验证过的 2.0.4，正式入口只验证依赖可构建和装载，不代表真实模型集成已验收。
+
+Boot 4 使用 Web MVC 与 Flyway 专用 starter，健康检查和安全自动配置类使用新包名。Web 层采用 Boot 管理的 Jackson 3，AgentScope 保留 Jackson 2；`AgentScopeCompatibilityTest` 验证 SDK 消息在正式应用依赖组合下可序列化并读回。安全版本覆盖集中在后端 POM，MCP 使用 BOM 统一模块版本。升级后在 IDEA 重新加载 Maven 项目，再刷新安全检查。
+
+2026-11-16 后端依赖安全修复：
+
+| 原告警构件 | 处理 |
+| --- | --- |
+| MySQL Connector/J 9.7.0 | 升至 26.10.0；[官方说明](https://dev.mysql.com/doc/relnotes/connector-j/en/news-26-10-0.html)支持 MySQL 8.4 及以后版本，数据库服务版本保持 8.4.7。 |
+| Logback 1.5.38 | 升至 1.6.7；[官方说明](https://logback.qos.ch/news.html)将 1.6 系列作为 1.5 的替代版本，本项目未使用 Janino 条件配置。 |
+| Jackson 3.1.7 | BOM 升至 3.1.8；[修复说明](https://github.com/FasterXML/jackson/wiki/Jackson-Release-3.1.8)包含 CVE-2026-110879。Jackson 2 保持 2.21.8。 |
+| MCP core 0.17.2 | MCP BOM 升至 1.1.5，包含 DNS rebinding、CORS 和[请求体无界读取](https://github.com/modelcontextprotocol/java-sdk/security/advisories/GHSA-4x8c-5vv7-973f)修复；新增 `McpCompatibilityTest` 验证 AgentScope 同步、异步 Streamable HTTP 初始化、工具发现及工具调用。 |
+| json-smart 2.6.0 | 升至 2.6.1。 |
+| ASM 9.7.1 | 随 json-smart/accessors-smart 2.6.1 升至 9.11.1，无单独版本覆盖。 |
+| android-json | 排除当前测试未使用的 JSONAssert，从测试依赖树移除该无维护版本；现有断言使用 AssertJ。 |
+
+7 项后端测试、IDEA 构建和隔离 Compose 验收通过（启动、迁移、重建、文件保留及数据库中断恢复）；IDEA/Mend 后端 POM 检查从 7 条降为 0 条，OSV 对最终 152 个依赖构件未检出已知漏洞。这是指定日期和依赖树的扫描结果，不是无漏洞保证。MCP 验证使用本机合成服务，未覆盖外部服务、SSE/stdio、认证或 MCP 服务端。两个历史原型仍保留各自的依赖组合；这里的零告警结论仅针对正式后端。
 
 Flyway 随应用启动运行，`backend/src/main/resources/db/migration/V1__baseline.sql` 仅执行无副作用语句并登记基线。历史存储在 MySQL `flyway_schema_history`，不创建业务表。再次启动验证校验和；迁移失败会阻止主应用启动，不提供忽略失败、自动 clean 或对非空数据库自动 baseline 的入口。后续业务票新增 V2、V3 等迁移，不修改已经应用的文件。
 

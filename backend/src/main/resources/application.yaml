@@ -2,7 +2,7 @@ spring:
   application:
     name: iwork
   autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   datasource:
     url: jdbc:mysql://${IWORK_DB_HOST:localhost}:${IWORK_DB_PORT:3306}/${IWORK_DB_NAME:iwork}?connectTimeout=3000&socketTimeout=3000
     username: ${IWORK_DB_USER:iwork}
@@ -44,4 +44,4 @@ iwork:
 logging:
   level:
     root: INFO
-    org.springframework.boot.actuate.jdbc: ERROR
+    org.springframework.boot.jdbc.health: ERROR

@@ -7,7 +7,7 @@
 - Java 21；交付镜像 Temurin 21.0.13+9，镜像摘要固定在 `Dockerfile`。
 - Maven 3.9.11 / Wrapper 3.3.4：使用 `backend/mvnw`，无需系统 Maven。
 - Node 26.13.1 / npm 11.20.0：版本在 `.nvmrc` 和前端 `package.json`。
-- Spring Boot 3.5.16 / AgentScope Java core 2.0.4 / MySQL 8.4.7；Vue 3.5.45 / TypeScript 5.9.3 / Vite 8.3.8。前端传递依赖由 lockfile 固定，后端使用 Boot BOM。
+- Spring Boot 4.0.9 / AgentScope Java core 2.0.4 / MySQL 8.4.7；Vue 3.5.45 / TypeScript 5.9.3 / Vite 8.3.8。前端传递依赖由 lockfile 固定，后端使用 Boot BOM。
 - Docker Engine 与 Compose v2 或更高版本；Python 3 用于 Compose 验收脚本。
 
 `backend/` 是正式 Java 主应用，`frontend/` 是 Vue 入口。`prototypes/` 只保留决策探针，不参与正式构建。模块职责见 [工程说明](docs/development.md)。
