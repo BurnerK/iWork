@@ -20,6 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.*;
 
 @Service
+@org.springframework.core.annotation.Order(2)
 public class MaterialParsing implements ApplicationRunner {
     private final JdbcTemplate db;
     private final TransactionTemplate tx;

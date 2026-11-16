@@ -75,6 +75,10 @@ public class CancellationClosureTest {
             public reactor.core.publisher.Flux<String> stream(io.agentscope.core.model.transport.HttpRequest request) {
                 String fault=""; for(var message:json.readTree(request.getBody()).path("messages")) if(message.path("role").asText().equals("user")) fault=message.path("content").asText();
                 if(fault.equals("before")) return reactor.core.publisher.Flux.<String>never().doOnCancel(stopped::incrementAndGet);
+                if(fault.equals("known")) return reactor.core.publisher.Flux.just("{\"id\":\"recovery-known\",\"usage\":{\"prompt_tokens\":23,\"completion_tokens\":11},\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"已观察输出\"},\"finish_reason\":null}]}")
+                    .concatWith(reactor.core.publisher.Flux.never());
+                if("true".equals(System.getenv("IWORK_TEST_SUMMARY_CRASH")) && fault.contains("Context Extraction Assistant") && fault.contains("summary-crash"))
+                    return reactor.core.publisher.Flux.<String>never().doOnCancel(stopped::incrementAndGet);
                 if(fault.equals("output")) return reactor.core.publisher.Flux.just("{\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"已观察输出\"},\"finish_reason\":null}]}")
                     .concatWith(reactor.core.publisher.Flux.never()).doOnCancel(stopped::incrementAndGet);
                 var body=json.readTree(request.getBody()); var names=new HashSet<String>();

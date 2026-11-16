@@ -47,8 +47,12 @@ class SecurityConfiguration {
             }
         };
     }
-    @Bean FilterRegistrationBean<Filter> dependencyFailures() {
+    @Bean FilterRegistrationBean<Filter> dependencyFailures(org.springframework.boot.availability.ApplicationAvailability availability) {
         Filter filter = (request, response, chain) -> {
+            if(((HttpServletRequest)request).getRequestURI().startsWith("/api/")
+                    && availability.getReadinessState()!=org.springframework.boot.availability.ReadinessState.ACCEPTING_TRAFFIC) {
+                ApiFailure.write((HttpServletResponse)response,503,"service_unavailable"); return;
+            }
             try { chain.doFilter(request, response); }
             catch (Exception error) {
                 for(Throwable cause=error; cause!=null; cause=cause.getCause()) {

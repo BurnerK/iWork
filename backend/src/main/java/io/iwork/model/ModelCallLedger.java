@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
+@org.springframework.core.annotation.Order(1)
 public class ModelCallLedger implements ApplicationRunner {
     public static final int MAX_OUTPUT=2048;
     private volatile boolean stopping;

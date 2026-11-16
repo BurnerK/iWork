@@ -166,3 +166,7 @@ DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等
 ## 取消与迟到结果验证（#19）
 
 业务取消、本地worker结束、供应商状态与处理容器清理分别表达；STOPPED不代表供应商停止。正常执行结果复用包内 acceptResult，测试远端回执也经过同一终态/正式提交边界。CancellationClosureTest 和 CancellationFixtureApplication 仅在test源集，正式包不含控制入口。真实容器取消/清理未知验证见 sandbox/verify_cancellation.py 与 [验收记录](validation/issue19-cancellation.md)。
+
+## 重启恢复（#20）
+
+业务 API 在启动恢复完成前返回503。依次归档未完成任务、幂等关闭调用与释放预占，再启动容器状态核对；不会自动续跑。原 requestId 仍返回中断任务，显式新请求重新准入。摘要/快照只有成功来源且历史核对通过才恢复。真实强杀与两个活容器进程树回收见 [契约](issue20-recovery-contract.md) 与 [验证](validation/issue20-recovery.md)。

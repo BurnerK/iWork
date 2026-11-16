@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
+@org.springframework.core.annotation.Order(0)
 public class TaskService implements ApplicationRunner {
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
