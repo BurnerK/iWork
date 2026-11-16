@@ -34,7 +34,7 @@ cp .env.example .env
 # 编辑 .env，为两个密码填写不同随机值（可分别运行 openssl rand -hex 24）。
 docker compose build
 mkdir -p data/files
-docker compose run --rm --no-deps --user 0 --entrypoint chown app 10001:10001 /data/files
+docker compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown app 10001:10001 /data/files
 docker compose up -d --wait --wait-timeout 180
 curl --fail http://127.0.0.1:8080/actuator/health/readiness
 ```

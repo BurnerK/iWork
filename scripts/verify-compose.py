@@ -63,7 +63,7 @@ def migration_count():
 print(f"Isolated project: {work.name}; evidence directory: {work}", flush=True)
 try:
     compose("build")
-    compose("run", "--rm", "--no-deps", "--user", "0", "--entrypoint", "chown",
+    compose("run", "--rm", "--no-deps", "--user", "0", "--cap-add", "CHOWN", "--entrypoint", "chown",
             "app", "10001:10001", "/data/files")
     compose("up", "-d", "--wait", "--wait-timeout", "180")
     health("/actuator/health/readiness", 200, "UP")

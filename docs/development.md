@@ -52,7 +52,7 @@ backend/mvnw -f backend/pom.xml spring-boot:run
 
 - `docker compose ps` 检查服务状态；`docker compose logs --tail=100 app mysql` 查看启动或迁移失败。不要复制包含私密数据的日志到公开位置。
 - `/actuator/health/liveness` 仅表明进程存活；`/actuator/health/readiness` 同时检查数据库和文件目录，失败返回 503。数据库启动失败时主应用不启动；运行中数据库失联不触发进程重启，待数据库恢复后可恢复就绪。
-- 文件目录不可写时检查宿主目录和 UID/GID 10001；不要通过让主应用永久以 root 运行来绕过权限问题。
+- 文件目录不可写时检查宿主目录和 UID/GID 10001；初始化 `chown` 命令需临时添加 `CHOWN` capability，单用 root 仍会被应用的 `cap_drop: ALL` 限制。不要让主应用永久以 root 运行或保留该 capability。
 - 数据库认证失败时检查实际账号密码与环境是否一致；连接超时需检查网络和 MySQL 状态。连接建立/读写超时 3 秒，连接池获取超时 3 秒；健康探测还有调度与连接池开销，不把这些配置当作完整响应 SLA。
 - Flyway 校验失败时还原误改的旧迁移并新增迁移，不删除历史表或已有数据。
 - macOS Testcontainers 找不到 Docker 时，确认 Docker 引擎已启动；必要时将 `DOCKER_HOST` 指向 `docker context inspect` 显示的当前 socket，勿挂载到主应用。
