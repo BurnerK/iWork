@@ -27,3 +27,7 @@
 ## 2026-11-12 最终验收与收口
 
 2026-11-12 用户已接受最终验证结果与限制，[#8 接入验证](https://github.com/BurnerK/iWork/issues/8#issuecomment-6826203433)与[#6 架构决策](https://github.com/BurnerK/iWork/issues/6#issuecomment-6826209370)均已完成收口。生产 Linux、正式身份、真实解析器、数据库成果事务及恢复等仍待实施验收；停止上限依赖看门狗、Docker、宿主调度与时钟可用，探针时间不是生产 SLA。前述阶段性待审阅状态已结束；最终边界以独立执行看门狗补充及收口决议为准。
+
+## 2026-11-16 Harness 修订
+
+SDK 运行入口确定为 HarnessAgent，首版包含上下文恢复与自动压缩。业务会话、任务、授权、额度和成果权威仍由 iWork 持有，取消/重启不自动续跑，受限沙箱管理服务与独立看门狗保持不变。具体边界见 [ADR 0004](0004-harness-runtime-and-context.md)；本条为已确认设计，尚待实施验收。

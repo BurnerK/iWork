@@ -2,6 +2,8 @@
 
 自托管的 AI 工作应用。当前提供账号登录、首次改密、普通用户管理与个人会话创建/列表/空详情；模型、消息、任务和资料处理随后续工单交付。
 
+首版运行方案已确定采用 HarnessAgent，包含会话上下文恢复与自动压缩，见 [ADR 0004](docs/adr/0004-harness-runtime-and-context.md)、[首版规格](docs/web-first-release-spec.md)和[开发任务](docs/web-first-release-tickets.md)。当前依赖仍为 core；Harness 接入、恢复与压缩尚待相应工单实现。
+
 ## 工具与目录
 
 - Java 21；交付镜像 Temurin 21.0.13+9，镜像摘要固定在 `Dockerfile`。

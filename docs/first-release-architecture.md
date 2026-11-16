@@ -1,5 +1,7 @@
 # iWork 首版模块与部署方案
 
+当前 SDK 运行方案已于 2026-11-16 修订为 HarnessAgent，见文末及 [ADR 0004](adr/0004-harness-runtime-and-context.md)；以下 2026-11-12 决策与探针记录保留原始语境。
+
 状态：2026-11-12 用户已共同确认首版架构基线，并在 #8 第一阶段实测后选择增加受限沙箱管理服务。分项决策见 [ADR 0001](adr/0001-first-release-application-and-execution-boundaries.md)、[ADR 0002](adr/0002-single-host-compose-deployment.md)、[ADR 0003](adr/0003-estimated-usage-for-internal-quotas.md)。官方 Docker 沙箱经固定业务工具与受限管理服务接入，已补齐第三阶段验证，并按用户要求采用独立执行看门狗实施容器外期限，见本文末尾修订。2026-11-12 用户已接受最终验证结果与限制，[#8 接入验证](https://github.com/BurnerK/iWork/issues/8#issuecomment-6826203433)与[#6 架构决策](https://github.com/BurnerK/iWork/issues/6#issuecomment-6826209370)均已完成收口。生产 Linux、正式身份、真实解析器、数据库成果事务及恢复等仍待实施验收；停止上限依赖看门狗、Docker、宿主调度与时钟可用，探针时间不是生产 SLA。
 
 GitHub 同步：[架构基线决议](https://github.com/BurnerK/iWork/issues/6#issuecomment-6824708438)。[沙箱接入验证 #8](https://github.com/BurnerK/iWork/issues/8#issuecomment-6826203433) 已完成，#6 全部原生阻塞项均已关闭，见[最终收口决议](https://github.com/BurnerK/iWork/issues/6#issuecomment-6826209370)。
@@ -94,3 +96,11 @@ MySQL 保存身份与授权、配置、会话与任务、幂等关系、成果�
 本条取代前文“不增加 Redis”的限制。Spring Session Redis 保存登录态，MySQL 保存账号、authVersion 与会话归属。Redis 不持有业务真相，不作为业务队列。Compose 使用固定摘要的官方 Redis 镜像、内部专用网络及 AOF 命名卷；主应用无 Docker 权限。用户密码/启停与版本递增同一事务提交，每个受保护请求回查 enabled/authVersion，业务写入事务重新锁定身份记录，避免已撤销身份迟到写入。
 
 正常应用/Redis 重建保留登录；Redis 数据丢失只要求重新登录，不删除 MySQL 会话。绝对登录期限 30 天、闲置 7 天，生产 Cookie Secure/HttpOnly/SameSite=Lax。不兼容 Session 序列化升级允许用户重新登录，部署前需说明；不保证无感跨版本恢复。完整合同及验证边界见 [#11 合同](issue-11-design.md) 和 [验证记录](validation/issue-11.md)。
+
+## 2026-11-16 Harness 运行机制修订（用户已确认）
+
+首版直接使用 HarnessAgent，并交付上下文恢复和自动压缩，见 [ADR 0004](adr/0004-harness-runtime-and-context.md) 与[修订规格](web-first-release-spec.md)。已有正式骨架仅引入 core；依赖接入与统一调用治理由 #14 承接，新增上下文票交付恢复和压缩，不把目标架构写成已完成实现。
+
+完整业务历史、运行上下文快照与摘要存入 MySQL；快照按用户/会话关联，仅服务明确发起的新任务，不自动续跑中断任务。iWork 保留业务终态、授权、额度及成果权威；摘要/重试等辅助调用同样授权、计量和取消。明确关闭首版不需要的通用工具、长期记忆、动态 Skill/MCP 和子智能体等能力。
+
+此修订不改变受限沙箱管理服务、独立看门狗或高权限边界。旧 ReAct 与沙箱探针保留为行为证据，不代表 Harness 已验收。正式测试增加 T17–T19，快照与摘要纳入协调备份恢复。
