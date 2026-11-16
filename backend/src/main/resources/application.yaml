@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: iwork
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: jdbc:mysql://${IWORK_DB_HOST:localhost}:${IWORK_DB_PORT:3306}/${IWORK_DB_NAME:iwork}?connectTimeout=3000&socketTimeout=3000
+    username: ${IWORK_DB_USER:iwork}
+    password: ${IWORK_DB_PASSWORD}
+    hikari:
+      connection-timeout: 3000
+      validation-timeout: 1000
+      maximum-pool-size: 5
+  flyway:
+    clean-disabled: true
+    validate-on-migrate: true
+server:
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    whitelabel:
+      enabled: false
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+      discovery:
+        enabled: false
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,fileStorage
+iwork:
+  files-directory: ${IWORK_FILES_DIRECTORY:./data/files}
+logging:
+  level:
+    root: INFO
+    org.springframework.boot.actuate.jdbc: ERROR

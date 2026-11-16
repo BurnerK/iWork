@@ -1,0 +1,46 @@
+name: iwork
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:${IWORK_HTTP_PORT:-8080}:8080"
+    environment:
+      IWORK_DB_HOST: mysql
+      IWORK_DB_PASSWORD: ${IWORK_DB_PASSWORD:?Set IWORK_DB_PASSWORD in .env}
+      IWORK_FILES_DIRECTORY: /data/files
+    volumes:
+      - ${IWORK_DATA_DIR:-./data}/files:/data/files
+    depends_on:
+      mysql:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+  mysql:
+    image: mysql:8.4.7@sha256:0426ec38c7a10aa45ba383887df7878f74ee70e2fd589c7b69207f3577901903
+    environment:
+      MYSQL_DATABASE: iwork
+      MYSQL_USER: iwork
+      MYSQL_PASSWORD: ${IWORK_DB_PASSWORD:?Set IWORK_DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${IWORK_MYSQL_ROOT_PASSWORD:?Set IWORK_MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - ${IWORK_DATA_DIR:-./data}/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql -h 127.0.0.1 -u iwork -D iwork -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
