@@ -28,11 +28,13 @@ class AuthController {
         return caller;
     }
     record PasswordChange(String currentPassword, String newPassword) {}
-    @PostMapping("/password") Caller password(@AuthenticationPrincipal Caller caller, @RequestBody PasswordChange change,
+    @PostMapping("/password") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    void password(@AuthenticationPrincipal Caller caller, @RequestBody PasswordChange change,
             HttpServletRequest request, HttpServletResponse response) {
-        var updated=identity.changePassword(caller, change.currentPassword(), change.newPassword());
-        establish(updated, request, response);
-        return updated;
+        identity.changePassword(caller, change.currentPassword(), change.newPassword());
+        SecurityContextHolder.clearContext();
+        var session=request.getSession(false);
+        if(session!=null) session.invalidate();
     }
     private void establish(Caller caller, HttpServletRequest request, HttpServletResponse response) {
         var old = request.getSession(false);

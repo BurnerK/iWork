@@ -72,9 +72,12 @@ class IdentityConversationTest {
         assertThat(one.login("admin", "Initial-password-11").statusCode()).isEqualTo(200);
         assertThat(two.login("admin", "Initial-password-11").statusCode()).isEqualTo(200);
         one.csrf();
-        assertThat(one.request("POST", "/api/auth/password", "{\"currentPassword\":\"Initial-password-11\",\"newPassword\":\"Changed-password-11\"}", true).statusCode()).isEqualTo(200);
+        assertThat(one.request("POST", "/api/auth/password", "{\"currentPassword\":\"Initial-password-11\",\"newPassword\":\"Initial-password-11\"}", true).statusCode()).isEqualTo(400);
+        assertThat(one.request("GET", "/api/conversations", null, false).statusCode()).isEqualTo(403);
+        assertThat(one.request("POST", "/api/auth/password", "{\"currentPassword\":\"Initial-password-11\",\"newPassword\":\"Changed-password-11\"}", true).statusCode()).isEqualTo(204);
         assertThat(two.request("GET", "/api/auth/me", null, false).statusCode()).isEqualTo(401);
-        one.csrf();
+        assertThat(one.request("GET", "/api/auth/me", null, false).statusCode()).isEqualTo(401);
+        one.login("admin", "Changed-password-11"); one.csrf();
         var created=one.request("POST", "/api/conversations", "{}", true);
         assertThat(created.statusCode()).isEqualTo(201);
         var id=json.readTree(created.body()).get("id").asText();
@@ -88,8 +91,8 @@ class IdentityConversationTest {
         assertThat(created.statusCode()).isEqualTo(201);
         var user=json.readTree(created.body()); var id=user.get("user").get("id").asText();
         var userBrowser=new Browser(); userBrowser.login("alice",user.get("temporaryPassword").asText()); userBrowser.csrf();
-        assertThat(userBrowser.request("POST","/api/auth/password",json.writeValueAsString(Map.of("currentPassword",user.get("temporaryPassword").asText(),"newPassword","Alice-password-11")),true).statusCode()).isEqualTo(200);
-        userBrowser.csrf();
+        assertThat(userBrowser.request("POST","/api/auth/password",json.writeValueAsString(Map.of("currentPassword",user.get("temporaryPassword").asText(),"newPassword","Alice-password-11")),true).statusCode()).isEqualTo(204);
+        userBrowser.login("alice","Alice-password-11"); userBrowser.csrf();
         assertThat(userBrowser.request("GET","/api/admin/users",null,false).statusCode()).isEqualTo(403);
         var conversation=userBrowser.request("POST","/api/conversations","{}",true);
         var conversationId=json.readTree(conversation.body()).get("id").asText();

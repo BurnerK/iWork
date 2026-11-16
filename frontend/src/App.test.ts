@@ -80,3 +80,46 @@ it('clears a generated temporary password when leaving user management', async (
   await router.push('/admin'); await flushPromises()
   expect(page.find('code').exists()).toBe(false)
 })
+
+it('does not expose the previous account conversations after expiry, another login, and a service failure', async () => {
+  let account = 'A', expired = false
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+    let data: object = { token: 'proof' }, status = 200
+    if (url.endsWith('/me')) data = { id: 'A', displayName: 'A', role: 'USER', mustChangePassword: false }
+    else if (url.endsWith('/login')) { account = 'B'; data = { id: 'B', displayName: 'B', role: 'USER', mustChangePassword: false } }
+    else if (url.includes('/conversations')) {
+      if (init?.method === 'POST') { expired = true; status = 401; data = { error: 'session_expired' } }
+      else if (expired && account === 'B') { status = 503; data = { error: 'service_unavailable' } }
+      else data = { items: [{ id: 'private-A', title: 'A confidential title', updatedAt: '2026-11-16T00:00:00Z' }], hasMore: false }
+    }
+    return Promise.resolve(new Response(JSON.stringify(data), { status }))
+  }))
+  const router = makeRouter(createMemoryHistory()); await router.push('/conversations')
+  const page = mount(App, { global: { plugins: [router] } }); await flushPromises()
+  expect(page.text()).toContain('A confidential title')
+  await page.findAll('button').find(button => button.text() === '新建会话')!.trigger('click'); await flushPromises()
+  await page.get('#username').setValue('B'); await page.get('#password').setValue('B-password-11')
+  await page.get('form').trigger('submit'); await flushPromises()
+  expect(page.text()).toContain('服务暂不可用')
+  expect(page.text()).not.toContain('A confidential title')
+})
+
+it('ignores a conversation response that arrives after logout', async () => {
+  let finishList!: (response: Response) => void
+  let firstList = true
+  vi.stubGlobal('fetch', vi.fn((url: string) => {
+    if (url.endsWith('/me') || url.endsWith('/login')) return Promise.resolve(new Response('{"id":"one","displayName":"User","role":"USER","mustChangePassword":false}'))
+    if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+    if (url.endsWith('/logout')) return Promise.resolve(new Response(null, { status: 204 }))
+    if (firstList) { firstList = false; return new Promise<Response>(resolve => { finishList = resolve }) }
+    return Promise.resolve(new Response('{"error":"service_unavailable"}', { status: 503 }))
+  }))
+  const router = makeRouter(createMemoryHistory()); await router.push('/conversations')
+  const page = mount(App, { global: { plugins: [router] } }); await flushPromises()
+  await page.findAll('button').find(button => button.text() === '退出登录')!.trigger('click'); await flushPromises()
+  finishList(new Response('{"items":[{"id":"late","title":"Late private title","updatedAt":"2026-11-16T00:00:00Z"}],"hasMore":false}'))
+  await flushPromises()
+  await page.get('#username').setValue('another'); await page.get('#password').setValue('Another-password-11')
+  await page.get('form').trigger('submit'); await flushPromises()
+  expect(page.text()).not.toContain('Late private title')
+})

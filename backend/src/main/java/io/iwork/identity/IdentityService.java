@@ -138,6 +138,7 @@ public class IdentityService implements ApplicationRunner {
             var account=accounts("id=?", caller.id()).getFirst();
             if(currentPassword == null || currentPassword.getBytes(StandardCharsets.UTF_8).length>72 || !passwords.matches(currentPassword, account.hash()))
                 throw new ApiFailure(400,"wrong_current_password");
+            if(passwords.matches(newPassword,account.hash())) throw new ApiFailure(400,"password_unchanged");
             replacePassword(caller.id(), newPassword, false);
             return accounts("id=?", caller.id()).getFirst().caller();
         });

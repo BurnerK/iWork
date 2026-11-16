@@ -8,15 +8,22 @@ type Conversation = { id: string; title: string; updatedAt: string }
 type Page<T> = { items: T[]; hasMore: boolean }
 const route = useRoute(), router = useRouter()
 const user = ref<User | null>(null), ready = ref(false), busy = ref(false), loading = ref(false), error = ref('')
+const notice = ref('')
 const username = ref(''), password = ref(''), newPassword = ref(''), displayName = ref(''), showPassword = ref(false)
 const conversations = ref<Conversation[]>([]), selected = ref<Conversation | null>(null), users = ref<User[]>([])
 const page = ref(0), hasMore = ref(false), temporary = ref<{ username: string; password: string } | null>(null)
 let loadSequence = 0
+function clearIdentity() {
+  ++loadSequence
+  user.value = null; conversations.value = []; users.value = []; selected.value = null
+  temporary.value = null; password.value = ''; newPassword.value = ''; username.value = ''; displayName.value = ''
+  page.value = 0; hasMore.value = false; loading.value = false
+}
 
 async function failure(cause: unknown) {
   error.value = errorMessage(cause)
   if (cause instanceof ApiError && cause.status === 401 && route.name !== 'login') {
-    user.value = null
+    clearIdentity()
     await router.replace('/login')
   }
   await nextTick()
@@ -66,16 +73,18 @@ async function act(action: () => Promise<void>) {
   try { await action() } catch (cause) { await failure(cause) } finally { busy.value = false }
 }
 function login() { return act(async () => {
-  user.value = await request<User>('/api/auth/login', 'POST', new URLSearchParams({ username: username.value, password: password.value }))
-  password.value = ''; await router.replace(user.value.mustChangePassword ? '/password' : '/conversations')
+  const authenticated = await request<User>('/api/auth/login', 'POST', new URLSearchParams({ username: username.value, password: password.value }))
+  clearIdentity(); user.value = authenticated; notice.value = ''
+  await router.replace(authenticated.mustChangePassword ? '/password' : '/conversations')
 }) }
 function changePassword() { return act(async () => {
   if ([...newPassword.value].length < 12 || new TextEncoder().encode(newPassword.value).length > 72) throw new ApiError(400, 'invalid_password')
-  user.value = await request<User>('/api/auth/password', 'POST', { currentPassword: password.value, newPassword: newPassword.value })
-  password.value = ''; newPassword.value = ''; await router.replace('/conversations')
+  await request('/api/auth/password', 'POST', { currentPassword: password.value, newPassword: newPassword.value })
+  clearIdentity(); notice.value = '密码已更新，请使用新密码重新登录。'
+  await router.replace('/login')
 }) }
 function logout() { return act(async () => {
-  await request('/api/auth/logout', 'POST'); user.value = null; conversations.value = []; users.value = []; selected.value = null
+  await request('/api/auth/logout', 'POST'); clearIdentity(); notice.value = ''
   await router.replace('/login')
 }) }
 function createConversation() { return act(async () => {
@@ -114,6 +123,7 @@ onMounted(loadIdentity)
     </nav>
   </header>
   <main :aria-busy="busy || loading">
+    <p v-if="notice" role="status">{{ notice }}</p>
     <p v-if="error" class="error" role="alert" tabindex="-1">{{ error }}</p>
     <template v-if="!ready">
       <h1 tabindex="-1">连接 iWork</h1><p>{{ loading ? '正在连接…' : '请检查服务后重试。' }}</p>

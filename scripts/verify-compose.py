@@ -105,7 +105,9 @@ try:
     browser = Browser()
     assert browser.login(env["IWORK_BOOTSTRAP_PASSWORD"])["mustChangePassword"]
     password = secrets.token_urlsafe(24)
-    assert browser.request("/api/auth/password", "POST", {"currentPassword": env["IWORK_BOOTSTRAP_PASSWORD"], "newPassword": password})[0] == 200
+    assert browser.request("/api/auth/password", "POST", {"currentPassword": env["IWORK_BOOTSTRAP_PASSWORD"], "newPassword": password})[0] == 204
+    assert browser.request("/api/auth/me")[0] == 401
+    browser.login(password)
     code, conversation = browser.request("/api/conversations", "POST", {})
     assert code == 201
     conversation_path = "/api/conversations/" + conversation["id"]

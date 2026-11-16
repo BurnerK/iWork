@@ -25,6 +25,7 @@ export function errorMessage(error: unknown): string {
   const messages: Record<string, string> = {
     invalid_credentials: '用户名或密码不正确，或账号不可用。连续 5 次失败后请等待 15 分钟。',
     password_change_required: '请先修改临时密码。', invalid_password: '密码至少 12 个字符，且不超过 72 个 UTF-8 字节。',
+    password_unchanged: '新密码必须与当前密码不同。',
     wrong_current_password: '当前密码不正确。', username_exists: '用户名已存在，请使用其他用户名。',
     invalid_username: '用户名须为 3–64 位字母、数字、点、下划线或连字符，并以字母或数字开头。',
     invalid_display_name: '请填写不超过 100 个字符的显示名称。',

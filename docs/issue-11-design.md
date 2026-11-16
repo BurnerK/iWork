@@ -4,7 +4,7 @@
 
 - Java 21 / Boot 4、Security、JDBC、Flyway、MySQL；无 ORM。新迁移保留 V1。
 - username/password 登录，无注册。外部秘密配置仅在初始 ADMIN 不存在时初始化，首次强制改密；重复启动不覆盖。管理员创建普通 USER、启停、重置密码，不提供角色编辑或禁用初始管理员。创建/重置生成的临时密码仅响应一次。
-- 部署恢复命令复用后端密码逻辑，隐藏交互输入或受保护文件，禁止命令参数和日志承载密码。恢复、重置、改密撤销所有旧登录；自行改密校验当前密码后重新登录。
+- 部署恢复命令复用后端密码逻辑，隐藏交互输入或受保护文件，禁止命令参数和日志承载密码。恢复、重置、改密撤销所有旧登录；自行改密校验当前密码、拒绝保留原密码后撤销当前及其他设备登录，用户必须显式重新登录。
 - BCrypt；密码至少 12 字符且不超过 72 UTF-8 字节；连续 5 次失败锁定 15 分钟。
 - users 保存唯一 username、displayName、hash、role、enabled、mustChangePassword、authVersion、失败/锁定及时间字段；conversations 保存 id、ownerId、title、时间及 owner/order 索引。
 - 密码和状态变更与 authVersion 递增为单一事务。每个受保护请求检查最新 enabled/authVersion；重新启用不会复活旧登录。业务写入在同一事务重新锁定并核验调用者，避免检查后撤权竞态。
