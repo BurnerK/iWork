@@ -71,10 +71,19 @@ class TaskLifecycleTest {
         var modelId=json.readTree(model.body()).get("id").asText();
         var uid=json.readTree(admin.request("GET","/api/auth/me",null,false).body()).get("id").asText();
         admin.request("PUT","/api/admin/users/"+uid+"/model-access",json.writeValueAsString(Map.of("modelIds",List.of(modelId))),true);
-        String body=json.writeValueAsString(Map.of("requestId","request-one","modelId",modelId,"message","hold"));
+        var uploaded=admin.client.send(HttpRequest.newBuilder(URI.create("http://localhost:"+port+"/api/materials"))
+            .header("X-CSRF-TOKEN",admin.csrf).header("X-File-Name","source.txt").header("Content-Type","application/octet-stream")
+            .POST(HttpRequest.BodyPublishers.ofString("source material")).build(),HttpResponse.BodyHandlers.ofString());
+        assertThat(uploaded.statusCode()).isEqualTo(201);
+        var materialId=json.readTree(uploaded.body()).get("id").asText();
+        String body=json.writeValueAsString(Map.of("requestId","request-one","modelId",modelId,"message","hold","materialIds",List.of(materialId)));
         var response=admin.request("POST","/api/conversations/"+cid+"/tasks",body,true);
         assertThat(response.statusCode()).isEqualTo(202);
         var taskId=json.readTree(response.body()).get("id").asText();
+        assertThat(admin.request("GET","/api/tasks/"+taskId+"/materials",null,false).body()).contains(materialId,"source.txt");
+        var changedMaterials=json.writeValueAsString(Map.of("requestId","request-one","modelId",modelId,"message","hold","materialIds",List.of()));
+        assertThat(admin.request("POST","/api/conversations/"+cid+"/tasks",changedMaterials,true).statusCode()).isEqualTo(409);
+
         assertThat(admin.request("POST","/api/conversations/"+cid+"/tasks",body,true).body()).contains(taskId);
         assertThat(admin.request("GET","/api/tasks/"+taskId,null,false).body()).contains("RUNNING");
         assertThat(admin.request("GET","/api/conversations/"+cid+"/messages",null,false).body()).contains("hold");
@@ -129,9 +138,11 @@ class TaskLifecycleTest {
         assertThat(ordinary.request("POST","/api/conversations/"+cid+"/tasks",body,true).statusCode()).isEqualTo(404);
         var ownConversation=ordinary.request("POST","/api/conversations","{}",true);
         var ownId=json.readTree(ownConversation.body()).get("id").asText();
-        assertThat(ordinary.request("POST","/api/conversations/"+ownId+"/tasks",body,true).statusCode()).isEqualTo(403);
+        assertThat(ordinary.request("POST","/api/conversations/"+ownId+"/tasks",body,true).statusCode()).isEqualTo(404);
+        var ownBody=json.writeValueAsString(Map.of("requestId","request-one","modelId",modelId,"message","hold"));
+        assertThat(ordinary.request("POST","/api/conversations/"+ownId+"/tasks",ownBody,true).statusCode()).isEqualTo(403);
         admin.request("PUT","/api/admin/users/"+userId+"/model-access",json.writeValueAsString(Map.of("modelIds",List.of(modelId))),true);
-        var sameKeyOtherOwner=ordinary.request("POST","/api/conversations/"+ownId+"/tasks",body,true);
+        var sameKeyOtherOwner=ordinary.request("POST","/api/conversations/"+ownId+"/tasks",ownBody,true);
         assertThat(sameKeyOtherOwner.statusCode()).isEqualTo(202);
         var ownTaskId=json.readTree(sameKeyOtherOwner.body()).get("id").asText();
         assertThat(ownTaskId).isNotEqualTo(taskId);

@@ -1,17 +1,18 @@
 export class ApiError extends Error {
   constructor(public status: number, public code: string) { super(code) }
 }
-export async function request<T>(path: string, method = 'GET', body?: object | URLSearchParams): Promise<T> {
+export async function request<T>(path: string, method = 'GET', body?: object | URLSearchParams | File): Promise<T> {
   const headers: Record<string, string> = {}
   if (method !== 'GET') {
     const { token } = await request<{ token: string }>('/api/auth/csrf')
     headers['X-CSRF-TOKEN'] = token
-    headers['Content-Type'] = body instanceof URLSearchParams ? 'application/x-www-form-urlencoded' : 'application/json'
+    if (body instanceof File) headers['X-File-Name'] = encodeURIComponent(body.name)
+    headers['Content-Type'] = body instanceof File ? 'application/octet-stream' : body instanceof URLSearchParams ? 'application/x-www-form-urlencoded' : 'application/json'
   }
   let response: Response
   try {
     response = await fetch(path, { method, headers, cache: 'no-store', credentials: 'same-origin',
-      body: body instanceof URLSearchParams ? body : body === undefined ? undefined : JSON.stringify(body),
+      body: body instanceof File || body instanceof URLSearchParams ? body : body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15000) })
   } catch { throw new ApiError(503, 'service_unavailable') }
   if (response.status === 204) return undefined as T
@@ -23,6 +24,11 @@ export async function request<T>(path: string, method = 'GET', body?: object | U
 export function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '操作失败，请重试。'
   const messages: Record<string, string> = {
+    invalid_file_name: '文件名无效，请移除路径或控制字符，长度不超过 200 字符。',
+    unsupported_material: '仅支持 .txt 和 .md 文件。',
+    material_too_large: '每份资料不能超过 2 MiB。',
+    incomplete_material: '文件为空或上传不完整，请重新选择。',
+    material_storage_unavailable: '原文暂时不可读取或保存，请稍后重试。',
     invalid_task: '请填写模型和不超过 20000 字符的工作要求。',
     execution_unavailable: '任务执行服务尚未就绪，请稍后重试。',
     model_not_authorized: '模型已停用或你没有使用权限，请刷新模型列表。',

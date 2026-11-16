@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import MaterialPanel from './MaterialPanel.vue'
 import { ApiError, errorMessage, request } from './api'
 const props = defineProps<{ conversationId: string; ownerId: string }>()
 const emit = defineEmits<{ failure: [cause: unknown] }>()
@@ -8,7 +9,8 @@ type Message = { id: number; taskId: string; role: string; content: string }
 type Page<T> = { items: T[]; hasMore: boolean }
 const models = ref<{ id: string; name: string }[]>([]), modelId = ref(''), message = ref('')
 const tasks = ref<Task[]>([]), messages = ref<Message[]>([]), busy = ref(false), loading = ref(false), error = ref('')
-const pending = ref<{ requestId: string; modelId: string; message: string } | null>(null)
+const materialIds = ref<string[]>([]), materialBusy = ref(false)
+const pending = ref<{ requestId: string; modelId: string; message: string; materialIds?: string[] } | null>(null)
 const storageKey = `iwork-pending:${props.ownerId}:${props.conversationId}`
 function clearPending() { localStorage.removeItem(storageKey); pending.value = null }
 const taskPage = ref(0), moreTasks = ref(false), moreMessages = ref(false)
@@ -42,10 +44,10 @@ async function poll() {
   if (!disposed) timer = setTimeout(poll, 2000)
 }
 async function submit() {
-  if (busy.value || active.value && !pending.value) return
+  if (busy.value || materialBusy.value || active.value && !pending.value) return
   busy.value = true; error.value = ''
   try {
-    pending.value ||= { requestId: crypto.randomUUID(), modelId: modelId.value, message: message.value }
+    pending.value ||= { requestId: crypto.randomUUID(), modelId: modelId.value, message: message.value, materialIds: [...materialIds.value] }
     localStorage.setItem(storageKey, JSON.stringify(pending.value))
     await request(`/api/conversations/${props.conversationId}/tasks`, 'POST', pending.value)
     clearPending(); message.value = ''; await load()
@@ -75,7 +77,7 @@ onMounted(async () => {
     if (stored) {
       const restored = JSON.parse(stored)
       if (typeof restored.requestId === 'string' && typeof restored.modelId === 'string' && typeof restored.message === 'string') {
-        pending.value = restored; modelId.value = restored.modelId; message.value = restored.message
+        pending.value = restored; modelId.value = restored.modelId; message.value = restored.message; materialIds.value = Array.isArray(restored.materialIds) ? restored.materialIds : []
       } else localStorage.removeItem(storageKey)
     }
   } catch (cause) { await failure(cause) }
@@ -92,12 +94,13 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
     <button v-if="moreMessages" type="button" class="secondary" :disabled="loading" @click="load">继续加载消息</button>
     <ul class="rows" aria-label="任务状态"><li v-for="task in tasks" :key="task.id"><div><span role="status">{{ labels[task.status] || task.status }}</span><small>任务 {{ task.id }}</small><small v-if="task.executionState === 'STOP_REQUESTED'">已请求停止，执行结束尚待确认。</small><small v-if="task.executionState === 'UNKNOWN'">执行状态未知。</small><small v-if="task.errorCode">{{ errorMessage(new ApiError(400, task.errorCode)) }}</small></div><button v-if="task.status === 'RUNNING'" type="button" class="secondary" :disabled="busy" @click="cancel(task)">取消任务</button></li></ul>
     <button v-if="moreTasks" type="button" class="secondary" :disabled="busy" @click="earlierTasks">较早的任务</button>
+    <MaterialPanel v-model="materialIds" :disabled="busy || !!pending || active" @failure="failure" @uploading="materialBusy = $event" />
     <form method="post" :action="`/api/conversations/${conversationId}/tasks`" aria-label="提交任务" @submit.prevent="submit">
       <label for="task-model">模型（必选）</label><select id="task-model" v-model="modelId" name="modelId" required :disabled="busy || !!pending || active"><option value="">请选择模型</option><option v-for="model in models" :key="model.id" :value="model.id">{{ model.name }}</option></select>
       <label for="task-message">工作要求（必填）</label><textarea id="task-message" v-model="message" name="message" required maxlength="20000" rows="4" :disabled="busy || !!pending || active"></textarea>
       <p v-if="pending" class="hint">尚未确认受理结果。重试使用同一请求，不会重复执行。</p>
       <p v-else-if="active" class="hint">当前会话已有运行任务。关闭页面不会取消任务。</p>
-      <button type="submit" :disabled="busy || active && !pending">{{ pending ? '重试确认' : '提交任务' }}</button>
+      <button type="submit" :disabled="busy || materialBusy || active && !pending">{{ pending ? '重试确认' : '提交任务' }}</button>
     </form>
     <button type="button" class="secondary" :disabled="loading" @click="load">刷新任务</button>
   </section>

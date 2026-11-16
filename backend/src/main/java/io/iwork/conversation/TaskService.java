@@ -24,14 +24,15 @@ public class TaskService implements ApplicationRunner {
     private final TransactionTemplate tx;
     private final IdentityService identity;
     private final ModelAuthorization models;
+    private final io.iwork.artifacts.MaterialService materials;
     private final ObjectProvider<TaskRunner> runners;
     private final Semaphore capacity;
     private final ConcurrentMap<String,Thread> workers=new ConcurrentHashMap<>();
     private volatile boolean stopping;
-    public TaskService(JdbcTemplate db,TransactionTemplate tx,IdentityService identity,ModelAuthorization models,
+    public TaskService(JdbcTemplate db,TransactionTemplate tx,IdentityService identity,ModelAuthorization models,io.iwork.artifacts.MaterialService materials,
             ObjectProvider<TaskRunner> runners,@Value("${iwork.task-capacity:2}") int capacity) {
         if(capacity<1 || capacity>16) throw new IllegalArgumentException("Task capacity must be 1 to 16");
-        this.db=db; this.tx=tx; this.identity=identity; this.models=models; this.runners=runners; this.capacity=new Semaphore(capacity);
+        this.db=db; this.tx=tx; this.identity=identity; this.models=models; this.materials=materials; this.runners=runners; this.capacity=new Semaphore(capacity);
     }
     public record Task(String id,String conversationId,String modelId,String requestId,String status,String errorCode,
                        String executionState,Instant createdAt,Instant updatedAt) {}
@@ -68,11 +69,12 @@ public class TaskService implements ApplicationRunner {
             new Message(r.getLong("id"),r.getString("task_id"),r.getString("role"),r.getString("content"),r.getTimestamp("created_at").toInstant()),conversationId,after);
         return new Page<>(rows.stream().limit(100).toList(),rows.size()>100);
     }
-    public Task submit(Caller caller,String conversationId,String requestId,String modelId,String message) {
+    public Task submit(Caller caller,String conversationId,String requestId,String modelId,String message,List<String> materialIds) {
         if(requestId==null || !requestId.matches("[A-Za-z0-9_-]{1,100}") || modelId==null || !modelId.matches("[a-fA-F0-9-]{36}")
             || message==null || message.isBlank() || message.length()>20000) throw new ApiFailure(400,"invalid_task");
+        if(materialIds.size()>5 || new HashSet<>(materialIds).size()!=materialIds.size() || materialIds.stream().anyMatch(id -> !id.matches("[a-fA-F0-9-]{36}"))) throw new ApiFailure(400,"invalid_task");
         final String hash;
-        try { hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest((conversationId+"\n"+modelId+"\n"+message).getBytes(StandardCharsets.UTF_8))); }
+        try { hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest((materialIds.isEmpty()?conversationId+"\n"+modelId+"\n"+message : "materials-v1\n"+conversationId+"\n"+modelId+"\n"+message.length()+":"+message+"\n"+String.join(",",materialIds)).getBytes(StandardCharsets.UTF_8))); }
         catch(java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
         boolean[] acquired={false};
         Task accepted;
@@ -88,6 +90,7 @@ public class TaskService implements ApplicationRunner {
                     if(!hash.equals(oldHash)) throw new ApiFailure(409,"idempotency_conflict");
                     return old;
                 }
+                materialIds.forEach(id -> materials.get(caller,id));
                 if(runners.getIfAvailable()==null || stopping) throw new ApiFailure(503,"execution_unavailable");
                 models.require(caller.id(),modelId);
                 if(!query("conversation_id=? AND status='RUNNING'",conversationId).isEmpty()) throw new ApiFailure(409,"conversation_busy");
@@ -95,6 +98,7 @@ public class TaskService implements ApplicationRunner {
                 acquired[0]=true;
                 String id=UUID.randomUUID().toString();
                 db.update("INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,status,execution_state) VALUES(?,?,?,?,?,?,'RUNNING','RUNNING')",id,caller.id(),conversationId,modelId,requestId,hash);
+                for(int i=0;i<materialIds.size();i++) db.update("INSERT INTO task_materials(task_id,material_id,position) VALUES(?,?,?)",id,materialIds.get(i),i);
                 db.update("INSERT INTO messages(task_id,conversation_id,role,content) VALUES(?,?,'user',?)",id,conversationId,message);
                 db.update("UPDATE conversations SET updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",conversationId);
                 return get(caller,id);
@@ -138,6 +142,11 @@ public class TaskService implements ApplicationRunner {
                 try { Thread.sleep(1000); } catch(InterruptedException interrupted) { if(stopping) return; }
             }
         }
+    }
+    public List<io.iwork.artifacts.MaterialService.Material> materials(Caller caller,String taskId) {
+        get(caller,taskId);
+        return db.queryForList("SELECT material_id FROM task_materials WHERE task_id=? ORDER BY position",String.class,taskId)
+            .stream().map(id -> materials.get(caller,id)).toList();
     }
     public Task cancel(Caller caller,String id) {
         var cancelled=tx.execute(status -> {

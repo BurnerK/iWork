@@ -11,6 +11,9 @@ spring:
       connection-timeout: 3000
       validation-timeout: 1000
       maximum-pool-size: 5
+      data-source-properties:
+        connectionTimeZone: "+00:00"
+        forceConnectionTimeZoneToSession: true
   data:
     redis:
       host: ${IWORK_REDIS_HOST:localhost}
