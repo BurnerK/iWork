@@ -70,6 +70,7 @@ backend/mvnw -B -f backend/pom.xml -Pdistribution -DskipTests package
 test -f .env || cp .env.example .env
 # 编辑 .env，为数据库和初始管理员密码填写不同随机值（可分别运行 openssl rand -hex 24）。
 # 仅 localhost HTTP 开发设置 IWORK_COOKIE_SECURE=false；生产 HTTPS 保持 true。
+node scripts/sandbox-key.mjs  # 首次生成服务密钥；已有文件会拒绝覆盖
 docker compose build
 mkdir -p data/files
 docker compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown app 10001:10001 /data/files
@@ -77,7 +78,7 @@ docker compose up -d --wait --wait-timeout 180
 curl --fail http://127.0.0.1:8080/actuator/health/readiness
 ```
 
-打开 [本机入口](http://127.0.0.1:8080)，以外部配置的管理员账号登录并修改初始密码，然后移除初始密码配置。无内置默认密码或公开注册。应用仅绑定回环地址；MySQL 和 Redis 不发布宿主端口。生产通过 HTTPS 反向代理接入。
+打开 [本机入口](http://127.0.0.1:8080)，以外部配置的管理员账号登录并修改初始密码，然后移除初始密码配置。无内置默认密码或公开注册。应用仅绑定回环地址；MySQL、Redis 和沙箱管理服务不发布宿主端口。生产通过 HTTPS 反向代理接入。
 
 `data/mysql` 与 `data/files` 是宿主持久目录，Redis 使用 Compose 命名卷 `redis-data` 保存登录态（AOF）。若修改 `IWORK_DATA_DIR`，需在对应目录下创建 `files`；初始化命令会按实际挂载路径设置 UID/GID 10001。主应用始终以该非 root 用户运行。不要将 `data/` 或 `.env` 提交到 Git；不要删除目录来解决启动失败。
 

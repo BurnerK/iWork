@@ -12,11 +12,11 @@
 | `io.iwork.artifacts` | 成果与文件：原始资料、执行工作区、正式版本及文件索引。原始资料使用独立存储和所有权索引，解析与正式成果另行接入。 |
 | `io.iwork.model` | 模型与用量：模型授权、额度、逐调用计量；供应商缺失用量保留待核实。 |
 
-各模块通过真实用例需要的包接口协作，不直接访问其他模块内部持久化对象。V2 新增 users 与 conversations；会话写入调用身份模块的事务内校验，SQL 始终限定 owner。沙箱管理服务和执行看门狗在 #16 接入；其高权限信任边界以及有条件的进程停止上限保持不变。
+各模块通过真实用例需要的包接口协作，不直接访问其他模块内部持久化对象。V2 新增 users 与 conversations；会话写入调用身份模块的事务内校验，SQL 始终限定 owner。沙箱管理服务和独立执行看门狗已在 #16 接入；其高权限信任边界以及有条件的进程停止上限保持不变。
 
 ## Harness 目标方案与当前实现
 
-首版采用 HarnessAgent，边界见 [ADR 0004](adr/0004-harness-runtime-and-context.md)。当前引入同版本 core、harness 与 extensions-model-openai，默认工具、记忆、子智能体和压缩均关闭。2.0.4 仍注册 wait_async_results，因此构建后显式移除并断言工具集合为空。主调用及辅助调用经 GovernedModel 逐次授权、预占和记录；#27 再接 MySQL 上下文恢复与自动压缩。具体计量规则见 [#14 设计](issue-14-design.md)。真实供应商兼容性仍由 #26 验证。
+首版采用 HarnessAgent，边界见 [ADR 0004](adr/0004-harness-runtime-and-context.md)。当前引入同版本 core、harness 与 extensions-model-openai，默认工具、记忆、子智能体和压缩均关闭。2.0.4 仍注册 wait_async_results，因此构建后显式移除并断言工具集合严格匹配本任务配置（有授权资料时仅 read_task_material）。主调用及辅助调用经 GovernedModel 逐次授权、预占和记录；#27 再接 MySQL 上下文恢复与自动压缩。具体计量规则见 [#14 设计](issue-14-design.md)。真实供应商兼容性仍由 #26 验证。
 
 完整业务消息、运行上下文快照和会话摘要统一保存在 MySQL；SDK 快照不是业务状态权威，不携带可恢复的历史授权，不自动续跑任务。关闭不需要的 SDK 工具、长期记忆及独立会话日志；主推理与压缩统一授权、计量和取消。原始资料、工作文件及成果仍独立保存，具体实现与 T17–T19 验收由开发票承接。
 
@@ -131,3 +131,16 @@ docker compose run --rm --no-deps \
 V4 增加任务、消息与请求身份；会话页面可提交、观察、取消并重开找回，接口和恢复边界见 [#13 实施合同](issue-13-design.md)。未接入 TaskRunner 时正式入口返回 503；不会把测试替身装入交付 JAR。测试替身仅由 `io.iwork.fixtures.TaskFixtureApplication` 在 test classpath 启动，用于浏览器及进程强杀验证。
 
 `iwork.task-capacity` 默认 2，范围 1–16；单实例运行期间保留实际执行许可，取消不提前释放。不要同时启动两个应用实例连接同一业务数据库；此首版不提供多实例调度或滚动升级。主进程启动只归档遗留任务，不重新执行。
+
+
+## #16 资料解析与隔离服务
+
+部署前运行 `node scripts/sandbox-key.mjs`，在 `data/secrets/sandbox.key` 创建随机服务密钥，已存在时拒绝覆盖。父目录应仅部署者可进入；文件作为只读 Compose secret 仅挂载给 app 与 sandbox-manager，不给看门狗和处理容器。不要输出文件内容、提交 Git 或挂载给其他服务。可通过 `IWORK_SANDBOX_KEY_FILE` 指定已有文件。实例名 `IWORK_SANDBOX_INSTANCE` 必须在同一 Docker 主机唯一，并与持久 registry 保持一致。
+
+`docker compose build` 构建主应用、管理服务和固定 Python 解析镜像；`docker compose up -d` 启动服务。text-parser-image 是构建依赖的短暂版本检查容器，成功退出属于预期。管理接口仅在内部 sandbox-control 网络，不发布宿主端口；只有管理服务及无网络看门狗挂载 Docker socket。它们不启动 Spring、不持有 DB/模型凭据。管理 registry 与看门狗健康记录各有独立命名卷，应保留 registry 做恢复核验。
+
+本机 Java 如需解析，需运行隔离服务并配置 `IWORK_SANDBOX_URL`、`IWORK_SANDBOX_KEY_FILE`；默认开发脚本只启 MySQL/Redis，未配置管理服务时解析明确不可用，文字任务仍可运行。生产不得为方便开发而开放管理端口。测试的回环端口覆盖只用于可丢弃实例。
+
+支持 TXT/Markdown UTF-8 文本，最大 2 MiB；原文保持不变，解析结果是任务材料，按 12,000 字符分段读取。用户在“资料处理”查看状态、清理确认与解析文本。取消或失败不把未确认的容器报告为已清理；管理端持续重试，独立看门狗按 Docker 创建时间执行 60 秒期限。该上限依赖 Docker/宿主可用，生产时间尚待 #25 标定。
+
+验证：`sandbox/verify.py URL KEY_FILE COMPOSE_FILE issue16实例名` 在可丢弃真实 Docker 实例检查身份/任务令牌、解析、隔离、取消竞态、监督失效与到期回收；会暂停该测试实例看门狗。业务 API 集成测试 `MaterialParsingTest` 需 `IWORK_SANDBOX_TEST_URL` 与 `IWORK_SANDBOX_TEST_KEY_FILE`，未配置则显式跳过；真实身份/MySQL/Redis/文件/Harness，仅模型 HTTP 传输为替身。测试替身入口 `ParsingFixtureApplication` 不进入交付 JAR。

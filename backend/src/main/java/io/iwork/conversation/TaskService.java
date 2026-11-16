@@ -72,7 +72,7 @@ public class TaskService implements ApplicationRunner {
     public Task submit(Caller caller,String conversationId,String requestId,String modelId,String message,List<String> materialIds) {
         if(requestId==null || !requestId.matches("[A-Za-z0-9_-]{1,100}") || modelId==null || !modelId.matches("[a-fA-F0-9-]{36}")
             || message==null || message.isBlank() || message.length()>20000) throw new ApiFailure(400,"invalid_task");
-        if(materialIds.size()>5 || new HashSet<>(materialIds).size()!=materialIds.size() || materialIds.stream().anyMatch(id -> !id.matches("[a-fA-F0-9-]{36}"))) throw new ApiFailure(400,"invalid_task");
+        if(materialIds.size()>5 || new HashSet<>(materialIds).size()!=materialIds.size() || materialIds.stream().anyMatch(id -> !id.matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"))) throw new ApiFailure(400,"invalid_task");
         final String hash;
         try { hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest((materialIds.isEmpty()?conversationId+"\n"+modelId+"\n"+message : "materials-v1\n"+conversationId+"\n"+modelId+"\n"+message.length()+":"+message+"\n"+String.join(",",materialIds)).getBytes(StandardCharsets.UTF_8))); }
         catch(java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }

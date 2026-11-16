@@ -53,6 +53,8 @@ management:
         readiness:
           include: readinessState,db,redis,fileStorage
 iwork:
+  sandbox-url: ${IWORK_SANDBOX_URL:}
+  sandbox-key-file: ${IWORK_SANDBOX_KEY_FILE:}
   cookie-secure: ${IWORK_COOKIE_SECURE:true}
   bootstrap:
     username: ${IWORK_BOOTSTRAP_USERNAME:admin}

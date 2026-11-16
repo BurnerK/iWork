@@ -24,6 +24,10 @@ with socket.socket() as port:
 env = dict(os.environ, IWORK_DATA_DIR=str(work), IWORK_HTTP_PORT=str(http_port),
            IWORK_DB_PASSWORD=secrets.token_hex(24), IWORK_MYSQL_ROOT_PASSWORD=secrets.token_hex(24),
            IWORK_BOOTSTRAP_PASSWORD=secrets.token_urlsafe(24), IWORK_COOKIE_SECURE="false")
+key_file = work / "sandbox.key"
+key_file.write_text(secrets.token_hex(32))
+key_file.chmod(0o444)
+env.update(IWORK_SANDBOX_KEY_FILE=str(key_file), IWORK_SANDBOX_INSTANCE=work.name)
 env_file = work / ".env"
 env_file.touch(mode=0o600)
 command = ["docker", "compose", "--env-file", str(env_file), "-f", str(root / "compose.yaml"),
@@ -97,6 +101,13 @@ try:
             "app", "10001:10001", "/data/files")
     compose("up", "-d", "--wait", "--wait-timeout", "180")
     health("/actuator/health/readiness", 200, "UP")
+    app_id = compose("ps", "-q", "app", capture=True).strip()
+    manager_id = compose("ps", "-q", "sandbox-manager", capture=True).strip()
+    app_info, manager_info = json.loads(subprocess.check_output(["docker", "inspect", app_id, manager_id]))
+    assert app_info["Config"]["User"] == "10001:10001"
+    assert all(mount["Destination"] in ("/data/files", "/run/secrets/sandbox_key") for mount in app_info["Mounts"])
+    assert not manager_info["HostConfig"]["PortBindings"]
+    assert all(not any(marker in value for marker in ("DB_PASSWORD", "MODEL_KEY", "MYSQL_ROOT_PASSWORD")) for value in manager_info["Config"]["Env"])
     code, page = request("/")
     assert code == 200 and '<div id="app">' in page
     assert request("/actuator/env")[0] == 403

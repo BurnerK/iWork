@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import ParsingPanel from './ParsingPanel.vue'
 import UsagePanel from './UsagePanel.vue'
 import MaterialPanel from './MaterialPanel.vue'
 import { ApiError, errorMessage, request } from './api'
@@ -14,7 +15,7 @@ const materialIds = ref<string[]>([]), materialBusy = ref(false)
 const pending = ref<{ requestId: string; modelId: string; message: string; materialIds?: string[] } | null>(null)
 const storageKey = `iwork-pending:${props.ownerId}:${props.conversationId}`
 function clearPending() { localStorage.removeItem(storageKey); pending.value = null }
-const usageTaskId = ref('')
+const usageTaskId = ref(''), parsingTaskId = ref('')
 const taskPage = ref(0), moreTasks = ref(false), moreMessages = ref(false)
 const active = computed(() => tasks.value.some(task => task.status === 'RUNNING'))
 const labels: Record<string, string> = { RUNNING: '运行中', COMPLETED: '已完成', FAILED: '失败', CANCELLED: '已取消', INTERRUPTED: '重启中断' }
@@ -94,7 +95,8 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
     <p v-if="!messages.length">暂时没有消息。</p>
     <ol class="messages"><li v-for="item in messages" :key="item.id"><small>{{ item.role === 'user' ? '你' : '助手' }}</small><p>{{ item.content }}</p></li></ol>
     <button v-if="moreMessages" type="button" class="secondary" :disabled="loading" @click="load">继续加载消息</button>
-    <ul class="rows" aria-label="任务状态"><li v-for="task in tasks" :key="task.id"><div><span role="status">{{ labels[task.status] || task.status }}</span><small>任务 {{ task.id }}</small><small v-if="task.executionState === 'STOP_REQUESTED'">已请求停止，执行结束尚待确认。</small><small v-if="task.executionState === 'UNKNOWN'">执行状态未知。</small><small v-if="task.errorCode">{{ errorMessage(new ApiError(400, task.errorCode)) }}</small></div><button v-if="task.status === 'RUNNING'" type="button" class="secondary" :disabled="busy" @click="cancel(task)">取消任务</button><button type="button" class="secondary" :aria-expanded="usageTaskId === task.id" @click="usageTaskId = usageTaskId === task.id ? '' : task.id">查看用量</button></li></ul>
+    <ul class="rows" aria-label="任务状态"><li v-for="task in tasks" :key="task.id"><div><span role="status">{{ labels[task.status] || task.status }}</span><small>任务 {{ task.id }}</small><small v-if="task.executionState === 'STOP_REQUESTED'">已请求停止，执行结束尚待确认。</small><small v-if="task.executionState === 'UNKNOWN'">执行状态未知。</small><small v-if="task.errorCode">{{ errorMessage(new ApiError(400, task.errorCode)) }}</small></div><button v-if="task.status === 'RUNNING'" type="button" class="secondary" :disabled="busy" @click="cancel(task)">取消任务</button><button type="button" class="secondary" :aria-expanded="usageTaskId === task.id" @click="usageTaskId = usageTaskId === task.id ? '' : task.id">查看用量</button><button type="button" class="secondary" :aria-expanded="parsingTaskId === task.id" @click="parsingTaskId = parsingTaskId === task.id ? '' : task.id">资料处理</button></li></ul>
+    <ParsingPanel v-if="parsingTaskId" :key="parsingTaskId" :task-id="parsingTaskId" />
     <UsagePanel v-if="usageTaskId" :key="usageTaskId" :task-id="usageTaskId" :running="tasks.some(task => task.id === usageTaskId && task.status === 'RUNNING')" />
     <button v-if="moreTasks" type="button" class="secondary" :disabled="busy" @click="earlierTasks">较早的任务</button>
     <MaterialPanel v-model="materialIds" :disabled="busy || !!pending || active" @failure="failure" @uploading="materialBusy = $event" />

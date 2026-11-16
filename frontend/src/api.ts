@@ -24,12 +24,17 @@ export async function request<T>(path: string, method = 'GET', body?: object | U
 export function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '操作失败，请重试。'
   const messages: Record<string, string> = {
+    sandbox_unavailable: '资料处理服务暂不可用，清理结果以处理状态为准。',
+    sandbox_timeout: '资料解析超时，已请求清理处理容器。',
+    material_parse_failed: '资料无法解析，请检查是否为有效的 UTF-8 文本。',
+    cancelled: '资料处理已取消。',
+    manager_restarted: '处理服务重启，未自动重新解析。',
     budget_exhausted: '内部可用额度不足，请联系管理员调整额度。',
     model_input_limit: '输入超出本次模型调用的长度限制。',
     model_attempt_limit: '任务已达到模型调用次数上限，请检查已有结果。',
     model_output_limit: '模型输出超过接收上限，任务已停止。',
     model_timeout: '模型调用超时，已请求停止；供应商用量可能仍待核实。',
-    task_not_running: '任务已经结束，不能再发起模型调用。',
+    task_not_running: '任务已经结束，不能再执行处理或模型调用。',
     invalid_file_name: '文件名无效，请移除路径或控制字符，长度不超过 200 字符。',
     unsupported_material: '仅支持 .txt 和 .md 文件。',
     material_too_large: '每份资料不能超过 2 MiB。',

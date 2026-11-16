@@ -11,7 +11,7 @@ COPY backend/ ./backend/
 COPY --from=web /build/frontend/dist ./frontend/dist
 RUN backend/mvnw -B -f backend/pom.xml -Pdistribution -DskipTests package
 
-FROM eclipse-temurin:21-jre-jammy@sha256:dff6eb46527bd293a3c06bbbe9e64e8c9f91f01905b5abbdad31761c03059d2c
+FROM eclipse-temurin:21-jre-jammy@sha256:dff6eb46527bd293a3c06bbbe9e64e8c9f91f01905b5abbdad31761c03059d2c AS runtime
 RUN groupadd --gid 10001 iwork && useradd --uid 10001 --gid iwork --no-create-home iwork \
     && mkdir -p /data/files && chown iwork:iwork /data/files
 WORKDIR /app
@@ -21,3 +21,12 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=3 \
     CMD curl --fail --silent http://localhost:8080/actuator/health/readiness > /dev/null || exit 1
 ENTRYPOINT ["java", "-jar", "/app/iwork.jar"]
+
+FROM docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d AS docker-cli
+FROM runtime AS sandbox-manager
+USER root
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+HEALTHCHECK NONE
+ENTRYPOINT ["java", "-Djava.io.tmpdir=/tmp/codex", "-Dloader.main=io.iwork.sandbox.SandboxControl", "-cp", "/app/iwork.jar", "org.springframework.boot.loader.launch.PropertiesLauncher"]
+
+FROM runtime AS app

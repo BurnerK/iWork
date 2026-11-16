@@ -12,9 +12,12 @@ services:
       IWORK_COOKIE_SECURE: ${IWORK_COOKIE_SECURE:-true}
       IWORK_DB_PASSWORD: ${IWORK_DB_PASSWORD:?Set IWORK_DB_PASSWORD in .env}
       IWORK_FILES_DIRECTORY: /data/files
+      IWORK_SANDBOX_URL: http://sandbox-manager:8090
+      IWORK_SANDBOX_KEY_FILE: /run/secrets/sandbox_key
     volumes:
       - ${IWORK_DATA_DIR:-./data}/files:/data/files
-    networks: [default, session]
+    secrets: [sandbox_key]
+    networks: [default, session, sandbox-control]
     depends_on:
       redis:
         condition: service_healthy
@@ -31,6 +34,54 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+  sandbox-manager:
+    build:
+      context: .
+      target: sandbox-manager
+    image: iwork-sandbox-manager:local
+    environment:
+      IWORK_SANDBOX_INSTANCE: ${IWORK_SANDBOX_INSTANCE:-iwork}
+      IWORK_SANDBOX_IMAGE: iwork-text-parser:1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox-registry:/registry
+      - sandbox-watchdog:/watchdog:ro
+    secrets: [sandbox_key]
+    depends_on:
+      text-parser-image:
+        condition: service_completed_successfully
+    networks: [sandbox-control]
+    read_only: true
+    tmpfs: ["/tmp/codex:rw,noexec,nosuid,size=64m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    logging:
+      options: {max-size: 10m, max-file: '3'}
+  sandbox-watchdog:
+    image: iwork-sandbox-manager:local
+    command: [watchdog]
+    environment:
+      IWORK_SANDBOX_INSTANCE: ${IWORK_SANDBOX_INSTANCE:-iwork}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox-watchdog:/watchdog
+    network_mode: none
+    read_only: true
+    tmpfs: ["/tmp/codex:rw,noexec,nosuid,size=64m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    logging:
+      options: {max-size: 10m, max-file: '3'}
+  text-parser-image:
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile.worker
+    image: iwork-text-parser:1
+    entrypoint: [python, --version]
+    network_mode: none
+
   mysql:
     image: mysql:8.4.7@sha256:0426ec38c7a10aa45ba383887df7878f74ee70e2fd589c7b69207f3577901903
     environment:
@@ -70,7 +121,14 @@ services:
         max-size: "10m"
         max-file: "3"
 networks:
+  sandbox-control:
+    internal: true
   session:
     internal: true
+secrets:
+  sandbox_key:
+    file: ${IWORK_SANDBOX_KEY_FILE:-./data/secrets/sandbox.key}
 volumes:
+  sandbox-registry:
+  sandbox-watchdog:
   redis-data:
