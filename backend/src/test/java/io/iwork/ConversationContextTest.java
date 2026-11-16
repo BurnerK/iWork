@@ -102,6 +102,7 @@ class ConversationContextTest {
         var complete=json.readTree(admin.request("GET","/api/conversations/"+cid+"/messages",null,false).body()).path("items");
         assertThat(complete.size()).isEqualTo(8);
         assertThat(complete.get(7).path("content").asText()).isEqualTo("蓝鲸项目，周五交付");
+        assertThat(admin.request("GET","/api/admin/tasks/"+compacted+"/diagnostics",null,false).body()).contains("SUMMARY","COMPACTED").doesNotContain("蓝鲸项目","周五交付");
         assertThat(db.queryForObject("SELECT summary FROM conversation_contexts WHERE task_id=?",String.class,compacted)).contains("蓝鲸项目");
         for(String mode:List.of("error","empty","missing","large")) {
             String fallback=seed(admin,modelId);
@@ -112,6 +113,8 @@ class ConversationContextTest {
             String saved=db.queryForObject("SELECT context_json FROM conversation_contexts WHERE task_id=?",String.class,continued);
             assertThat(saved).doesNotContain("Summarization failed","Summary unavailable","synthetic-summary-failure");
             if(mode.equals("missing")) assertThat(admin.request("GET","/api/tasks/"+continued+"/calls",null,false).body()).contains("SUMMARY","OBSERVED_ESTIMATE");
+            String diagnostic=admin.request("GET","/api/tasks/"+continued+"/diagnostics",null,false).body();
+            assertThat(diagnostic).contains(mode.equals("missing")?"COMPACTED":"FALLBACK").doesNotContain("synthetic-summary-failure","蓝鲸项目");
             summaryMode="normal";
         }
         String over=seed(admin,modelId); summaryMode="error";
@@ -129,7 +132,8 @@ class ConversationContextTest {
         assertThat(db.queryForObject("SELECT COUNT(*) FROM conversation_contexts WHERE task_id=?",Integer.class,cancelled)).isZero();
         task(admin,cancelledConversation,modelId,"请回忆");
         db.update("UPDATE conversation_contexts SET context_hash=? WHERE conversation_id=?","0".repeat(64),cid);
-        task(admin,cid,modelId,"请回忆项目与交付时间");
+        String rebuilt=task(admin,cid,modelId,"请回忆项目与交付时间");
+        assertThat(admin.request("GET","/api/tasks/"+rebuilt+"/diagnostics",null,false).body()).contains("SNAPSHOT_REJECTED").doesNotContain("蓝鲸项目");
         String faulty=seed(admin,modelId);
         long beforeFault=db.queryForObject("SELECT COUNT(*) FROM conversation_contexts WHERE conversation_id=?",Long.class,faulty);
         responseGate=reactor.core.publisher.Sinks.empty(); responseStarted=new java.util.concurrent.CountDownLatch(1);

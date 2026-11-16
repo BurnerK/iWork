@@ -24,6 +24,13 @@ export async function request<T>(path: string, method = 'GET', body?: object | U
 export function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '操作失败，请重试。'
   const messages: Record<string, string> = {
+    model_failed: '模型调用失败，供应商用量以已记录依据核算，仍可能待核实。',
+    local_cancelled: '本地调用已取消，不代表供应商已停止。',
+    context_compaction_failed: '上下文摘要未能完成，原始消息保留，请缩短本次要求。',
+    context_limit: '上下文仍超出模型容量，请在新会话中明确选择所需资料。',
+    context_history_limit: '历史超过本次可处理范围，原始消息保留。',
+    context_window_not_configured: '模型上下文容量尚未配置，请联系管理员。',
+    model_context_limit: '本次模型输入超出已配置容量。',
     invalid_project: '请填写120字符以内的项目名称，指令不超过4000字符。',
     invalid_agent: '请填写120字符以内的名称、4000字符以内的指令，并选择已授权模型。',
     invalid_document: '请提供有效标题和非空 Markdown 正文。',

@@ -63,8 +63,12 @@ public class GovernedModel {
                             .stream(true).httpTransport(observed).generateOptions(options).build();
                         return upstream.stream(messages,tools,options)
                             .takeUntilOther(Mono.delay(Duration.ofSeconds(120)).flatMap(value -> Mono.error(new ApiFailure(504,"model_timeout"))))
-                            .doFinally(signal -> ledger.retain(() -> ledger.finish(call.id())));
-                    } catch(RuntimeException failure) { ledger.retain(() -> ledger.finish(call.id())); return Flux.error(failure); }
+                            .doOnError(failure -> ledger.retain(() -> ledger.failure(call.id(),failure)))
+                            .doFinally(signal -> ledger.retain(() -> {
+                                if(signal==reactor.core.publisher.SignalType.CANCEL) ledger.cancelled(call.id());
+                                ledger.finish(call.id());
+                            }));
+                    } catch(RuntimeException failure) { ledger.retain(() -> { ledger.failure(call.id(),failure); ledger.finish(call.id()); }); return Flux.error(failure); }
                 });
             }
         };

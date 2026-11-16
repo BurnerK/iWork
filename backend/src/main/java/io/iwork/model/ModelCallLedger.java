@@ -84,6 +84,14 @@ public class ModelCallLedger implements ApplicationRunner {
             if(call.get("status").equals("CLOSED")) settle(id);
         });
     }
+    public void failure(String id,Throwable failure) {
+        String code="model_failed";
+        for(int i=0;i<10 && failure!=null;i++,failure=failure.getCause()) {
+            if(failure instanceof ApiFailure && Set.of("model_timeout","model_output_limit","model_input_limit","model_context_limit","model_not_authorized","task_not_running","credential_not_configured","budget_exhausted").contains(failure.getMessage())) { code=failure.getMessage(); break; }
+        }
+        db.update("UPDATE model_calls SET error_code=COALESCE(error_code,?) WHERE id=?",code,id);
+    }
+    public void cancelled(String id) { db.update("UPDATE model_calls SET error_code=COALESCE(error_code,'local_cancelled') WHERE id=?",id); }
     public void finish(String id) { tx.executeWithoutResult(status -> { locked(id); settle(id); }); }
     private void settle(String id) {
         var call=db.queryForMap("SELECT * FROM model_calls WHERE id=? FOR UPDATE",id);

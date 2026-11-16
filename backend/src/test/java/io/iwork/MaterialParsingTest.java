@@ -218,6 +218,10 @@ class MaterialParsingTest {
         var failed=task(admin,model,invalid,"请解析资料");
         var failedParse=json.readTree(admin.send("GET","/api/tasks/"+failed+"/parses",null).body()).get(0);
         assertThat(failedParse.get("status").asText()).isEqualTo("FAILED"); assertThat(failedParse.get("cleanup").asText()).isEqualTo("CONFIRMED");
+        var diagnosis=admin.send("GET","/api/tasks/"+failed+"/diagnostics",null);
+        assertThat(diagnosis.statusCode()).isEqualTo(200);
+        assertThat(diagnosis.body()).contains(failedParse.path("id").asText(),"material_parse_failed","CONFIRMED","cleanupAttemptedAt").doesNotContain("parsed_text","task_token");
+        assertThat(json.readTree(diagnosis.body()).path("parses").get(0).path("cleanupAttempts").asInt()).isPositive();
         var foreign=task(admin,model,material,"foreign-reference");
         assertThat(json.readTree(admin.send("GET","/api/tasks/"+foreign+"/parses",null).body()).isEmpty()).isTrue();
         var created=json.readTree(admin.send("POST","/api/admin/users","{\"username\":\"other-parser\",\"displayName\":\"Other\"}").body());

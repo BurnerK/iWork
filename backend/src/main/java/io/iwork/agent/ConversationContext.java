@@ -62,6 +62,7 @@ public class ConversationContext {
                 } catch(RuntimeException invalidSnapshot) { /* Rebuild from authoritative business messages. */ }
             }
         }
+        db.update("UPDATE tasks SET context_state=?,context_at=CURRENT_TIMESTAMP(6) WHERE id=?",snapshot==null?"BUSINESS_HISTORY":restored?"RESTORED":"SNAPSHOT_REJECTED",input.taskId());
         if((restored?tailBytes[0]:rebuiltBytes[0])>2*1024*1024) throw new ApiFailure(413,"context_history_limit");
         state.contextMutable().addAll(restored?tail:rebuilt);
         compact(input,state);
@@ -72,7 +73,8 @@ public class ConversationContext {
         if(window==null) throw new ApiFailure(409,"context_window_not_configured");
         int original=state.toJson().getBytes(StandardCharsets.UTF_8).length+input.message().getBytes(StandardCharsets.UTF_8).length+input.instructions().getBytes(StandardCharsets.UTF_8).length;
         int budget=window-4096;
-        if(original<budget/2) return;
+        if(original<budget/2) { summaryState(input,"NOT_NEEDED"); return; }
+        summaryState(input,"RUNNING");
         var completed=new java.util.concurrent.atomic.AtomicBoolean();
         var summary=new StringBuilder();
         var failure=new java.util.concurrent.atomic.AtomicReference<Throwable>();
@@ -89,16 +91,24 @@ public class ConversationContext {
         var config=CompactionConfig.builder().triggerMessages(1).triggerTokens(1).keepTokens(0).keepMessages(2)
             .flushBeforeCompact(false).offloadBeforeCompact(false).truncateArgs(null).prune(null).build();
         var context=RuntimeContext.builder().userId(input.caller().id()).sessionId(input.conversationId()).build();
-        var compacted=new ConversationCompactor(guarded,null).compactIfNeeded(context,state.getContext(),config,input.taskId(),input.conversationId()).block(java.time.Duration.ofSeconds(125));
+        java.util.Optional<List<Msg>> compacted;
+        try { compacted=new ConversationCompactor(guarded,null).compactIfNeeded(context,state.getContext(),config,input.taskId(),input.conversationId()).block(java.time.Duration.ofSeconds(125)); }
+        catch(RuntimeException failureDuringSummary) { summaryState(input,Thread.currentThread().isInterrupted()?"CANCELLED":"FAILED"); throw failureDuringSummary; }
+        boolean accepted=false;
         // 2.0.4 converts summary errors and empty output to text; never persist those fallbacks.
         if(completed.get() && failure.get()==null && !summary.toString().isBlank() && compacted!=null && compacted.isPresent()) {
             var candidate=AgentState.builder().userId(input.caller().id()).sessionId(input.conversationId()).context(compacted.get()).summary(summary.toString()).build();
             if(candidate.toJson().getBytes(StandardCharsets.UTF_8).length+input.message().getBytes(StandardCharsets.UTF_8).length+input.instructions().getBytes(StandardCharsets.UTF_8).length<=budget) {
-                state.contextMutable().clear(); state.contextMutable().addAll(compacted.get()); state.setSummary(summary.toString());
+                state.contextMutable().clear(); state.contextMutable().addAll(compacted.get()); state.setSummary(summary.toString()); accepted=true;
             }
-        } else if(original>budget) throw new ApiFailure(413,"context_compaction_failed");
+        }
+        summaryState(input,accepted?"COMPACTED":original<=budget?"FALLBACK":"FAILED");
+        if(!accepted && original>budget) throw new ApiFailure(413,"context_compaction_failed");
         if(state.toJson().getBytes(StandardCharsets.UTF_8).length+input.message().getBytes(StandardCharsets.UTF_8).length+input.instructions().getBytes(StandardCharsets.UTF_8).length>budget)
             throw new ApiFailure(413,"context_limit");
+    }
+    private void summaryState(TaskRunner.Input input,String state) {
+        db.update("UPDATE tasks SET summary_state=?,summary_at=CURRENT_TIMESTAMP(6) WHERE id=?",state,input.taskId());
     }
     public void save(TaskRunner.Input input,Prepared prepared) {
         String encoded=prepared.state().toJson();

@@ -64,3 +64,6 @@ logging:
   level:
     root: INFO
     org.springframework.boot.jdbc.health: ERROR
+    # SDK exception messages can contain provider payloads or private tool arguments.
+    io.agentscope: "OFF"
+    reactor.core.publisher: "OFF"

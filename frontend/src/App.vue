@@ -3,6 +3,7 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskPanel from './TaskPanel.vue'
 import ModelPanel from './ModelPanel.vue'
+import DiagnosticsPanel from './DiagnosticsPanel.vue'
 import ProjectPanel from './ProjectPanel.vue'
 import ProjectMembership from './ProjectMembership.vue'
 import AgentPanel from './AgentPanel.vue'
@@ -48,7 +49,7 @@ async function navigate() {
   temporary.value = null; password.value = ''; newPassword.value = ''; showPassword.value = false
   if (!user.value) { if (route.name !== 'login') await router.replace('/login'); return }
   if (user.value.mustChangePassword && route.name !== 'password') { await router.replace('/password'); return }
-  if (route.name === 'login' || ['admin', 'admin-models'].includes(String(route.name)) && user.value.role !== 'ADMIN') { await router.replace('/conversations'); return }
+  if (route.name === 'login' || ['admin', 'admin-models', 'admin-diagnostics'].includes(String(route.name)) && user.value.role !== 'ADMIN') { await router.replace('/conversations'); return }
   page.value = 0; await loadPanel()
   await nextTick(); document.querySelector<HTMLElement>('h1')?.focus()
 }
@@ -118,7 +119,7 @@ async function movedConversation() {
 }
 async function paginate(delta: number) { page.value += delta; await loadPanel() }
 watch(() => route.fullPath, navigate)
-watch(() => route.name, name => { document.title = `${({ projects: '项目空间', project: '项目空间', agents: '我的智能体', login: '登录', password: '修改密码', admin: '用户管理', models: '模型与额度', 'admin-models': '模型管理', conversation: '会话', conversations: '个人会话' } as Record<string, string>)[String(name)] || 'iWork'} · iWork` })
+watch(() => route.name, name => { document.title = `${({ 'admin-diagnostics': '运行诊断', projects: '项目空间', project: '项目空间', agents: '我的智能体', login: '登录', password: '修改密码', admin: '用户管理', models: '模型与额度', 'admin-models': '模型管理', conversation: '会话', conversations: '个人会话' } as Record<string, string>)[String(name)] || 'iWork'} · iWork` })
 onMounted(loadIdentity)
 </script>
 
@@ -133,6 +134,7 @@ onMounted(loadIdentity)
         <RouterLink to="/agents">我的智能体</RouterLink>
         <RouterLink to="/models">模型与额度</RouterLink>
         <RouterLink v-if="user.role === 'ADMIN'" to="/admin-models">模型管理</RouterLink>
+        <RouterLink v-if="user.role === 'ADMIN'" to="/admin-diagnostics">运行诊断</RouterLink>
         <RouterLink to="/password">修改密码</RouterLink>
       </template>
       <span>{{ user.displayName }}</span>
@@ -191,6 +193,7 @@ onMounted(loadIdentity)
         </li>
       </ul>
     </section>
+    <DiagnosticsPanel v-else-if="user?.role === 'ADMIN' && route.name === 'admin-diagnostics'" admin />
     <ProjectPanel v-else-if="user && ['projects', 'project'].includes(String(route.name))" :key="route.fullPath" :project-id="route.params.id ? String(route.params.id) : undefined" @failure="failure" />
     <AgentPanel v-else-if="user && route.name === 'agents'" :key="user.id" @failure="failure" />
     <ModelPanel v-else-if="user && ['models', 'admin-models'].includes(String(route.name))" :key="`${user.id}-${String(route.name)}`" :admin="route.name === 'admin-models'" @failure="failure" />

@@ -129,13 +129,25 @@ public class PersonalAgentTest {
         assertThat(admin.request("GET","/api/budget",null,false).body()).isEqualTo(budgetBefore);
         assertThat(new java.math.BigDecimal(json.readTree(other.request("GET","/api/budget",null,false).body()).path("spent").asText())).isPositive();
         assertThat(admin.request("GET","/api/tasks/"+ownTask+"/calls",null,false).statusCode()).isEqualTo(404);
+        assertThat(admin.request("GET","/api/tasks/"+ownTask+"/diagnostics",null,false).statusCode()).isEqualTo(404);
+        assertThat(other.request("GET","/api/tasks/"+revoked+"/diagnostics",null,false).statusCode()).isEqualTo(404);
+        assertThat(other.request("GET","/api/admin/tasks",null,false).statusCode()).isEqualTo(403);
+        assertThat(other.request("GET","/api/admin/tasks/"+ownTask+"/diagnostics",null,false).statusCode()).isEqualTo(403);
+        var safe=admin.request("GET","/api/admin/tasks/"+ownTask+"/diagnostics",null,false);
+        assertThat(safe.statusCode()).isEqualTo(200);
+        assertThat(safe.body()).contains(ownTask,otherId,"sandboxJobId","cleanupConfirmedAt","COMPLETED").doesNotContain("蓝鲸","own.md","个人归属","智能体方案","按分工","credential","task_token","parsed_text","markdown","summary\":","context_json");
+        var own=other.request("GET","/api/tasks/"+ownTask+"/diagnostics",null,false);
+        assertThat(own.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(own.body())).isEqualTo(json.readTree(safe.body()));
+        assertThat(admin.request("GET","/api/admin/tasks?page=-1",null,false).statusCode()).isEqualTo(400);
+        assertThat(admin.request("GET","/api/admin/tasks",null,false).body()).contains(ownTask).doesNotContain("蓝鲸","按分工","own.md");
 
 
     }
     void await(Browser browser,String task,String expected) throws Exception {
         for(int i=0;i<300;i++) {
             var state=json.readTree(browser.request("GET","/api/tasks/"+task,null,false).body());
-            if(!state.path("status").asText().equals("RUNNING")) { assertThat(state.path("status").asText()).as(state.toString()).isEqualTo(expected); return; }
+            if(!state.path("status").asText().equals("RUNNING")) { assertThat(state.path("status").asText()).as(browser.request("GET","/api/tasks/"+task+"/diagnostics",null,false).body()).isEqualTo(expected); return; }
             Thread.sleep(50);
         }
         throw new AssertionError("Task did not finish");
@@ -149,6 +161,8 @@ public class PersonalAgentTest {
             final ObjectMapper json=new ObjectMapper();
             public io.agentscope.core.model.transport.HttpResponse execute(io.agentscope.core.model.transport.HttpRequest request) { throw new AssertionError("stream only"); }
             public reactor.core.publisher.Flux<String> stream(io.agentscope.core.model.transport.HttpRequest request) {
+                if(request.getBody().contains("diagnostic-provider-error")) return reactor.core.publisher.Flux.error(new IllegalStateException("private-diagnostic-provider-body"));
+                if(request.getBody().contains("material_parse_failed") || request.getBody().contains("sandbox_unavailable")) return reactor.core.publisher.Flux.error(new IllegalStateException("private-diagnostic-tool-failure"));
                 var body=json.readTree(request.getBody()); String system="",user=""; boolean read=false,prepared=false;
                 for(var message:body.path("messages")) {
                     if(message.path("role").asText().equals("system")) system=message.path("content").asText();

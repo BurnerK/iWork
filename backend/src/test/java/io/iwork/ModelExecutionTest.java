@@ -15,6 +15,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.ObjectMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
+@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
     "iwork.files-directory=target/model-execution-files", "iwork.cookie-secure=false",
@@ -95,7 +96,7 @@ class ModelExecutionTest {
             public void close() {}
         }; }
     }
-    @Test void harnessPersistsReplyAndProviderUsageUnderTheCallerBudget() throws Exception {
+    @Test void harnessPersistsReplyAndProviderUsageUnderTheCallerBudget(org.springframework.boot.test.system.CapturedOutput output) throws Exception {
         var admin=new Browser(); admin.login("admin","Initial-password-11"); admin.csrf();
         admin.request("POST","/api/auth/password","{\"currentPassword\":\"Initial-password-11\",\"newPassword\":\"Model-password-14\"}",true);
         admin.login("admin","Model-password-14"); admin.csrf();
@@ -162,6 +163,17 @@ class ModelExecutionTest {
         var failed=submit(admin,cid,modelId,"error"); awaitStatus(admin,failed,"FAILED");
         assertThat(requests.get()).isEqualTo(count+1);
         assertThat(admin.request("GET","/api/tasks/"+failed+"/calls",null,false).body()).contains("PARTIAL_ESTIMATE").doesNotContain("private-provider-failure");
+        var diagnostic=admin.request("GET","/api/tasks/"+failed+"/diagnostics",null,false);
+        assertThat(diagnostic.statusCode()).isEqualTo(200);
+        var diagnosticCall=json.readTree(diagnostic.body()).path("calls").get(0);
+        var authoritativeCall=json.readTree(admin.request("GET","/api/tasks/"+failed+"/calls",null,false).body()).get(0);
+        assertThat(diagnosticCall.path("charged").isTextual()).isTrue();
+        assertThat(diagnosticCall.path("charged").asText()).isEqualTo(authoritativeCall.path("charged").asText());
+        assertThat(diagnosticCall.path("reservation").isTextual()).isTrue();
+        assertThat(diagnosticCall.path("reservation").asText()).isEqualTo(authoritativeCall.path("reservation").asText());
+        assertThat(diagnostic.body()).contains("model_failed","PARTIAL_ESTIMATE","UNKNOWN").doesNotContain("private-provider-failure","synthetic-model-secret-12","credentialRef","baseUrl");
+        assertThat(admin.request("GET","/api/admin/tasks/"+auxiliary+"/diagnostics",null,false).body()).contains("MAIN","SUMMARY","OVERFLOW");
+        assertThat(output.getAll()).doesNotContain("private-provider-failure","synthetic-model-secret-12");
         var silent=submit(admin,cid,modelId,"silent"); awaitStatus(admin,silent,"FAILED");
         var silentCall=json.readTree(admin.request("GET","/api/tasks/"+silent+"/calls",null,false).body()).get(0);
         assertThat(silentCall.get("source").asText()).isEqualTo("LIMIT_ESTIMATE");

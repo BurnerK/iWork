@@ -46,6 +46,7 @@ public class MaterialParsing implements ApplicationRunner {
     private JsonNode manager(String method,String id,String token,Object body) {
         if(endpoint.isBlank() || keyFile.isBlank()) throw new ApiFailure(503,"sandbox_unavailable");
         try {
+            if(method.equals("DELETE")) db.update("UPDATE material_parses SET cleanup_attempts=cleanup_attempts+1,cleanup_attempted_at=CURRENT_TIMESTAMP(6) WHERE id=?",id);
             if(method.equals("DELETE") && body==null) body=db.queryForMap("SELECT task_id AS taskId,material_id AS materialId FROM material_parses WHERE id=?",id);
             var key=Files.readString(Path.of(keyFile)).trim();
             if(!key.matches("[a-f0-9]{64}")) throw new ApiFailure(503,"sandbox_unavailable");
@@ -72,8 +73,8 @@ public class MaterialParsing implements ApplicationRunner {
             boolean live=row.get("status").equals("RUNNING");
             String text=live && state.equals("COMPLETED") && cleanup.equals("CONFIRMED")?result.path("text").asText(null):null;
             if(text!=null && text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>MaterialService.MAX_BYTES) throw new ApiFailure(502,"material_too_large");
-            db.update("UPDATE material_parses SET status=?,cleanup=?,error_code=?,parsed_text=COALESCE(parsed_text,?),updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",
-                live?state:state.equals("RUNNING")?"INTERRUPTED":state,cleanup,result.path("error").asText(null),text,id);
+            db.update("UPDATE material_parses SET status=?,cleanup=?,error_code=?,parsed_text=COALESCE(parsed_text,?),cleanup_confirmed_at=IF(?='CONFIRMED',COALESCE(cleanup_confirmed_at,CURRENT_TIMESTAMP(6)),cleanup_confirmed_at),updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",
+                live?state:state.equals("RUNNING")?"INTERRUPTED":state,cleanup,result.path("error").asText(null),text,cleanup,id);
         });
     }
     public Object read(TaskRunner.Input input,String material,int offset) {
