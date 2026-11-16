@@ -18,12 +18,13 @@ import org.springframework.web.bind.annotation.*;
 class ConversationController {
     private final JdbcTemplate db;
     private final IdentityService identity;
-    ConversationController(JdbcTemplate db, IdentityService identity) { this.db=db; this.identity=identity; }
-    record Conversation(String id, String title, Instant createdAt, Instant updatedAt) {}
+    private final ProjectService projects;
+    ConversationController(JdbcTemplate db, IdentityService identity,ProjectService projects) { this.db=db; this.identity=identity; this.projects=projects; }
+    record Conversation(String id, String title, Instant createdAt, Instant updatedAt,String projectId) {}
     record Page(List<Conversation> items, int page, int size, boolean hasMore) {}
     private List<Conversation> query(String sql, Object... args) {
         return db.query(sql, (r,n) -> new Conversation(r.getString("id"),r.getString("title"),
-            r.getTimestamp("created_at").toInstant(), r.getTimestamp("updated_at").toInstant()),args);
+            r.getTimestamp("created_at").toInstant(), r.getTimestamp("updated_at").toInstant(),r.getString("project_id")),args);
     }
     @GetMapping Page list(@AuthenticationPrincipal Caller caller, @RequestParam(defaultValue="0") int page,
             @RequestParam(defaultValue="20") int size) {
@@ -40,11 +41,13 @@ class ConversationController {
     Conversation create(@AuthenticationPrincipal Caller caller, @RequestBody Map<String,Object> input) {
         var live=identity.verify(caller,true);
         if(live.mustChangePassword()) throw new ApiFailure(403,"password_change_required");
-        if(!input.keySet().stream().allMatch("title"::equals)) throw new ApiFailure(400,"invalid_input");
+        if(!java.util.Set.of("title","projectId").containsAll(input.keySet())) throw new ApiFailure(400,"invalid_input");
+        Object project=input.get("projectId");
+        if(project!=null) { if(!(project instanceof String value)) throw new ApiFailure(400,"invalid_project"); projects.get(caller,value); }
         Object supplied=input.getOrDefault("title","新会话");
         if(!(supplied instanceof String title) || title.isBlank() || title.length()>200) throw new ApiFailure(400,"invalid_title");
         var id=UUID.randomUUID().toString();
-        db.update("INSERT INTO conversations(id,owner_id,title) VALUES(?,?,?)",id,caller.id(),title.strip());
+        db.update("INSERT INTO conversations(id,owner_id,title,project_id) VALUES(?,?,?,?)",id,caller.id(),title.strip(),project);
         return open(caller,id);
     }
 }

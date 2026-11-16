@@ -105,6 +105,7 @@ public class DocumentService {
             number=db.queryForObject("SELECT version_number+1 FROM document_versions WHERE document_id=? ORDER BY version_number DESC LIMIT 1 FOR UPDATE",Integer.class,draft.artifactId());
         }
         db.update("INSERT INTO document_versions(id,document_id,task_id,version_number,byte_size,sha256,title,base_version_id) VALUES(?,?,?,?,?,?,?,?)",draft.versionId(),draft.artifactId(),input.taskId(),number,draft.byteSize(),draft.sha256(),draft.title(),base);
+        db.update("INSERT INTO project_documents(project_id,document_id) SELECT t.project_id,? FROM tasks t WHERE t.id=? AND t.project_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM project_documents p WHERE p.project_id=t.project_id AND p.document_id=?)",draft.artifactId(),input.taskId(),draft.artifactId());
     }
     public void cleanup(String task) {
         var directory=workspaces.resolve(task);
@@ -148,6 +149,12 @@ public class DocumentService {
     public io.iwork.conversation.TaskService.Page<Map<String,Object>> personal(Caller caller,int page) {
         if(page<0 || page>100000) throw new ApiFailure(400,"invalid_pagination");
         var rows=db.queryForList(VERSION_COLUMNS+"WHERE d.owner_id=? ORDER BY v.created_at DESC,v.id DESC LIMIT 21 OFFSET ?",caller.id(),page*20);
+        return new io.iwork.conversation.TaskService.Page<>(rows.stream().limit(20).toList(),rows.size()>20);
+    }
+    public io.iwork.conversation.TaskService.Page<Map<String,Object>> project(Caller caller,String project,int page) {
+        if(page<0 || page>100000) throw new ApiFailure(400,"invalid_pagination");
+        if(db.queryForList("SELECT id FROM projects WHERE id=? AND owner_id=?",String.class,project,caller.id()).isEmpty()) throw new ApiFailure(404,"not_found");
+        var rows=db.queryForList(VERSION_COLUMNS+"JOIN project_documents p ON p.document_id=d.id WHERE p.project_id=? AND d.owner_id=? ORDER BY v.created_at DESC,v.id DESC LIMIT 21 OFFSET ?",project,caller.id(),page*20);
         return new io.iwork.conversation.TaskService.Page<>(rows.stream().limit(20).toList(),rows.size()>20);
     }
     public Map<String,Object> version(Caller caller,String id) {

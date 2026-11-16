@@ -29,22 +29,23 @@ public class TaskService implements ApplicationRunner {
     private final ObjectProvider<TaskRunner> runners;
     private final io.iwork.artifacts.DocumentService documents;
     private final io.iwork.agent.PersonalAgentService agents;
+    private final ProjectService projects;
     private final Semaphore capacity;
     private final ConcurrentMap<String,Thread> workers=new ConcurrentHashMap<>();
     private volatile boolean stopping;
     public TaskService(JdbcTemplate db,TransactionTemplate tx,IdentityService identity,ModelAuthorization models,io.iwork.artifacts.MaterialService materials,
-            io.iwork.artifacts.DocumentService documents,io.iwork.agent.PersonalAgentService agents,ObjectProvider<TaskRunner> runners,@Value("${iwork.task-capacity:2}") int capacity) {
+            io.iwork.artifacts.DocumentService documents,io.iwork.agent.PersonalAgentService agents,ProjectService projects,ObjectProvider<TaskRunner> runners,@Value("${iwork.task-capacity:2}") int capacity) {
         if(capacity<1 || capacity>16) throw new IllegalArgumentException("Task capacity must be 1 to 16");
-        this.agents=agents; this.documents=documents; this.db=db; this.tx=tx; this.identity=identity; this.models=models; this.materials=materials; this.runners=runners; this.capacity=new Semaphore(capacity);
+        this.projects=projects; this.agents=agents; this.documents=documents; this.db=db; this.tx=tx; this.identity=identity; this.models=models; this.materials=materials; this.runners=runners; this.capacity=new Semaphore(capacity);
     }
     public record Task(String id,String conversationId,String modelId,String requestId,String status,String errorCode,
-                       String executionState,Instant createdAt,Instant updatedAt,String outputMode,String baseVersionId,String agentId,String agentName) {}
+                       String executionState,Instant createdAt,Instant updatedAt,String outputMode,String baseVersionId,String agentId,String agentName,String projectId,String projectName) {}
     public record Message(long id,String taskId,String role,String content,Instant createdAt) {}
     public record Page<T>(List<T> items,boolean hasMore) {}
     private List<Task> query(String condition,Object... args) {
         return db.query("SELECT * FROM tasks WHERE "+condition,(r,n)->new Task(r.getString("id"),r.getString("conversation_id"),r.getString("model_id"),
             r.getString("request_id"),r.getString("status"),r.getString("error_code"),r.getString("execution_state"),
-            r.getTimestamp("created_at").toInstant(),r.getTimestamp("updated_at").toInstant(),r.getString("output_mode"),r.getString("base_version_id"),r.getString("agent_id"),r.getString("agent_name")),args);
+            r.getTimestamp("created_at").toInstant(),r.getTimestamp("updated_at").toInstant(),r.getString("output_mode"),r.getString("base_version_id"),r.getString("agent_id"),r.getString("agent_name"),r.getString("project_id"),r.getString("project_name")),args);
     }
     @Override public void run(ApplicationArguments args) {
         db.update("UPDATE tasks SET status='INTERRUPTED',execution_state='UNKNOWN',error_code='process_restarted',updated_at=CURRENT_TIMESTAMP(6) WHERE status='RUNNING'");
@@ -112,13 +113,15 @@ public class TaskService implements ApplicationRunner {
                 if(runners.getIfAvailable()==null || stopping) throw new ApiFailure(503,"execution_unavailable");
                 var config=agentId==null?null:agents.get(caller,agentId);
                 String selectedModel=config==null?modelId:config.modelId();
-                initializedInstructions[0]=config==null?"":config.instructions();
+                String projectId=db.queryForObject("SELECT project_id FROM conversations WHERE id=? AND owner_id=?",String.class,conversationId,caller.id());
+                var project=projectId==null?null:projects.get(caller,projectId);
+                initializedInstructions[0]=(project==null?"":"项目工作背景：\n"+project.instructions()+"\n")+(config==null?"":"智能体处理方式：\n"+config.instructions());
                 models.require(caller.id(),selectedModel);
                 if(!query("conversation_id=? AND status='RUNNING'",conversationId).isEmpty()) throw new ApiFailure(409,"conversation_busy");
                 if(!capacity.tryAcquire()) throw new ApiFailure(429,"task_capacity_exceeded");
                 acquired[0]=true;
                 String id=UUID.randomUUID().toString();
-                db.update("INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,status,execution_state,output_mode,base_version_id,agent_id,agent_name,agent_instructions) VALUES(?,?,?,?,?,?,'RUNNING','RUNNING',?,?,?,?,?)",id,caller.id(),conversationId,selectedModel,requestId,hash,outputMode,baseVersionId,agentId,config==null?null:config.name(),initializedInstructions[0]);
+                db.update("INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,status,execution_state,output_mode,base_version_id,agent_id,agent_name,agent_instructions,project_id,project_name,project_instructions) VALUES(?,?,?,?,?,?,'RUNNING','RUNNING',?,?,?,?,?,?,?,?)",id,caller.id(),conversationId,selectedModel,requestId,hash,outputMode,baseVersionId,agentId,config==null?null:config.name(),config==null?"":config.instructions(),projectId,project==null?null:project.name(),project==null?"":project.instructions());
                 for(int i=0;i<materialIds.size();i++) db.update("INSERT INTO task_materials(task_id,material_id,position) VALUES(?,?,?)",id,materialIds.get(i),i);
                 db.update("INSERT INTO messages(task_id,conversation_id,role,content) VALUES(?,?,'user',?)",id,conversationId,message);
                 db.update("UPDATE conversations SET updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",conversationId);

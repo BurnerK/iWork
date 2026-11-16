@@ -178,3 +178,5 @@ DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等
 ## 个人智能体（#22）
 
 `/api/agents`保存当前用户的名称、指令、模型；不含凭据或可编辑工具。任务使用agentId或modelId二选一，受理时保存配置快照，之后编辑不影响当前任务；新任务重查实际模型/资料权限和本人额度。V11新增个人配置与任务快照字段。界面“我的智能体”保存后在会话选择，详见 [契约](issue22-agent-contract.md) 和 [验收](validation/issue22-personal-agents.md)。
+
+项目空间见 [#23 契约](issue23-project-contract.md) 与 [验收证据](validation/issue23-project-spaces.md)。删除项目只移除组织引用，个人会话、资料和成果保留；任务资料仍需明确选择。

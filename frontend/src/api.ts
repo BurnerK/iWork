@@ -24,6 +24,7 @@ export async function request<T>(path: string, method = 'GET', body?: object | U
 export function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '操作失败，请重试。'
   const messages: Record<string, string> = {
+    invalid_project: '请填写120字符以内的项目名称，指令不超过4000字符。',
     invalid_agent: '请填写120字符以内的名称、4000字符以内的指令，并选择已授权模型。',
     invalid_document: '请提供有效标题和非空 Markdown 正文。',
     document_too_large: '文档正文不能超过 256 KiB。',
@@ -68,5 +69,5 @@ export function errorMessage(error: unknown): string {
     invalid_display_name: '请填写不超过 100 个字符的显示名称。',
   }
   return messages[error.code] || ({ 401: '登录已失效，请重新登录。', 403: '无法执行此操作，请刷新页面后重试。',
-    404: '会话不存在或你没有访问权限。', 503: '服务暂不可用，请稍后重试。' }[error.status] || '提交内容无效，请检查后重试。')
+    404: '资源不存在或你没有访问权限。', 503: '服务暂不可用，请稍后重试。' }[error.status] || '提交内容无效，请检查后重试。')
 }

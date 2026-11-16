@@ -61,3 +61,7 @@ fieldset { border: 1px solid #d9d9dd; border-radius: 4px; padding: 16px; }
 textarea { resize: vertical; }
 .messages { list-style: none; padding: 0; }
 .messages p { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+ dialog { color: #212121; background: #ffffff; border: 1px solid #d9d9dd; border-radius: 8px; padding: 24px; max-inline-size: calc(100% - 48px); }
+ dialog:modal { overscroll-behavior: contain; }
+ dialog::backdrop { overflow: hidden; overscroll-behavior: contain; background: #eeece7; }

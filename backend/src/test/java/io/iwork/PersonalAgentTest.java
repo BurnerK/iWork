@@ -156,14 +156,14 @@ public class PersonalAgentTest {
                     if(message.path("role").asText().equals("tool")) { if(message.path("content").asText().contains("PREPARED")) prepared=true; else { assertThat(message.path("content").asText()).contains("蓝鲸项目"); read=true; } }
                 }
                 var names=new HashSet<String>(); for(var tool:body.path("tools")) names.add(tool.path("function").path("name").asText());
-                assertThat(names).containsExactlyInAnyOrder("read_task_material","prepare_document");
+                assertThat(names).contains("prepare_document").isSubsetOf("read_task_material","prepare_document","read_document_version");
                 Map<String,Object> delta; String finish;
                 if(prepared) { delta=Map.of("role","assistant","content","已按配置准备文档"); finish="stop"; }
                 else {
-                    String tool=read?"prepare_document":"read_task_material";
+                    String tool=read?"prepare_document":names.contains("read_document_version")?"read_document_version":"read_task_material";
                     var matcher=java.util.regex.Pattern.compile("id=([a-f0-9-]{36})").matcher(system);
-                    assertThat(read || matcher.find()).isTrue();
-                    Map<String,Object> args=read?Map.of("title","智能体方案","markdown","# "+(system.contains("按分工组织正文")?"分工组织":"行动清单")+"\n蓝鲸项目，周五交付。\n"):Map.of("materialId",matcher.group(1),"offset",0);
+                    assertThat(read || tool.equals("read_document_version") || matcher.find()).isTrue();
+                    Map<String,Object> args=read?Map.of("title","智能体方案","markdown","# "+(system.contains("按分工组织正文")?"分工组织":"行动清单")+"\n蓝鲸项目，周五交付。\n"):tool.equals("read_document_version")?Map.of("offset",0):Map.of("materialId",matcher.group(1),"offset",0);
                     delta=Map.of("role","assistant","tool_calls",List.of(Map.of("index",0,"id",UUID.randomUUID().toString(),"type","function","function",Map.of("name",tool,"arguments",json.writeValueAsString(args))))); finish="tool_calls";
                 }
                 var response=reactor.core.publisher.Flux.just(json.writeValueAsString(Map.of("choices",List.of(Map.of("index",0,"delta",delta,"finish_reason",finish)))),"[DONE]");

@@ -140,3 +140,29 @@ it('requires an explicit login after password change', async () => {
   expect(page.get('[role="status"]').text()).toContain('使用新密码重新登录')
   expect(page.find('nav[aria-label="主导航"]').exists()).toBe(false)
 })
+
+it('preserves an unsent task draft and selected material when moving its conversation', async () => {
+  let projectId: string | null = null
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT') { projectId = JSON.parse(String(init.body)).projectId; return Promise.resolve(new Response(null, { status: 204 })) }
+    const data = url.endsWith('/csrf') ? { token: 'proof' }
+      : url.endsWith('/me') ? { id: 'one', displayName: 'Alice', role: 'USER', mustChangePassword: false }
+      : url === '/api/models' ? [{ id: 'model', name: 'Model' }]
+      : url.startsWith('/api/projects?') ? { items: [{ id: 'project', name: '蓝鲸' }], hasMore: false }
+      : url === '/api/conversations/abc' ? { id: 'abc', title: '会话', projectId }
+      : url === '/api/materials?page=0' ? { items: [{ id: 'material', name: 'source.md', byteSize: 12 }], hasMore: false }
+      : url.endsWith('/documents') ? [] : { items: [], hasMore: false }
+    return Promise.resolve(new Response(JSON.stringify(data)))
+  }))
+  const router = makeRouter(createMemoryHistory()); await router.push('/conversations/abc')
+  const page = mount(App, { global: { plugins: [router] } }); await flushPromises()
+  await page.get('#task-message').setValue('请保留这个未提交要求')
+  await page.get('#task-model').setValue('model'); await page.get('#material-material').setValue(true)
+  await page.get('#conversation-project').setValue('project')
+  await page.get('[aria-label="会话所属项目"]').trigger('submit'); await flushPromises()
+  expect((page.get('#task-message').element as HTMLTextAreaElement).value).toBe('请保留这个未提交要求')
+  expect((page.get('#task-model').element as HTMLSelectElement).value).toBe('model')
+  expect((page.get('#material-material').element as HTMLInputElement).checked).toBe(true)
+  expect(page.find('[aria-label="项目引用资料"]').exists()).toBe(true)
+  page.unmount()
+})

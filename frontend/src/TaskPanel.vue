@@ -5,7 +5,7 @@ import ParsingPanel from './ParsingPanel.vue'
 import UsagePanel from './UsagePanel.vue'
 import MaterialPanel from './MaterialPanel.vue'
 import { ApiError, errorMessage, request } from './api'
-const props = defineProps<{ conversationId: string; ownerId: string }>()
+const props = defineProps<{ conversationId: string; ownerId: string; projectId?: string | null; initialVersionId?: string }>()
 const emit = defineEmits<{ failure: [cause: unknown] }>()
 type Task = { agentName?: string; id: string; requestId: string; status: string; executionState: string; errorCode: string | null }
 type Message = { id: number; taskId: string; role: string; content: string }
@@ -103,6 +103,9 @@ onMounted(async () => {
       } else localStorage.removeItem(storageKey)
     }
   } catch (cause) { await failure(cause) }
+  if (!pending.value && props.initialVersionId) {
+    try { baseVersion.value = await request(`/api/document-versions/${encodeURIComponent(props.initialVersionId)}`); outputMode.value = 'DOCUMENT' } catch (cause) { await failure(cause) }
+  }
   try { models.value = await request('/api/models') } catch (cause) { await failure(cause) }
   await loadAgents()
   await poll()
@@ -120,6 +123,7 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
     <UsagePanel v-if="usageTaskId" :key="usageTaskId" :task-id="usageTaskId" :running="tasks.some(task => task.id === usageTaskId && task.status === 'RUNNING')" />
     <button v-if="moreTasks" type="button" class="secondary" :disabled="busy" @click="earlierTasks">较早的任务</button>
     <DocumentPanel :conversation-id="conversationId" :disabled="busy || !!pending || active" @select-version="selectVersion" :revision="tasks.map(task => task.id + task.status).join(',')" />
+    <MaterialPanel v-if="projectId" :key="projectId" :project-id="projectId" v-model="materialIds" :disabled="busy || !!pending || active" @failure="failure" @uploading="materialBusy = $event" />
     <MaterialPanel v-model="materialIds" :disabled="busy || !!pending || active" @failure="failure" @uploading="materialBusy = $event" />
     <form method="post" :action="`/api/conversations/${conversationId}/tasks`" aria-label="提交任务" @submit.prevent="submit">
       <label for="task-agent">使用方式</label><select id="task-agent" v-model="agentId" name="agentId" :disabled="busy || !!pending || active"><option value="">直接选择模型</option><option v-for="agent in agents" :key="agent.id" :value="agent.id">{{ agent.name }}</option></select>

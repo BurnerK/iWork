@@ -3,11 +3,13 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskPanel from './TaskPanel.vue'
 import ModelPanel from './ModelPanel.vue'
+import ProjectPanel from './ProjectPanel.vue'
+import ProjectMembership from './ProjectMembership.vue'
 import AgentPanel from './AgentPanel.vue'
 import { ApiError, errorMessage, request } from './api'
 
 type User = { id: string; username: string; displayName: string; role: string; enabled: boolean; mustChangePassword: boolean }
-type Conversation = { id: string; title: string; updatedAt: string }
+type Conversation = { id: string; title: string; updatedAt: string; projectId: string | null }
 type Page<T> = { items: T[]; hasMore: boolean }
 const route = useRoute(), router = useRouter()
 const user = ref<User | null>(null), ready = ref(false), busy = ref(false), loading = ref(false), error = ref('')
@@ -106,9 +108,17 @@ function resetPassword(target: User) { return act(async () => {
 function toggleUser(target: User) { return act(async () => {
   await request(`/api/admin/users/${target.id}/status`, 'PATCH', { enabled: !target.enabled }); await loadPanel()
 }) }
+async function movedConversation() {
+  if (!selected.value) return
+  const id = selected.value.id
+  try {
+    const refreshed = await request<Conversation>(`/api/conversations/${id}`)
+    if (selected.value?.id === id) selected.value = refreshed
+  } catch (cause) { await failure(cause) }
+}
 async function paginate(delta: number) { page.value += delta; await loadPanel() }
 watch(() => route.fullPath, navigate)
-watch(() => route.name, name => { document.title = `${({ agents: '我的智能体', login: '登录', password: '修改密码', admin: '用户管理', models: '模型与额度', 'admin-models': '模型管理', conversation: '会话', conversations: '个人会话' } as Record<string, string>)[String(name)] || 'iWork'} · iWork` })
+watch(() => route.name, name => { document.title = `${({ projects: '项目空间', project: '项目空间', agents: '我的智能体', login: '登录', password: '修改密码', admin: '用户管理', models: '模型与额度', 'admin-models': '模型管理', conversation: '会话', conversations: '个人会话' } as Record<string, string>)[String(name)] || 'iWork'} · iWork` })
 onMounted(loadIdentity)
 </script>
 
@@ -119,6 +129,7 @@ onMounted(loadIdentity)
       <template v-if="!user.mustChangePassword">
         <RouterLink to="/conversations">个人会话</RouterLink>
         <RouterLink v-if="user.role === 'ADMIN'" to="/admin">用户管理</RouterLink>
+        <RouterLink to="/projects">项目空间</RouterLink>
         <RouterLink to="/agents">我的智能体</RouterLink>
         <RouterLink to="/models">模型与额度</RouterLink>
         <RouterLink v-if="user.role === 'ADMIN'" to="/admin-models">模型管理</RouterLink>
@@ -180,6 +191,7 @@ onMounted(loadIdentity)
         </li>
       </ul>
     </section>
+    <ProjectPanel v-else-if="user && ['projects', 'project'].includes(String(route.name))" :key="route.fullPath" :project-id="route.params.id ? String(route.params.id) : undefined" @failure="failure" />
     <AgentPanel v-else-if="user && route.name === 'agents'" :key="user.id" @failure="failure" />
     <ModelPanel v-else-if="user && ['models', 'admin-models'].includes(String(route.name))" :key="`${user.id}-${String(route.name)}`" :admin="route.name === 'admin-models'" @failure="failure" />
     <section v-else class="workspace">
@@ -189,7 +201,7 @@ onMounted(loadIdentity)
         <p v-else-if="!conversations.length">还没有会话。新建一段会话，开始整理你的工作。</p>
         <ul v-else class="rows" role="list"><li v-for="conversation in conversations" :key="conversation.id"><RouterLink :to="`/conversations/${conversation.id}`">{{ conversation.title }}<small>{{ new Date(conversation.updatedAt).toLocaleString() }}</small></RouterLink></li></ul>
       </aside>
-      <article class="detail"><template v-if="selected"><h2>{{ selected.title }}</h2><TaskPanel :key="selected.id" :conversation-id="selected.id" :owner-id="user?.id || ''" @failure="failure" /></template><template v-else><h2>准备好新的开始</h2><p>从左侧打开会话，或新建一段会话。</p></template></article>
+      <article class="detail"><template v-if="selected"><h2>{{ selected.title }}</h2><ProjectMembership :key="`membership-${selected.id}-${selected.projectId}`" :conversation-id="selected.id" :project-id="selected.projectId" @moved="movedConversation" @failure="failure" /><TaskPanel :key="selected.id" :project-id="selected.projectId" :initial-version-id="typeof route.query.version === 'string' ? route.query.version : undefined" :conversation-id="selected.id" :owner-id="user?.id || ''" @failure="failure" /></template><template v-else><h2>准备好新的开始</h2><p>从左侧打开会话，或新建一段会话。</p></template></article>
     </section>
     <nav v-if="ready && ['admin', 'conversations', 'conversation'].includes(String(route.name))" class="pagination" aria-label="分页">
       <button type="button" class="secondary" :disabled="page === 0 || loading || busy" @click="paginate(-1)">上一页</button><span>第 {{ page + 1 }} 页</span><button type="button" class="secondary" :disabled="!hasMore || loading || busy" @click="paginate(1)">下一页</button>

@@ -4,7 +4,8 @@ import { createRouter, createWebHashHistory, type RouterHistory } from 'vue-rout
 export function makeRouter(history: RouterHistory = createWebHashHistory()) {
   return createRouter({ history, routes: [
     { path: '/', redirect: '/conversations' },
-    ...['agents', 'login', 'password', 'conversations', 'admin', 'models', 'admin-models'].map(name => ({ path: `/${name}`, name, component: {} })),
+    ...['projects', 'agents', 'login', 'password', 'conversations', 'admin', 'models', 'admin-models'].map(name => ({ path: `/${name}`, name, component: {} })),
+    { path: '/projects/:id', name: 'project', component: {} },
     { path: '/conversations/:id', name: 'conversation', component: {} },
     { path: '/:pathMatch(.*)*', redirect: '/conversations' },
   ] })
