@@ -6,3 +6,5 @@ frontend/dist/
 !.env.example
 data/
 .DS_Store
+.archify/
+.idea/
