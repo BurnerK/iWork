@@ -13,7 +13,7 @@ public class TaskFixtureApplication {
     }
     @TestConfiguration(proxyBeanMethods=false)
     public static class Execution {
-        @Bean TaskRunner runner() { return input -> {
+        @Bean @org.springframework.context.annotation.Primary TaskRunner runner() { return input -> {
             Thread.sleep(input.message().equals("hold")?30000:2000);
             if(input.message().equals("fail")) throw new IllegalStateException("Fixture failure");
             return "测试替身完成："+input.message();

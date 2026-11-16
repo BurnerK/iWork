@@ -8,21 +8,21 @@
 | --- | --- |
 | `io.iwork.identity` | 身份与资源：用户名密码、Redis Session、管理员用户管理、实时 authVersion 撤权及部署密码恢复。 |
 | `io.iwork.conversation` | 会话与任务：持久业务状态、幂等、执行互斥、取消和重启中断。 |
-| `io.iwork.agent` | 智能体运行：AgentScope 推理和受控工具调用，不替代 iWork 业务权威。仅固定 core 依赖，不加载模型、工具或沙箱。 |
-| `io.iwork.artifacts` | 成果与文件：原始资料、执行工作区、正式版本及文件索引。当前只验证存储目录可写。 |
+| `io.iwork.agent` | 智能体运行：AgentScope 推理和受控工具调用，不替代 iWork 业务权威。Harness 2.0.4 通过统一授权/计量入口执行文字推理；默认通用工具关闭。 |
+| `io.iwork.artifacts` | 成果与文件：原始资料、执行工作区、正式版本及文件索引。原始资料使用独立存储和所有权索引，解析与正式成果另行接入。 |
 | `io.iwork.model` | 模型与用量：模型授权、额度、逐调用计量；供应商缺失用量保留待核实。 |
 
 各模块通过真实用例需要的包接口协作，不直接访问其他模块内部持久化对象。V2 新增 users 与 conversations；会话写入调用身份模块的事务内校验，SQL 始终限定 owner。沙箱管理服务和执行看门狗在 #16 接入；其高权限信任边界以及有条件的进程停止上限保持不变。
 
 ## Harness 目标方案与当前实现
 
-首版采用 HarnessAgent，边界见 [ADR 0004](adr/0004-harness-runtime-and-context.md)。当前后端仍只引入 core；#14 接入 Harness 并验证依赖组合、工具范围和统一模型调用治理，新增上下文任务交付恢复与自动压缩。不要把下面已有工程测试、依赖扫描记录解释为 Harness 已通过。
+首版采用 HarnessAgent，边界见 [ADR 0004](adr/0004-harness-runtime-and-context.md)。当前引入同版本 core、harness 与 extensions-model-openai，默认工具、记忆、子智能体和压缩均关闭。2.0.4 仍注册 wait_async_results，因此构建后显式移除并断言工具集合为空。主调用及辅助调用经 GovernedModel 逐次授权、预占和记录；#27 再接 MySQL 上下文恢复与自动压缩。具体计量规则见 [#14 设计](issue-14-design.md)。真实供应商兼容性仍由 #26 验证。
 
 完整业务消息、运行上下文快照和会话摘要统一保存在 MySQL；SDK 快照不是业务状态权威，不携带可恢复的历史授权，不自动续跑任务。关闭不需要的 SDK 工具、长期记忆及独立会话日志；主推理与压缩统一授权、计量和取消。原始资料、工作文件及成果仍独立保存，具体实现与 T17–T19 验收由开发票承接。
 
 ## 构建与迁移
 
-Spring Boot 4.0.9 支持 Java 21（[官方兼容要求](https://docs.spring.io/spring-boot/4.0/system-requirements.html)）。AgentScope core 固定为已有探针验证过的 2.0.4，正式入口只验证依赖可构建和装载，不代表真实模型集成已验收。
+Spring Boot 4.0.9 支持 Java 21（[官方兼容要求](https://docs.spring.io/spring-boot/4.0/system-requirements.html)）。AgentScope core 固定为已有探针验证过的 2.0.4，正式入口还使用可控供应商传输验证 Harness 调用，不代表真实供应商兼容已验收。
 
 Boot 4 使用 Web MVC 与 Flyway 专用 starter，健康检查和安全自动配置类使用新包名。Web 层采用 Boot 管理的 Jackson 3，AgentScope 保留 Jackson 2；`AgentScopeCompatibilityTest` 验证 SDK 消息在正式应用依赖组合下可序列化并读回。安全版本覆盖集中在后端 POM，MCP 使用 BOM 统一模块版本。升级后在 IDEA 重新加载 Maven 项目，再刷新安全检查。
 

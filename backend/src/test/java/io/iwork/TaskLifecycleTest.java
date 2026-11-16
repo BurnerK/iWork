@@ -48,7 +48,7 @@ class TaskLifecycleTest {
     }
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
     static class ExecutionConfiguration {
-        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Bean @org.springframework.context.annotation.Primary
         io.iwork.conversation.TaskRunner runner() { return input -> {
             if(input.message().equals("hold")) Thread.sleep(30000);
             if(input.message().equals("fail")) throw new IllegalStateException("private-provider-detail");

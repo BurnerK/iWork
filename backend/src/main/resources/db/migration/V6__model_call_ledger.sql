@@ -1,0 +1,43 @@
+ALTER TABLE budgets MODIFY spent DECIMAL(30,6) NOT NULL DEFAULT 0, MODIFY reserved DECIMAL(30,6) NOT NULL DEFAULT 0;
+CREATE TABLE model_calls (
+    id CHAR(36) CHARACTER SET ascii PRIMARY KEY,
+    task_id CHAR(36) CHARACTER SET ascii NOT NULL,
+    owner_id CHAR(36) CHARACTER SET ascii NOT NULL,
+    model_id CHAR(36) CHARACTER SET ascii NOT NULL,
+    purpose VARCHAR(20) CHARACTER SET ascii NOT NULL,
+    status VARCHAR(20) CHARACTER SET ascii NOT NULL DEFAULT 'OPEN',
+    input_estimate BIGINT NOT NULL,
+    output_bytes BIGINT NOT NULL DEFAULT 0,
+    provider_complete BOOLEAN NOT NULL DEFAULT FALSE,
+    provider_input BIGINT NULL,
+    provider_output BIGINT NULL,
+    provider_response_id VARCHAR(200) NULL,
+    input_price DECIMAL(18,6) NOT NULL,
+    output_price DECIMAL(18,6) NOT NULL,
+    currency CHAR(3) CHARACTER SET ascii NOT NULL,
+    reservation DECIMAL(30,6) NOT NULL,
+    charged DECIMAL(30,6) NOT NULL DEFAULT 0,
+    source VARCHAR(40) CHARACTER SET ascii NOT NULL DEFAULT 'PENDING',
+    started_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    sent_at TIMESTAMP(6) NULL,
+    usage_at TIMESTAMP(6) NULL,
+    ended_at TIMESTAMP(6) NULL,
+    FOREIGN KEY(task_id) REFERENCES tasks(id),
+    FOREIGN KEY(owner_id) REFERENCES users(id),
+    FOREIGN KEY(model_id) REFERENCES models(id),
+    CHECK (purpose IN ('MAIN','SUMMARY','OVERFLOW')),
+    CHECK (status IN ('OPEN','CLOSED')),
+    CHECK (reservation>=0 AND charged>=0 AND output_bytes>=0 AND input_estimate>0),
+    INDEX call_task(task_id,started_at,id)
+) ENGINE=InnoDB;
+CREATE TABLE model_call_adjustments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    call_id CHAR(36) CHARACTER SET ascii NOT NULL,
+    previous_amount DECIMAL(30,6) NOT NULL,
+    new_amount DECIMAL(30,6) NOT NULL,
+    source VARCHAR(40) CHARACTER SET ascii NOT NULL,
+    provider_input BIGINT NULL,
+    provider_output BIGINT NULL,
+    created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    FOREIGN KEY(call_id) REFERENCES model_calls(id)
+) ENGINE=InnoDB;

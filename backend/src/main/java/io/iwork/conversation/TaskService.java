@@ -126,13 +126,18 @@ public class TaskService implements ApplicationRunner {
             });
         } catch(Exception failure) {
             Thread.interrupted();
+            String errorCode=executionError(failure);
             persist(() -> db.update("UPDATE tasks SET status=?,error_code=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND status='RUNNING'",
-                stopping?"INTERRUPTED":"FAILED",stopping?"process_restarted":"execution_failed",input.taskId()));
+                stopping?"INTERRUPTED":"FAILED",stopping?"process_restarted":errorCode,input.taskId()));
         } finally {
             Thread.interrupted();
             try { persist(() -> db.update("UPDATE tasks SET execution_state='STOPPED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",input.taskId())); }
             finally { workers.remove(input.taskId()); capacity.release(); }
         }
+    }
+    private static String executionError(Throwable failure) {
+        for(int i=0;i<10 && failure!=null;i++,failure=failure.getCause()) if(failure instanceof ApiFailure) return failure.getMessage();
+        return "execution_failed";
     }
     private void persist(Runnable write) {
         while(true) {
