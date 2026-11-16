@@ -13,3 +13,20 @@ it('previews the saved version as text and links the same version for download',
   expect(panel.findAll('button')[0]!.attributes('aria-expanded')).toBe('true')
   panel.unmount()
 })
+it('keeps the last successful page when loading the next page fails', async () => {
+  let attempts = 0
+  const fetch = vi.fn((url: string) => {
+    if (url === '/api/document-versions?page=1' && attempts++ === 0) return Promise.reject(new TypeError('lost'))
+    return Promise.resolve(new Response(JSON.stringify(url.endsWith('/documents') ? [] : { items: [], hasMore: true })))
+  })
+  vi.stubGlobal('fetch', fetch)
+  const panel = mount(DocumentPanel, { props: { conversationId: 'conversation', revision: '' } }); await flushPromises()
+  await panel.get('#all-document-versions').setValue(true); await flushPromises()
+  const next = () => panel.findAll('button').find(button => button.text() === '下一页版本')!
+  await next().trigger('click'); await flushPromises()
+  expect(panel.text()).toContain('第 1 页')
+  await next().trigger('click'); await flushPromises()
+  expect(panel.text()).toContain('第 2 页')
+  expect(fetch.mock.calls.filter(([url]) => url === '/api/document-versions?page=1')).toHaveLength(2)
+  panel.unmount()
+})

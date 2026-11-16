@@ -36,13 +36,13 @@ public class TaskService implements ApplicationRunner {
         this.documents=documents; this.db=db; this.tx=tx; this.identity=identity; this.models=models; this.materials=materials; this.runners=runners; this.capacity=new Semaphore(capacity);
     }
     public record Task(String id,String conversationId,String modelId,String requestId,String status,String errorCode,
-                       String executionState,Instant createdAt,Instant updatedAt,String outputMode) {}
+                       String executionState,Instant createdAt,Instant updatedAt,String outputMode,String baseVersionId) {}
     public record Message(long id,String taskId,String role,String content,Instant createdAt) {}
     public record Page<T>(List<T> items,boolean hasMore) {}
     private List<Task> query(String condition,Object... args) {
         return db.query("SELECT * FROM tasks WHERE "+condition,(r,n)->new Task(r.getString("id"),r.getString("conversation_id"),r.getString("model_id"),
             r.getString("request_id"),r.getString("status"),r.getString("error_code"),r.getString("execution_state"),
-            r.getTimestamp("created_at").toInstant(),r.getTimestamp("updated_at").toInstant(),r.getString("output_mode")),args);
+            r.getTimestamp("created_at").toInstant(),r.getTimestamp("updated_at").toInstant(),r.getString("output_mode"),r.getString("base_version_id")),args);
     }
     @Override public void run(ApplicationArguments args) {
         db.update("UPDATE tasks SET status='INTERRUPTED',execution_state='UNKNOWN',error_code='process_restarted',updated_at=CURRENT_TIMESTAMP(6) WHERE status='RUNNING'");
@@ -75,12 +75,16 @@ public class TaskService implements ApplicationRunner {
         return submit(caller,conversationId,requestId,modelId,message,materialIds,"TEXT");
     }
     public Task submit(Caller caller,String conversationId,String requestId,String modelId,String message,List<String> materialIds,String outputMode) {
+        return submit(caller,conversationId,requestId,modelId,message,materialIds,outputMode,null);
+    }
+    public Task submit(Caller caller,String conversationId,String requestId,String modelId,String message,List<String> materialIds,String outputMode,String baseVersionId) {
+        if(baseVersionId!=null && (!outputMode.equals("DOCUMENT") || !baseVersionId.matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"))) throw new ApiFailure(400,"invalid_task");
         if(!Set.of("TEXT","DOCUMENT").contains(outputMode)) throw new ApiFailure(400,"invalid_task");
         if(requestId==null || !requestId.matches("[A-Za-z0-9_-]{1,100}") || modelId==null || !modelId.matches("[a-fA-F0-9-]{36}")
             || message==null || message.isBlank() || message.length()>20000) throw new ApiFailure(400,"invalid_task");
         if(materialIds.size()>5 || new HashSet<>(materialIds).size()!=materialIds.size() || materialIds.stream().anyMatch(id -> !id.matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"))) throw new ApiFailure(400,"invalid_task");
         final String hash;
-        try { hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(((outputMode.equals("TEXT")?"":"document-v1\n")+(materialIds.isEmpty()?conversationId+"\n"+modelId+"\n"+message : "materials-v1\n"+conversationId+"\n"+modelId+"\n"+message.length()+":"+message+"\n"+String.join(",",materialIds))).getBytes(StandardCharsets.UTF_8))); }
+        try { hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(((baseVersionId==null?"":"base-version-v1\n"+baseVersionId+"\n")+(outputMode.equals("TEXT")?"":"document-v1\n")+(materialIds.isEmpty()?conversationId+"\n"+modelId+"\n"+message : "materials-v1\n"+conversationId+"\n"+modelId+"\n"+message.length()+":"+message+"\n"+String.join(",",materialIds))).getBytes(StandardCharsets.UTF_8))); }
         catch(java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
         boolean[] acquired={false};
         Task accepted;
@@ -97,13 +101,14 @@ public class TaskService implements ApplicationRunner {
                     return old;
                 }
                 materialIds.forEach(id -> materials.get(caller,id));
+                if(baseVersionId!=null) documents.version(caller,baseVersionId);
                 if(runners.getIfAvailable()==null || stopping) throw new ApiFailure(503,"execution_unavailable");
                 models.require(caller.id(),modelId);
                 if(!query("conversation_id=? AND status='RUNNING'",conversationId).isEmpty()) throw new ApiFailure(409,"conversation_busy");
                 if(!capacity.tryAcquire()) throw new ApiFailure(429,"task_capacity_exceeded");
                 acquired[0]=true;
                 String id=UUID.randomUUID().toString();
-                db.update("INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,status,execution_state,output_mode) VALUES(?,?,?,?,?,?,'RUNNING','RUNNING',?)",id,caller.id(),conversationId,modelId,requestId,hash,outputMode);
+                db.update("INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,status,execution_state,output_mode,base_version_id) VALUES(?,?,?,?,?,?,'RUNNING','RUNNING',?,?)",id,caller.id(),conversationId,modelId,requestId,hash,outputMode,baseVersionId);
                 for(int i=0;i<materialIds.size();i++) db.update("INSERT INTO task_materials(task_id,material_id,position) VALUES(?,?,?)",id,materialIds.get(i),i);
                 db.update("INSERT INTO messages(task_id,conversation_id,role,content) VALUES(?,?,'user',?)",id,conversationId,message);
                 db.update("UPDATE conversations SET updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",conversationId);

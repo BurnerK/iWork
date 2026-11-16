@@ -13,7 +13,12 @@ type Page<T> = { items: T[]; hasMore: boolean }
 const models = ref<{ id: string; name: string }[]>([]), modelId = ref(''), message = ref(''), outputMode = ref('TEXT')
 const tasks = ref<Task[]>([]), messages = ref<Message[]>([]), busy = ref(false), loading = ref(false), error = ref('')
 const materialIds = ref<string[]>([]), materialBusy = ref(false)
-const pending = ref<{ requestId: string; modelId: string; message: string; materialIds?: string[]; outputMode?: string } | null>(null)
+const baseVersion = ref<{ versionId: string; title: string; versionNumber: number }>()
+function selectVersion(version: { versionId: string; title: string; versionNumber: number }) {
+  if (busy.value || pending.value || active.value) return
+  baseVersion.value = version; outputMode.value = 'DOCUMENT'; document.getElementById('task-message')?.focus()
+}
+const pending = ref<{ baseVersionId?: string; requestId: string; modelId: string; message: string; materialIds?: string[]; outputMode?: string } | null>(null)
 const storageKey = `iwork-pending:${props.ownerId}:${props.conversationId}`
 function clearPending() { localStorage.removeItem(storageKey); pending.value = null }
 const usageTaskId = ref(''), parsingTaskId = ref('')
@@ -38,7 +43,7 @@ async function load() {
     tasks.value = [...recent.items, ...tasks.value.filter(task => !recent.items.some(item => item.id === task.id))]
     if (taskPage.value === 0) moreTasks.value = recent.hasMore
     messages.value.push(...incoming.items); moreMessages.value = incoming.hasMore
-    if (pending.value && recent.items.some(task => task.requestId === pending.value?.requestId)) { clearPending(); message.value = '' }
+    if (pending.value && recent.items.some(task => task.requestId === pending.value?.requestId)) { clearPending(); message.value = ''; baseVersion.value = undefined }
   } catch (cause) { await failure(cause) }
   finally { loading.value = false }
 }
@@ -51,10 +56,10 @@ async function submit() {
   if (busy.value || materialBusy.value || active.value && !pending.value) return
   busy.value = true; error.value = ''
   try {
-    pending.value ||= { requestId: crypto.randomUUID(), modelId: modelId.value, message: message.value, outputMode: outputMode.value, materialIds: [...materialIds.value] }
+    pending.value ||= { requestId: crypto.randomUUID(), modelId: modelId.value, message: message.value, outputMode: outputMode.value, baseVersionId: baseVersion.value?.versionId, materialIds: [...materialIds.value] }
     localStorage.setItem(storageKey, JSON.stringify(pending.value))
     await request(`/api/conversations/${props.conversationId}/tasks`, 'POST', pending.value)
-    clearPending(); message.value = ''; await load()
+    clearPending(); message.value = ''; baseVersion.value = undefined; await load()
   } catch (cause) {
     if (cause instanceof ApiError && (cause.status >= 400 && cause.status < 500 || cause.code === 'execution_unavailable')) clearPending()
     await failure(cause)
@@ -82,6 +87,7 @@ onMounted(async () => {
       const restored = JSON.parse(stored)
       if (typeof restored.requestId === 'string' && typeof restored.modelId === 'string' && typeof restored.message === 'string') {
         pending.value = restored; outputMode.value = restored.outputMode || 'TEXT'; modelId.value = restored.modelId; message.value = restored.message; materialIds.value = Array.isArray(restored.materialIds) ? restored.materialIds : []
+        if (typeof restored.baseVersionId === 'string') baseVersion.value = await request(`/api/document-versions/${restored.baseVersionId}`)
       } else localStorage.removeItem(storageKey)
     }
   } catch (cause) { await failure(cause) }
@@ -100,11 +106,12 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
     <ParsingPanel v-if="parsingTaskId" :key="parsingTaskId" :task-id="parsingTaskId" />
     <UsagePanel v-if="usageTaskId" :key="usageTaskId" :task-id="usageTaskId" :running="tasks.some(task => task.id === usageTaskId && task.status === 'RUNNING')" />
     <button v-if="moreTasks" type="button" class="secondary" :disabled="busy" @click="earlierTasks">较早的任务</button>
-    <DocumentPanel :conversation-id="conversationId" :revision="tasks.map(task => task.id + task.status).join(',')" />
+    <DocumentPanel :conversation-id="conversationId" :disabled="busy || !!pending || active" @select-version="selectVersion" :revision="tasks.map(task => task.id + task.status).join(',')" />
     <MaterialPanel v-model="materialIds" :disabled="busy || !!pending || active" @failure="failure" @uploading="materialBusy = $event" />
     <form method="post" :action="`/api/conversations/${conversationId}/tasks`" aria-label="提交任务" @submit.prevent="submit">
       <label for="task-model">模型（必选）</label><select id="task-model" v-model="modelId" name="modelId" required :disabled="busy || !!pending || active"><option value="">请选择模型</option><option v-for="model in models" :key="model.id" :value="model.id">{{ model.name }}</option></select>
-      <label for="task-output">成果形式</label><select id="task-output" v-model="outputMode" name="outputMode" :disabled="busy || !!pending || active"><option value="TEXT">文字回复</option><option value="DOCUMENT">Markdown 文档（.md）</option></select>
+      <p v-if="baseVersion" role="status">基于《{{ baseVersion.title }}》版本 {{ baseVersion.versionNumber }} 修改。<button type="button" class="secondary" :disabled="busy || !!pending || active" @click="baseVersion = undefined">清除来源版本</button></p>
+      <label for="task-output">成果形式</label><select id="task-output" v-model="outputMode" name="outputMode" :disabled="busy || !!pending || active || !!baseVersion"><option value="TEXT">文字回复</option><option value="DOCUMENT">Markdown 文档（.md）</option></select>
       <label for="task-message">工作要求（必填）</label><textarea id="task-message" v-model="message" name="message" required maxlength="20000" rows="4" :disabled="busy || !!pending || active"></textarea>
       <p v-if="pending" class="hint">尚未确认受理结果。重试使用同一请求，不会重复执行。</p>
       <p v-else-if="active" class="hint">当前会话已有运行任务。关闭页面不会取消任务。</p>

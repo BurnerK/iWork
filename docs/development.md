@@ -158,3 +158,7 @@ V4 增加任务、消息与请求身份；会话页面可提交、观察、取�
 V9 增加 MySQL conversation_contexts 与模型 context_window。升级后已有模型窗口为空，管理员需在模型管理中按供应商确认规格填写 8192–131072；更大模型也只启用首版上限，空值会返回 context_window_not_configured。不要把确定性测试替身的参数复制到真实模型。
 
 业务历史与可用快照参与协调备份，不属于可清理的临时工作目录。损坏快照可按完整成功业务记录重建；无法确认或超限时明确失败。中断任务不自动续跑，只响应新的显式任务。测试入口 ConversationContextTest 与仅用于本地验收的 ContextFixtureApplication，后者不进入正式 JAR。
+
+## 来源版本与续改（#18）
+
+DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等指纹。固定 read_document_version 只能读本任务选定来源，12000字符分页；正式完成时锁成果并分配新版本号，各版本保留标题、正文与来源关系。旧版续改与并发续改均追加，不覆盖旧文件。个人版本列表 `/api/document-versions?page=0` 每页20项；会话文档列表包含本会话引用成果的历史版本。V10 迁移保留既有版本标题。详见 [版本契约](issue18-version-contract.md)。
