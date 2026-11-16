@@ -182,3 +182,5 @@ DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等
 项目空间见 [#23 契约](issue23-project-contract.md) 与 [验收证据](validation/issue23-project-spaces.md)。删除项目只移除组织引用，个人会话、资料和成果保留；任务资料仍需明确选择。
 
 任务聚合诊断见 [#24 受限诊断契约](issue24-diagnostics-contract.md) 和 [验证记录](validation/issue24-diagnostics.md)。管理员只读取运行投影，不获得正文或摘要权限；SDK 异常日志默认关闭，排错优先使用任务/调用/处理作业标识及固定错误码。
+
+离线协调备份/空环境恢复工具：`python3 scripts/backup.py --help`，操作和前置条件见 [#25部署准备](issue25-operations.md)，[本地恢复证据](validation/issue25-local-restore.md)。目标Linux验收尚未完成。[#26真实试用矩阵](validation/issue26-acceptance-matrix.md)列出T01–T19证据和仍需人员/资料/模型预算授权的步骤。
