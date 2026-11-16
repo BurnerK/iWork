@@ -141,6 +141,14 @@ try:
     assert browser.request(conversation_path)[0] == 200
     recovered_password = secrets.token_urlsafe(24)
     compose("exec", "-T", "app", "sh", "-c", "umask 077; cat > /tmp/recovery-password", input=recovered_password)
+    compose("exec", "-T", "app", "chmod", "644", "/tmp/recovery-password")
+    try:
+        compose("exec", "-T", "-e", "IWORK_RECOVERY_PASSWORD_FILE=/tmp/recovery-password", "app", "java", "-jar", "/app/iwork.jar", "--recover-admin", capture=True)
+        raise AssertionError("Recovery accepted a world-readable secret file")
+    except subprocess.CalledProcessError:
+        pass
+    assert browser.request("/api/auth/me")[0] == 200
+    compose("exec", "-T", "app", "chmod", "600", "/tmp/recovery-password")
     compose("exec", "-T", "-e", "IWORK_RECOVERY_PASSWORD_FILE=/tmp/recovery-password", "app", "java", "-jar", "/app/iwork.jar", "--recover-admin", capture=True)
     compose("exec", "-T", "app", "rm", "/tmp/recovery-password")
     assert browser.request("/api/auth/me")[0] == 401

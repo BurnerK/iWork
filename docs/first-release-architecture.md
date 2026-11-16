@@ -37,7 +37,7 @@ MySQL 保存身份与授权、配置、会话与任务、幂等关系、成果�
 
 ## 部署与文件处理隔离
 
-单台 Linux 服务器使用 Docker Compose 部署主应用和 MySQL，资料及成果使用持久目录。首版不增加 Redis、消息队列或 Kubernetes；接受维护窗口内停机。
+单台 Linux 服务器使用 Docker Compose 部署主应用和 MySQL，资料及成果使用持久目录。2026-11-16 #11 修订增加 Redis，仅持久保存登录 Session；不增加消息队列或 Kubernetes，接受维护窗口内停机。
 
 文件处理优先评估 AgentScope Java 官方 Docker 沙箱能力，运行平台预置解析与转换程序，仅向模型开放受控业务工具。执行环境只获得本次所需文件，不获得主数据库或模型凭据；配置资源、网络、挂载和运行权限限制。自定义 Java 工具需要显式接入沙箱，不会自动迁移进去。
 
@@ -88,3 +88,9 @@ MySQL 保存身份与授权、配置、会话与任务、幂等关系、成果�
 2026-11-12 用户已接受最终验证结果与限制，[#8 接入验证](https://github.com/BurnerK/iWork/issues/8#issuecomment-6826203433)与[#6 架构决策](https://github.com/BurnerK/iWork/issues/6#issuecomment-6826209370)均已完成收口。生产 Linux、正式身份、真实解析器、数据库成果事务及恢复等仍待实施验收；停止上限依赖看门狗、Docker、宿主调度与时钟可用，探针时间不是生产 SLA。
 
 当前方案为主应用 + 受限沙箱管理服务 + 独立执行看门狗，管理服务与看门狗持有完整 Docker 权限，主应用与处理容器均不持有。前述分阶段“待审阅/保持开放”描述保留为历史，不代表当前状态；最终执行边界以上一节第三阶段补证与本次收口为准。架构已达到另行拆解开发任务的程度，地图 #1 已同步。
+
+## #11 登录态持久化修订 · 2026-11-16（用户已批准）
+
+本条取代前文“不增加 Redis”的限制。Spring Session Redis 保存登录态，MySQL 保存账号、authVersion 与会话归属。Redis 不持有业务真相，不作为业务队列。Compose 使用固定摘要的官方 Redis 镜像、内部专用网络及 AOF 命名卷；主应用无 Docker 权限。用户密码/启停与版本递增同一事务提交，每个受保护请求回查 enabled/authVersion，业务写入事务重新锁定身份记录，避免已撤销身份迟到写入。
+
+正常应用/Redis 重建保留登录；Redis 数据丢失只要求重新登录，不删除 MySQL 会话。绝对登录期限 30 天、闲置 7 天，生产 Cookie Secure/HttpOnly/SameSite=Lax。不兼容 Session 序列化升级允许用户重新登录，部署前需说明；不保证无感跨版本恢复。完整合同及验证边界见 [#11 合同](issue-11-design.md) 和 [验证记录](validation/issue-11.md)。

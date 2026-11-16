@@ -1,6 +1,6 @@
 # iWork
 
-自托管的 AI 工作应用。当前正式工程提供可构建的 Web 入口、MySQL 迁移、健康检查和单机 Compose 配置；账号、会话、模型和资料处理业务随后续工单交付。
+自托管的 AI 工作应用。当前提供账号登录、首次改密、普通用户管理与个人会话创建/列表/空详情；模型、消息、任务和资料处理随后续工单交付。
 
 ## 工具与目录
 
@@ -14,7 +14,7 @@
 
 ## 独立检查与交付构建
 
-在仓库根目录运行；后端测试会启动临时真实 MySQL，需先启动 Docker。
+在仓库根目录运行；后端测试会启动临时真实 MySQL 和 Redis，需先启动 Docker。
 
 ```sh
 npm ci --prefix frontend
@@ -31,7 +31,8 @@ backend/mvnw -B -f backend/pom.xml -Pdistribution -DskipTests package
 
 ```sh
 cp .env.example .env
-# 编辑 .env，为两个密码填写不同随机值（可分别运行 openssl rand -hex 24）。
+# 编辑 .env，为数据库和初始管理员密码填写不同随机值（可分别运行 openssl rand -hex 24）。
+# 仅 localhost HTTP 开发设置 IWORK_COOKIE_SECURE=false；生产 HTTPS 保持 true。
 docker compose build
 mkdir -p data/files
 docker compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown app 10001:10001 /data/files
@@ -39,9 +40,9 @@ docker compose up -d --wait --wait-timeout 180
 curl --fail http://127.0.0.1:8080/actuator/health/readiness
 ```
 
-打开 <http://127.0.0.1:8080>，应显示“服务已就绪”；点击“检查连接”可重试。仅绑定本机回环地址，MySQL 不发布宿主端口。未实现的业务入口默认拒绝访问，没有可登录的默认账号。
+打开 [本机入口](http://127.0.0.1:8080)，以外部配置的管理员账号登录并修改初始密码，然后移除初始密码配置。无内置默认密码或公开注册。应用仅绑定回环地址；MySQL 和 Redis 不发布宿主端口。生产通过 HTTPS 反向代理接入。
 
-`data/mysql` 与 `data/files` 是宿主持久目录。若修改 `IWORK_DATA_DIR`，需在对应目录下创建 `files`；上面的初始化命令会按 Compose 实际挂载路径设置 UID/GID 10001。普通主应用始终以该非 root 用户运行。不要将 `data/` 或 `.env` 提交到 Git；不要删除目录来解决启动失败。
+`data/mysql` 与 `data/files` 是宿主持久目录，Redis 使用 Compose 命名卷 `redis-data` 保存登录态（AOF）。若修改 `IWORK_DATA_DIR`，需在对应目录下创建 `files`；初始化命令会按实际挂载路径设置 UID/GID 10001。主应用始终以该非 root 用户运行。不要将 `data/` 或 `.env` 提交到 Git；不要删除目录来解决启动失败。
 
 ```sh
 docker compose stop       # 停止，保留数据
@@ -57,7 +58,7 @@ docker compose down      # 删除本项目容器及网络，仍保留宿主数�
 python3 scripts/verify-compose.py
 ```
 
-脚本创建独立项目、随机测试凭据和临时端口，在系统临时目录的 `codex/iwork-smoke-*` 下保存测试数据与通过记录。验证干净初始化、唯一 V1 迁移、前端入口、拒绝诊断访问、重建后数据库与文件保留、停止 MySQL 后就绪 503/存活 200、恢复后就绪 200，以及日志不含测试密码。无论成功失败都停止该测试项目，不停止已有部署；测试目录保留便于排错。
+脚本创建独立项目、随机测试凭据和临时端口，在系统临时目录的 `codex/iwork-smoke-*` 下保存测试数据与通过记录。验证迁移、初始管理员幂等、首次改密、会话持久化、应用及 Redis 重建保留登录、依赖中断、Redis 丢失后重新登录、部署恢复撤权及日志不含测试密码。无论成功失败都停止该测试项目并删除测试 Redis 卷，不停止已有部署；测试目录保留便于排错。
 
 GitHub Actions 使用上述相同的前端检查、Maven 验证与 Compose 脚本。完整 Linux 部署、升级和数据库/文件协调恢复属于 [#25](https://github.com/BurnerK/iWork/issues/25)，本票验证不替代上线验收。
 

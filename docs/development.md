@@ -6,13 +6,13 @@
 
 | 包 | 职责 |
 | --- | --- |
-| `io.iwork.identity` | 身份与资源：认证、授权、资源归属。当前安全配置仅放行静态入口及两个无详情健康端点，其他请求默认拒绝。后续账号票替换相应授权规则。 |
+| `io.iwork.identity` | 身份与资源：用户名密码、Redis Session、管理员用户管理、实时 authVersion 撤权及部署密码恢复。 |
 | `io.iwork.conversation` | 会话与任务：持久业务状态、幂等、执行互斥、取消和重启中断。 |
 | `io.iwork.agent` | 智能体运行：AgentScope 推理和受控工具调用，不替代 iWork 业务权威。仅固定 core 依赖，不加载模型、工具或沙箱。 |
 | `io.iwork.artifacts` | 成果与文件：原始资料、执行工作区、正式版本及文件索引。当前只验证存储目录可写。 |
 | `io.iwork.model` | 模型与用量：模型授权、额度、逐调用计量；供应商缺失用量保留待核实。 |
 
-各模块通过后续真实用例需要的包接口协作，不直接访问其他模块内部持久化对象。没有业务表、CRUD 占位、通用接口包装或伪业务响应。沙箱管理服务和执行看门狗在 #16 接入；其高权限信任边界以及有条件的进程停止上限保持不变。
+各模块通过真实用例需要的包接口协作，不直接访问其他模块内部持久化对象。V2 新增 users 与 conversations；会话写入调用身份模块的事务内校验，SQL 始终限定 owner。沙箱管理服务和执行看门狗在 #16 接入；其高权限信任边界以及有条件的进程停止上限保持不变。
 
 ## 构建与迁移
 
@@ -34,7 +34,7 @@ Boot 4 使用 Web MVC 与 Flyway 专用 starter，健康检查和安全自动配
 
 7 项后端测试、IDEA 构建和隔离 Compose 验收通过（启动、迁移、重建、文件保留及数据库中断恢复）；IDEA/Mend 后端 POM 检查从 7 条降为 0 条，OSV 对最终 152 个依赖构件未检出已知漏洞。这是指定日期和依赖树的扫描结果，不是无漏洞保证。MCP 验证使用本机合成服务，未覆盖外部服务、SSE/stdio、认证或 MCP 服务端。两个历史原型仍保留各自的依赖组合；这里的零告警结论仅针对正式后端。
 
-Flyway 随应用启动运行，`backend/src/main/resources/db/migration/V1__baseline.sql` 仅执行无副作用语句并登记基线。历史存储在 MySQL `flyway_schema_history`，不创建业务表。再次启动验证校验和；迁移失败会阻止主应用启动，不提供忽略失败、自动 clean 或对非空数据库自动 baseline 的入口。后续业务票新增 V2、V3 等迁移，不修改已经应用的文件。
+Flyway 随应用启动运行，V1 保留原基线，V2 新增账号与个人会话表。历史存储在 MySQL `flyway_schema_history`。再次启动验证校验和；迁移失败会阻止主应用启动，不提供忽略失败、自动 clean 或对非空数据库自动 baseline 的入口。后续业务票继续新增迁移，不修改已经应用的文件。
 
 `-Pdistribution` 依赖先执行前端构建；开发时只检查 Java 可以不用该 profile。Docker 多阶段构建始终重新构建前端，不将本机 `node_modules`、`target`、`.env` 或数据目录放入构建上下文。最终镜像仅有运行时和 jar。
 
@@ -62,17 +62,51 @@ export IWORK_FILES_DIRECTORY="$PWD/data/files"
 backend/mvnw -f backend/pom.xml spring-boot:run
 ```
 
-另一终端运行 `npm --prefix frontend run dev`，Vite 将健康请求转发至 127.0.0.1:8080。正式浏览器验证使用 Compose 的已打包入口。
+还需准备独立 Redis，设置初始管理员密码及本机 Cookie 配置，见下文 #11 配置。另一终端运行 `npm --prefix frontend run dev`，Vite 将 `/api` 与健康请求转发至 127.0.0.1:8080。正式浏览器验证使用 Compose 的已打包入口。
 
 ## 基础排错
 
 - `docker compose ps` 检查服务状态；`docker compose logs --tail=100 app mysql` 查看启动或迁移失败。不要复制包含私密数据的日志到公开位置。
-- `/actuator/health/liveness` 仅表明进程存活；`/actuator/health/readiness` 同时检查数据库和文件目录，失败返回 503。数据库启动失败时主应用不启动；运行中数据库失联不触发进程重启，待数据库恢复后可恢复就绪。
+- `/actuator/health/liveness` 仅表明进程存活；`/actuator/health/readiness` 同时检查数据库、Redis 和文件目录，失败返回 503。数据库启动失败时主应用不启动；运行中依赖失联不触发进程重启，恢复后可恢复就绪。
 - 文件目录不可写时检查宿主目录和 UID/GID 10001；初始化 `chown` 命令需临时添加 `CHOWN` capability，单用 root 仍会被应用的 `cap_drop: ALL` 限制。不要让主应用永久以 root 运行或保留该 capability。
 - 数据库认证失败时检查实际账号密码与环境是否一致；连接超时需检查网络和 MySQL 状态。连接建立/读写超时 3 秒，连接池获取超时 3 秒；健康探测还有调度与连接池开销，不把这些配置当作完整响应 SLA。
 - Flyway 校验失败时还原误改的旧迁移并新增迁移，不删除历史表或已有数据。
 - macOS Testcontainers 找不到 Docker 时，确认 Docker 引擎已启动；必要时将 `DOCKER_HOST` 指向 `docker context inspect` 显示的当前 socket，勿挂载到主应用。
 
-## 最小浏览器验收
+## #11 账号与登录态
 
-启动 Compose 后打开首页，检查“服务已就绪”。按 Tab 定位“检查连接”，验证焦点可见且 Enter 可以重试。停止该实例 MySQL，再点击按钮应显示“服务暂不可用，请稍后重试”，页面不得显示主机、数据库、异常或凭据。恢复 MySQL 后重试应回到就绪。检查窄屏无横向滚动。当前尚无登录、会话或成果页面。
+正式工程已增加 users/conversations 的 V2 迁移，V1 保持不变。identity 提供可信 Caller 与事务内身份锁定校验，conversation 所有查询限定 owner。仅支持会话创建、分页列表、空详情；消息、任务及模型未接入。
+
+在独立 MySQL 之外准备 Redis，默认 localhost:6379，可用 `IWORK_REDIS_HOST` / `IWORK_REDIS_PORT` 修改。首次启动必须提供 `IWORK_BOOTSTRAP_PASSWORD`（至少 12 字符，最多 72 UTF-8 字节），可用 `IWORK_BOOTSTRAP_USERNAME` 设置管理员用户名（默认 admin）。只有数据库不存在 ADMIN 才初始化；正常启动和改动配置都不会覆盖现有账号。首次改密完成后移除密码配置。用户名为 3–64 位 ASCII 字母、数字、点、下划线或连字符，以字母/数字开头，不区分大小写；显示名称支持中文。
+
+生产默认 `IWORK_COOKIE_SECURE=true`，必须通过 HTTPS 使用。仅本机 HTTP 开发显式设置 `IWORK_COOKIE_SECURE=false`。Redis 只保存 Spring Session，Compose 使用内部网络/AOF命名卷，无宿主端口；MySQL 用户与会话不存 Redis。Cookie HttpOnly/SameSite=Lax，最长 30 天；服务端另校验自登录起 30 天绝对期限及 7 天闲置期限。多设备可同时登录，改密/重置/禁用原子递增 authVersion 撤销所有旧登录；重新启用不会复活旧登录。
+
+登录和所有写请求须先 GET `/api/auth/csrf`，将 token 放在 `X-CSRF-TOKEN` 请求头；登录为 form POST，其他写请求为 JSON。登录更换 Session ID；自行改密拒绝保留原密码，成功返回 204 并撤销当前及其他设备登录，用户须用新密码显式重新登录。下次写入应获取新 CSRF。临时密码只能访问本人、改密、退出及 CSRF 接口。错误 401/403/404/409/503 分别表示身份、权限/CSRF、资源不存在（含非本人）、重复用户名、依赖不可用，不回传内部异常。会话和用户分页参数 page 从 0 开始、size 默认 20，最大 100。
+
+Redis 正常重建保留登录；删除 Redis 命名卷只丢失登录，重新登录后业务记录仍在 MySQL。不兼容 Session 序列化升级可以使旧登录失效，应在升级说明中要求重新登录；不能把 Redis 当作业务备份。AOF everysec 不保证断电零丢失。
+
+Vite 同时代理 `/api` 与健康请求。readiness 检查 MySQL、Redis 和文件目录；公开静态入口及探针不加载登录 Cookie，失效登录不影响页面刷新或 liveness。生产需配置 HTTPS 反向代理，主应用端口仍仅绑定回环。
+
+## 部署管理员密码恢复
+
+交互方式（隐藏输入，不在命令参数/日志传递密码）：
+
+```sh
+docker compose run --rm --no-deps app --recover-admin
+```
+
+需要真正的交互终端。非交互部署可把新临时密码放入仅执行用户可读的普通文件（0600/0400，禁止符号链接和组/其他用户权限），通过 `IWORK_RECOVERY_PASSWORD_FILE` 指定文件路径。容器执行用户 UID 为 10001，挂载文件须让该用户可读；密码不要写在命令行、脚本正文或 Git 中。例：
+
+```sh
+docker compose run --rm --no-deps \
+  -v /secure/iwork-recovery-password:/run/recovery-password:ro \
+  -e IWORK_RECOVERY_PASSWORD_FILE=/run/recovery-password app --recover-admin
+```
+
+该命令无 HTTP 监听，复用相同后端密码校验、BCrypt 与数据库事务；重置配置用户名对应的管理员、清除锁定、撤销所有旧登录，下一次登录强制改密。完成后安全删除临时文件。恢复只需数据库可用；不修改业务会话和角色。参数中不能跟密码。
+
+## #11 浏览器与回归验收
+
+使用独立 Compose 实例，以初始管理员登录→首次改密→创建普通用户并记录一次性密码→退出→普通用户首改→新建会话并刷新/打开直接链接→管理员重置/禁用→旧登录失效。检查键盘 Tab/Enter、可见焦点、窄屏、加载失败重试。模型、消息和任务未在 #11 实现。
+
+验证命令仍为 README/CI 的 npm、Maven、Compose 命令；证据与未验证范围见 [#11 验证记录](validation/issue-11.md)。

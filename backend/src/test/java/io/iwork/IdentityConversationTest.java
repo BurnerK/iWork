@@ -174,4 +174,28 @@ class IdentityConversationTest {
         }
     }
 
+    @Test @org.junit.jupiter.api.Order(9) void unicodePasswordBoundaryAndPaginationAreUsable() throws Exception {
+        var admin=new Browser(); admin.login("admin","Changed-password-11"); admin.csrf();
+        var created=admin.request("POST","/api/admin/users","{\"username\":\"boundary\",\"displayName\":\"Boundary\"}",true);
+        var temporary=json.readTree(created.body()).get("temporaryPassword").asText();
+        var ordinary=new Browser(); ordinary.login("boundary",temporary); ordinary.csrf();
+        var password="界".repeat(24);
+        assertThat(ordinary.request("POST","/api/auth/password",json.writeValueAsString(Map.of("currentPassword",temporary,"newPassword",password)),true).statusCode()).isEqualTo(204);
+        assertThat(ordinary.login("boundary",password).statusCode()).isEqualTo(200);
+        var adminConversation=json.readTree(admin.request("GET","/api/conversations",null,false).body()).get("items").get(0).get("id").asText();
+        assertThat(ordinary.request("GET","/api/conversations/"+adminConversation,null,false).statusCode()).isEqualTo(404);
+        assertThat(ordinary.request("GET","/api/conversations",null,false).body()).doesNotContain(adminConversation);
+        ordinary.csrf();
+        for(int i=0;i<3;i++) assertThat(ordinary.request("POST","/api/conversations","{}",true).statusCode()).isEqualTo(201);
+        var ids=new HashSet<String>();
+        for(int i=0;i<3;i++) {
+            var result=json.readTree(ordinary.request("GET","/api/conversations?size=1&page="+i,null,false).body());
+            assertThat(result.get("items").size()).isEqualTo(1);
+            assertThat(result.get("hasMore").asBoolean()).isEqualTo(i<2);
+            ids.add(result.get("items").get(0).get("id").asText());
+        }
+        assertThat(ids).hasSize(3);
+        assertThat(json.readTree(admin.request("GET","/api/admin/users?size=1",null,false).body()).get("hasMore").asBoolean()).isTrue();
+    }
+
 }

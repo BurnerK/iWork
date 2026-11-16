@@ -123,3 +123,17 @@ it('ignores a conversation response that arrives after logout', async () => {
   await page.get('form').trigger('submit'); await flushPromises()
   expect(page.text()).not.toContain('Late private title')
 })
+
+it('requires an explicit login after password change', async () => {
+  vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(url.endsWith('/password')
+    ? new Response(null, { status: 204 })
+    : new Response(JSON.stringify(url.endsWith('/csrf') ? { token: 'proof' } : { id: 'one', displayName: 'User', role: 'USER', mustChangePassword: true })))))
+  const router = makeRouter(createMemoryHistory()); await router.push('/password')
+  const page = mount(App, { global: { plugins: [router] } }); await flushPromises()
+  await page.get('#current-password').setValue('Temporary-password-11')
+  await page.get('#new-password').setValue('Changed-password-11')
+  await page.get('form').trigger('submit'); await flushPromises()
+  expect(router.currentRoute.value.path).toBe('/login')
+  expect(page.get('[role="status"]').text()).toContain('使用新密码重新登录')
+  expect(page.find('nav[aria-label="主导航"]').exists()).toBe(false)
+})
