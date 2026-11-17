@@ -7,7 +7,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class IWorkApplication {
     public static void main(String[] args) {
         if (java.util.Arrays.asList(args).contains("--recover-admin")) {
-            if (args.length != 1) { System.err.println("Recovery accepts no password arguments."); System.exit(1); }
+            if (args.length != 1) {
+                System.err.println("Recovery accepts no password arguments.");
+                System.exit(1);
+            }
             System.exit(io.iwork.identity.AdministratorRecovery.run());
             return;
         }

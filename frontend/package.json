@@ -10,6 +10,8 @@
   "packageManager": "npm@11.20.0",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "format": "prettier --write 'src/**/*.{ts,vue,css}' vite.config.ts index.html && prettier --write 'src/**/*.{ts,vue,css}' vite.config.ts index.html",
+    "format:check": "prettier --check 'src/**/*.{ts,vue,css}' vite.config.ts index.html",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "build": "vite build"
@@ -22,6 +24,7 @@
     "@vitejs/plugin-vue": "6.0.11",
     "@vue/test-utils": "2.6.0",
     "jsdom": "31.0.1",
+    "prettier": "3.10.1",
     "typescript": "5.9.3",
     "vite": "8.3.8",
     "vitest": "5.1.0",

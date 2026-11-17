@@ -9,14 +9,20 @@ import org.springframework.context.annotation.Bean;
 /** Browser/restart fixture, never included in the production jar. */
 public class TaskFixtureApplication {
     public static void main(String[] args) {
-        new SpringApplication(IWorkApplication.class,Execution.class).run(args);
+        new SpringApplication(IWorkApplication.class, Execution.class).run(args);
     }
-    @TestConfiguration(proxyBeanMethods=false)
+
+    @TestConfiguration(proxyBeanMethods = false)
     public static class Execution {
-        @Bean @org.springframework.context.annotation.Primary TaskRunner runner() { return input -> {
-            Thread.sleep(input.message().equals("hold")?30000:2000);
-            if(input.message().equals("fail")) throw new IllegalStateException("Fixture failure");
-            return "测试替身完成："+input.message();
-        }; }
+        @Bean
+        @org.springframework.context.annotation.Primary
+        TaskRunner runner() {
+            return input -> {
+                Thread.sleep(input.message().equals("hold") ? 30000 : 2000);
+                if (input.message().equals("fail"))
+                    throw new IllegalStateException("Fixture failure");
+                return "测试替身完成：" + input.message();
+            };
+        }
     }
 }

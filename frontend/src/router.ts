@@ -2,11 +2,24 @@ import { createRouter, createWebHashHistory, type RouterHistory } from 'vue-rout
 
 // App owns the small workspace shell; routes select its current panel.
 export function makeRouter(history: RouterHistory = createWebHashHistory()) {
-  return createRouter({ history, routes: [
-    { path: '/', redirect: '/conversations' },
-    ...['admin-diagnostics', 'projects', 'agents', 'login', 'password', 'conversations', 'admin', 'models', 'admin-models'].map(name => ({ path: `/${name}`, name, component: {} })),
-    { path: '/projects/:id', name: 'project', component: {} },
-    { path: '/conversations/:id', name: 'conversation', component: {} },
-    { path: '/:pathMatch(.*)*', redirect: '/conversations' },
-  ] })
+  return createRouter({
+    history,
+    routes: [
+      { path: '/', redirect: '/conversations' },
+      ...[
+        'admin-diagnostics',
+        'projects',
+        'agents',
+        'login',
+        'password',
+        'conversations',
+        'admin',
+        'models',
+        'admin-models',
+      ].map((name) => ({ path: `/${name}`, name, component: {} })),
+      { path: '/projects/:id', name: 'project', component: {} },
+      { path: '/conversations/:id', name: 'conversation', component: {} },
+      { path: '/:pathMatch(.*)*', redirect: '/conversations' },
+    ],
+  })
 }

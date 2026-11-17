@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component;
 class FileStorageHealthIndicator extends AbstractHealthIndicator {
     private final Path directory;
 
-    FileStorageHealthIndicator(@Value("${iwork.files-directory}") Path directory) throws IOException {
+    FileStorageHealthIndicator(@Value("${iwork.files-directory}") Path directory)
+            throws IOException {
         this.directory = directory;
         Files.createDirectories(directory);
         verifyWritable();
