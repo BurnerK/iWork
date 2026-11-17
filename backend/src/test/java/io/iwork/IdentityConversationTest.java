@@ -54,7 +54,8 @@ class IdentityConversationTest {
     }
 
     static class MutableClock extends java.time.Clock {
-        java.time.Instant now = java.time.Instant.now();
+        volatile java.time.Instant now =
+                java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
 
         public java.time.ZoneId getZone() {
             return java.time.ZoneOffset.UTC;
@@ -326,7 +327,9 @@ class IdentityConversationTest {
         for (int i = 0; i < 5; i++)
             assertThat(browser.login("admin", "bad-password").statusCode()).isEqualTo(401);
         assertThat(browser.login("admin", "Changed-password-11").statusCode()).isEqualTo(401);
-        clock.advance(java.time.Duration.ofMinutes(15));
+        clock.advance(java.time.Duration.ofMinutes(15).minusNanos(1000));
+        assertThat(browser.login("admin", "Changed-password-11").statusCode()).isEqualTo(401);
+        clock.advance(java.time.Duration.ofNanos(1000));
         assertThat(browser.login("admin", "Changed-password-11").statusCode()).isEqualTo(200);
         for (int i = 0; i < 4; i++)
             assertThat(new Browser().login("admin", "bad-password").statusCode()).isEqualTo(401);
