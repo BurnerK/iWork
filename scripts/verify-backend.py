@@ -57,6 +57,10 @@ try:
         time.sleep(1)
     env.update(IWORK_SANDBOX_TEST_URL=url, IWORK_SANDBOX_TEST_KEY_FILE=str(key_file))
     try:
+        for attempt in range(8):
+            print(f"Sandbox reproduction run {attempt + 1}/8", flush=True)
+            subprocess.run([str(root / "backend/mvnw"), "-B", "-f", str(root / "backend/pom.xml"),
+                            "-Dtest=MaterialParsingTest", "test"], cwd=root, env=env, check=True)
         subprocess.run([str(root / "backend/mvnw"), "-B", "-f", str(root / "backend/pom.xml"),
                         "-Pdistribution", "-DreuseForks=false", "clean", "verify"], cwd=root, env=env, check=True)
     except subprocess.CalledProcessError:
