@@ -296,14 +296,23 @@ public final class SandboxControl {
                     throw new IllegalArgumentException();
                 return old;
             }
-            if (!ready
-                    || !supervised()
-                    || jobs.values().stream()
+            boolean supervisionReady = supervised();
+            boolean pendingCleanup =
+                    jobs.values().stream()
                             .anyMatch(
                                     j ->
                                             !j.status.equals("RUNNING")
-                                                    && !j.cleanup.equals("CONFIRMED")))
+                                                    && !j.cleanup.equals("CONFIRMED"));
+            if (!ready || !supervisionReady || pendingCleanup) {
+                System.err.println(
+                        "Sandbox admission unavailable: ready="
+                                + ready
+                                + " supervised="
+                                + supervisionReady
+                                + " pendingCleanup="
+                                + pendingCleanup);
                 throw new IOException("Supervision unavailable");
+            }
             if (jobs.values().stream().filter(j -> j.status.equals("RUNNING")).count() >= 2)
                 throw new RejectedExecutionException();
             var job = new Job();
@@ -353,6 +362,7 @@ public final class SandboxControl {
                     Thread.ofVirtual().start(() -> job.execute(source));
                     return job;
                 } catch (Exception failure) {
+                    System.err.println("Sandbox container creation unavailable");
                     job.status = "FAILED";
                     job.error = "sandbox_unavailable";
                     try {

@@ -82,6 +82,12 @@ class MaterialParsingTest {
                                                                                         .readAllBytes()))
                                                         .build(),
                                                 HttpResponse.BodyHandlers.ofByteArray());
+                                if (response.statusCode() != 200)
+                                    System.err.println(
+                                            "Sandbox fixture upstream "
+                                                    + exchange.getRequestMethod()
+                                                    + " status="
+                                                    + response.statusCode());
                                 exchange.getResponseHeaders()
                                         .set("Content-Type", "application/json");
                                 exchange.sendResponseHeaders(
@@ -89,6 +95,9 @@ class MaterialParsingTest {
                                 exchange.getResponseBody().write(response.body());
                             } catch (InterruptedException failure) {
                                 Thread.currentThread().interrupt();
+                            } catch (java.io.IOException failure) {
+                                System.err.println("Sandbox fixture proxy I/O unavailable");
+                                throw failure;
                             }
                         });
                 proxy.start();

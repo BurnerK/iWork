@@ -56,8 +56,13 @@ try:
             raise RuntimeError("Sandbox manager and watchdog did not become ready")
         time.sleep(1)
     env.update(IWORK_SANDBOX_TEST_URL=url, IWORK_SANDBOX_TEST_KEY_FILE=str(key_file))
-    subprocess.run([str(root / "backend/mvnw"), "-B", "-f", str(root / "backend/pom.xml"),
-                    "-Pdistribution", "-DreuseForks=false", "clean", "verify"], cwd=root, env=env, check=True)
+    try:
+        subprocess.run([str(root / "backend/mvnw"), "-B", "-f", str(root / "backend/pom.xml"),
+                        "-Pdistribution", "-DreuseForks=false", "clean", "verify"], cwd=root, env=env, check=True)
+    except subprocess.CalledProcessError:
+        subprocess.run(compose + ["logs", "--no-color", "--tail", "100", "sandbox-manager", "sandbox-watchdog"],
+                       cwd=root, env=env, check=False)
+        raise
     for test in ("MaterialParsingTest", "PersonalAgentTest", "ProjectSpaceTest"):
         report = ET.parse(root / "backend/target/surefire-reports" / f"TEST-io.iwork.{test}.xml").getroot()
         if int(report.get("tests", "0")) == 0 or int(report.get("skipped", "0")) != 0:
