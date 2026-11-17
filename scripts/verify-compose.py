@@ -48,7 +48,7 @@ def request(path):
 
 
 def health(path, status, body):
-    deadline = time.monotonic() + 60
+    deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
         try:
             code, content = request(path)
@@ -58,6 +58,23 @@ def health(path, status, body):
             pass
         time.sleep(1)
     raise AssertionError(f"{path} did not reach {status}/{body}")
+
+
+def sandbox_health():
+    manager = compose("ps", "-q", "sandbox-manager", capture=True).strip()
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        result = subprocess.run(
+            ["docker", "exec", manager, "sh", "-c",
+             'curl -fsS -H "Authorization: Bearer $(cat /run/secrets/sandbox_key)" http://127.0.0.1:8090/health'],
+            capture_output=True, text=True)
+        try:
+            if result.returncode == 0 and json.loads(result.stdout).get("ready") is True:
+                return
+        except ValueError:
+            pass
+        time.sleep(1)
+    raise AssertionError("Sandbox manager and watchdog did not become ready")
 
 
 class Browser:
@@ -99,8 +116,9 @@ try:
     compose("build")
     compose("run", "--rm", "--no-deps", "--user", "0", "--cap-add", "CHOWN", "--entrypoint", "chown",
             "app", "10001:10001", "/data/files")
-    compose("up", "-d", "--wait", "--wait-timeout", "180")
+    compose("up", "-d")
     health("/actuator/health/readiness", 200, "UP")
+    sandbox_health()
     app_id = compose("ps", "-q", "app", capture=True).strip()
     manager_id = compose("ps", "-q", "sandbox-manager", capture=True).strip()
     app_info, manager_info = json.loads(subprocess.check_output(["docker", "inspect", app_id, manager_id]))
@@ -123,7 +141,9 @@ try:
     assert code == 201
     conversation_path = "/api/conversations/" + conversation["id"]
     compose("exec", "-T", "app", "sh", "-c", 'printf retained > /data/files/smoke-marker')
-    compose("up", "-d", "--force-recreate", "--wait", "--wait-timeout", "180")
+    compose("up", "-d", "--force-recreate")
+    health("/actuator/health/readiness", 200, "UP")
+    sandbox_health()
     assert migration_count() == "1"
     assert compose("exec", "-T", "app", "cat", "/data/files/smoke-marker", capture=True) == "retained"
     assert browser.request("/api/auth/me")[0] == 200
