@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 80" role="img" aria-label="iWork">
+<g fill="#FFFFFF"><g transform="scale(.8)"><rect x="15" y="15" width="70" height="18" rx="5"/><rect x="15" y="42" width="22" height="43" rx="5"/><rect x="47" y="67" width="38" height="18" rx="5"/><circle cx="66" cy="49" r="10"/></g><g transform="translate(86 17)"><path d="M0 3H8V11H0ZM0 17H8V42H0ZM13 5H22L29 31L36 10H43L50 31L57 5H66L55 42H46L39.5 23L33 42H24Z"/>
+<path fill-rule="evenodd" d="M78 15C86 15 92 21 92 29C92 37 86 43 78 43C70 43 64 37 64 29C64 21 70 15 78 15ZM78 22C74 22 72 25 72 29C72 33 74 36 78 36C82 36 84 33 84 29C84 25 82 22 78 22Z"/>
+<path d="M97 16H105V20C108 16 112 15 117 16V24C110 23 105 25 105 32V42H97ZM122 4H130V27L140 16H150L139 28L151 42H141L130 30V42H122Z"/></g></g>
+</svg>
