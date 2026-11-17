@@ -24,7 +24,8 @@ name = "iwork-ci-" + secrets.token_hex(6)
 key = secrets.token_hex(32)
 key_file = work / "sandbox.key"
 key_file.write_text(key)
-key_file.chmod(0o600)
+# Compose bind-mounts this file into a container without DAC override; work remains private (0700).
+key_file.chmod(0o444)
 env_file = work / ".env"
 env_file.touch(mode=0o600)
 env = dict({key: value for key, value in os.environ.items() if not key.startswith("IWORK_")},
