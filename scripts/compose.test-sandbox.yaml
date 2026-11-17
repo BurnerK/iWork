@@ -1,0 +1,12 @@
+services:
+  sandbox-manager:
+    image: ${IWORK_TEST_MANAGER_IMAGE:?}
+    environment:
+      IWORK_SANDBOX_IMAGE: ${IWORK_TEST_PARSER_IMAGE:?}
+    ports:
+      - "127.0.0.1:${IWORK_TEST_SANDBOX_PORT:?}:8090"
+    networks: [sandbox-control, default]
+  sandbox-watchdog:
+    image: ${IWORK_TEST_MANAGER_IMAGE:?}
+  text-parser-image:
+    image: ${IWORK_TEST_PARSER_IMAGE:?}

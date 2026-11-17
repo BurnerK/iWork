@@ -55,14 +55,22 @@ npm run dev
 
 ```sh
 npm ci --prefix frontend
+npm --prefix frontend run format:check
 npm --prefix frontend run typecheck
 npm --prefix frontend test
 npm --prefix frontend run build
-backend/mvnw -B -f backend/pom.xml verify
+backend/mvnw -B -f backend/pom.xml spotless:check
+python3 scripts/verify-backend.py
 backend/mvnw -B -f backend/pom.xml -Pdistribution -DskipTests package
 ```
 
 独立后端构建无需前端工具。`distribution` 将已构建的 `frontend/dist` 打入 `backend/target/iwork-0.1.0-SNAPSHOT.jar`。完整容器构建自动执行前端检查并生成同一交付包；Java 集成测试在容器构建之外执行，主应用不挂载 Docker socket。
+
+`verify-backend.py` 构建独立测试沙箱和解析镜像，生成临时密钥，等待管理服务及看门狗就绪后执行后端全量测试，最后删除本次容器、卷和镜像。它会清理 `backend/target`，请勿与本地正在运行的后端共用同一检出目录；需先安装 Docker 并保证本机未对测试开放的端口设置防火墙拦截。
+测试按类使用独立 JVM，防止 Spring 测试上下文在其 Testcontainers 数据库停止后继续后台重连；不使用自动重试来掩盖失败。
+
+代码格式由固定版本的 Prettier 和 Spotless / google-java-format 统一，CI 分别检查前端和后端。修改前端格式使用 `npm --prefix frontend run format`；修改 Java 格式使用 `backend/mvnw -B -f backend/pom.xml spotless:apply`。检查命令只报告问题，不修改文件；格式化命令会改写对应源码。
+当前 Prettier 对部分紧凑的 Vue 模板第一次格式化后仍可能产生差异，因此前端格式化命令执行两遍；升级工具时应重新验证这一限制。
 
 ## 完整应用 Compose 启动（打包联调）
 
