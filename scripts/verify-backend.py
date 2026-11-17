@@ -49,6 +49,9 @@ try:
         except (OSError, ValueError, urllib.error.HTTPError):
             pass
         if time.monotonic() >= deadline:
+            subprocess.run(compose + ["ps", "-a"], cwd=root, env=env, check=False)
+            subprocess.run(compose + ["logs", "--no-color", "--tail", "50", "sandbox-manager", "sandbox-watchdog"],
+                           cwd=root, env=env, check=False)
             raise RuntimeError("Sandbox manager and watchdog did not become ready")
         time.sleep(1)
     env.update(IWORK_SANDBOX_TEST_URL=url, IWORK_SANDBOX_TEST_KEY_FILE=str(key_file))
