@@ -24,7 +24,13 @@ jobs:
       - run: npm --prefix frontend run format:check
       - run: npm --prefix frontend run typecheck
       - run: npm --prefix frontend test
-      - run: npm --prefix frontend run build
+      - run: npm --prefix frontend exec -- playwright install --with-deps chromium
+      - run: npm --prefix frontend run test:e2e
       - run: backend/mvnw -B -f backend/pom.xml spotless:check
       - run: python3 scripts/verify-backend.py
       - run: python3 scripts/verify-compose.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/target/site/jacoco/

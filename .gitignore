@@ -8,3 +8,5 @@ data/
 .DS_Store
 .archify/
 .idea/
+frontend/test-results/
+frontend/playwright-report/
