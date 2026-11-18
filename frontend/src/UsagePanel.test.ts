@@ -1,3 +1,4 @@
+import { apiResponse } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import UsagePanel from './UsagePanel.vue'
@@ -7,7 +8,7 @@ it('distinguishes an internal estimate from unknown supplier usage', async () =>
     'fetch',
     vi.fn(() =>
       Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify([
             {
               id: 'call',

@@ -1,3 +1,4 @@
+import { apiResponse } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
@@ -9,7 +10,7 @@ it('requires a temporary-password user to change password before opening convers
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue(
-      new Response(
+      apiResponse(
         JSON.stringify({
           id: 'one',
           username: 'alice',
@@ -34,9 +35,9 @@ it('shows a safe service error and allows retry without claiming the user is log
   const fetch = vi
     .fn()
     .mockResolvedValueOnce(
-      new Response('{"error":"service_unavailable","detail":"jdbc:private"}', { status: 503 })
+      apiResponse('{"error":"service_unavailable","detail":"jdbc:private"}', { status: 503 })
     )
-    .mockResolvedValueOnce(new Response('{"error":"authentication_required"}', { status: 401 }))
+    .mockResolvedValueOnce(apiResponse('{"error":"authentication_required"}', { status: 401 }))
   vi.stubGlobal('fetch', fetch)
   const router = makeRouter(createMemoryHistory())
   await router.push('/conversations')
@@ -53,13 +54,13 @@ it('submits login with CSRF and prevents duplicate submissions while waiting', a
   let resolveLogin!: (response: Response) => void
   const fetch = vi.fn((url: string) => {
     if (url.endsWith('/me'))
-      return Promise.resolve(new Response('{"error":"authentication_required"}', { status: 401 }))
-    if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"csrf-proof"}'))
+      return Promise.resolve(apiResponse('{"error":"authentication_required"}', { status: 401 }))
+    if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"csrf-proof"}'))
     if (url.endsWith('/login'))
       return new Promise<Response>((resolve) => {
         resolveLogin = resolve
       })
-    return Promise.resolve(new Response('{"items":[],"hasMore":false}'))
+    return Promise.resolve(apiResponse('{"items":[],"hasMore":false}'))
   })
   vi.stubGlobal('fetch', fetch)
   const router = makeRouter(createMemoryHistory())
@@ -79,7 +80,7 @@ it('submits login with CSRF and prevents duplicate submissions while waiting', a
     })
   )
   resolveLogin(
-    new Response(
+    apiResponse(
       '{"id":"one","username":"alice","displayName":"Alice","role":"USER","mustChangePassword":false}'
     )
   )
@@ -93,7 +94,7 @@ it('opens a direct conversation link with its task composer', async () => {
     'fetch',
     vi.fn((url: string) =>
       Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url.endsWith('/me')
               ? { id: 'one', displayName: 'Alice', role: 'USER', mustChangePassword: false }
@@ -127,14 +128,23 @@ it('clears a generated temporary password when leaving user management', async (
     'fetch',
     vi.fn((url: string, init?: RequestInit) =>
       Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url.endsWith('/me')
               ? { id: 'admin', displayName: '管理员', role: 'ADMIN', mustChangePassword: false }
               : url.endsWith('/csrf')
                 ? { token: 'proof' }
                 : init?.method === 'POST'
-                  ? { user: { username: 'alice' }, temporaryPassword: 'one-time-secret' }
+                  ? {
+                      user: {
+                        id: 'alice',
+                        username: 'alice',
+                        displayName: 'Alice',
+                        role: 'USER',
+                        mustChangePassword: true,
+                      },
+                      temporaryPassword: 'one-time-secret',
+                    }
                   : { items: [], hasMore: false }
           )
         )
@@ -188,7 +198,7 @@ it('does not expose the previous account conversations after expiry, another log
             hasMore: false,
           }
       }
-      return Promise.resolve(new Response(JSON.stringify(data), { status }))
+      return Promise.resolve(apiResponse(JSON.stringify(data), { status }))
     })
   )
   const router = makeRouter(createMemoryHistory())
@@ -216,19 +226,19 @@ it('ignores a conversation response that arrives after logout', async () => {
     vi.fn((url: string) => {
       if (url.endsWith('/me') || url.endsWith('/login'))
         return Promise.resolve(
-          new Response('{"id":"one","displayName":"User","role":"USER","mustChangePassword":false}')
+          apiResponse('{"id":"one","displayName":"User","role":"USER","mustChangePassword":false}')
         )
-      if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
-      if (url.endsWith('/logout')) return Promise.resolve(new Response(null, { status: 204 }))
+      if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
+      if (url.endsWith('/logout')) return Promise.resolve(apiResponse(null, { status: 204 }))
       if (url.startsWith('/api/projects'))
-        return Promise.resolve(new Response('{"items":[],"hasMore":false}'))
+        return Promise.resolve(apiResponse('{"items":[],"hasMore":false}'))
       if (firstList) {
         firstList = false
         return new Promise<Response>((resolve) => {
           finishList = resolve
         })
       }
-      return Promise.resolve(new Response('{"error":"service_unavailable"}', { status: 503 }))
+      return Promise.resolve(apiResponse('{"error":"service_unavailable"}', { status: 503 }))
     })
   )
   const router = makeRouter(createMemoryHistory())
@@ -241,7 +251,7 @@ it('ignores a conversation response that arrives after logout', async () => {
     .trigger('click')
   await flushPromises()
   finishList(
-    new Response(
+    apiResponse(
       '{"items":[{"id":"late","title":"Late private title","updatedAt":"2026-11-16T00:00:00Z"}],"hasMore":false}'
     )
   )
@@ -259,8 +269,8 @@ it('requires an explicit login after password change', async () => {
     vi.fn((url: string) =>
       Promise.resolve(
         url.endsWith('/password')
-          ? new Response(null, { status: 204 })
-          : new Response(
+          ? apiResponse(null, { status: 204 })
+          : apiResponse(
               JSON.stringify(
                 url.endsWith('/csrf')
                   ? { token: 'proof' }
@@ -290,7 +300,7 @@ it('preserves an unsent task draft and selected material when moving its convers
     vi.fn((url: string, init?: RequestInit) => {
       if (init?.method === 'PUT') {
         projectId = JSON.parse(String(init.body)).projectId
-        return Promise.resolve(new Response(null, { status: 204 }))
+        return Promise.resolve(apiResponse(null, { status: 204 }))
       }
       const data = url.endsWith('/csrf')
         ? { token: 'proof' }
@@ -301,13 +311,11 @@ it('preserves an unsent task draft and selected material when moving its convers
             : url.startsWith('/api/projects?')
               ? { items: [{ id: 'project', name: '蓝鲸' }], hasMore: false }
               : url === '/api/conversations/abc'
-                ? { id: 'abc', title: '会话', projectId }
+                ? { id: 'abc', title: '会话', updatedAt: '2026-11-18T00:00:00Z', projectId }
                 : url === '/api/materials?page=0'
                   ? { items: [{ id: 'material', name: 'source.md', byteSize: 12 }], hasMore: false }
-                  : url.endsWith('/documents')
-                    ? []
-                    : { items: [], hasMore: false }
-      return Promise.resolve(new Response(JSON.stringify(data)))
+                  : { items: [], hasMore: false }
+      return Promise.resolve(apiResponse(JSON.stringify(data)))
     })
   )
   const router = makeRouter(createMemoryHistory())

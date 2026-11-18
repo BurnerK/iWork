@@ -1,3 +1,13 @@
+import { z } from 'zod'
+import { responseSchema } from './apiSchemas'
+
+const failureEnvelope = z.object({ success: z.literal(false), data: z.null(), error: z.string() })
+const successEnvelope = z.object({
+  success: z.literal(true),
+  data: z.json(),
+  error: z.null(),
+})
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -42,18 +52,23 @@ export async function request<T>(
     throw new ApiError(503, 'service_unavailable')
   }
   if (response.status === 204) return undefined as T
-  let data: any
-  try {
-    data = await response.json()
-  } catch {
-    throw new ApiError(503, 'service_unavailable')
+  const data: unknown = await response.json().catch(() => undefined)
+  if (!response.ok) {
+    const error = failureEnvelope.safeParse(data)
+    throw new ApiError(response.status, error.success ? error.data.error : 'request_failed')
   }
-  if (!response.ok) throw new ApiError(response.status, data.error || 'request_failed')
-  return data as T
+  const envelope = successEnvelope.safeParse(data)
+  const schema = responseSchema(path, method)
+  if (!envelope.success || !schema) throw new ApiError(503, 'invalid_response')
+  const parsed = schema.safeParse(envelope.data.data)
+  if (!parsed.success) throw new ApiError(503, 'invalid_response')
+  return parsed.data as T
 }
 export function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '操作失败，请重试。'
   const messages: Record<string, string> = {
+    invalid_response: '服务器返回了无法识别的响应，请稍后重试。',
+    document_source_required: '本次任务没有成功读取来源正文，未保存新版本。',
     model_failed: '模型调用失败，供应商用量以已记录依据核算，仍可能待核实。',
     local_cancelled: '本地调用已取消，不代表供应商已停止。',
     context_compaction_failed: '上下文摘要未能完成，原始消息保留，请缩短本次要求。',
@@ -114,6 +129,7 @@ export function errorMessage(error: unknown): string {
       401: '登录已失效，请重新登录。',
       403: '无法执行此操作，请刷新页面后重试。',
       404: '资源不存在或你没有访问权限。',
+      500: '操作失败，请稍后重试。',
       503: '服务暂不可用，请稍后重试。',
     }[error.status] ||
     '提交内容无效，请检查后重试。'

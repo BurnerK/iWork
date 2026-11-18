@@ -73,12 +73,14 @@ class SecurityConfiguration {
             org.springframework.boot.availability.ApplicationAvailability availability) {
         Filter filter =
                 (request, response, chain) -> {
-                    if (((HttpServletRequest) request).getRequestURI().startsWith("/api/")
+                    var requestHttp = (HttpServletRequest) request;
+                    var responseHttp = (HttpServletResponse) response;
+                    boolean businessApi = requestHttp.getRequestURI().startsWith("/api/");
+                    if (businessApi
                             && availability.getReadinessState()
                                     != org.springframework.boot.availability.ReadinessState
                                             .ACCEPTING_TRAFFIC) {
-                        ApiFailure.write(
-                                (HttpServletResponse) response, 503, "service_unavailable");
+                        ApiFailure.write(requestHttp, responseHttp, 503, "service_unavailable");
                         return;
                     }
                     try {
@@ -86,13 +88,24 @@ class SecurityConfiguration {
                     } catch (Exception error) {
                         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
                             if (cause instanceof DataAccessException) {
-                                var http = (HttpServletResponse) response;
-                                if (!http.isCommitted()) {
-                                    http.reset();
-                                    ApiFailure.write(http, 503, "service_unavailable");
+                                if (!responseHttp.isCommitted()) {
+                                    responseHttp.reset();
+                                    ApiFailure.write(
+                                            requestHttp, responseHttp, 503, "service_unavailable");
                                 }
                                 return;
                             }
+                        }
+                        if (businessApi
+                                && !responseHttp.isCommitted()
+                                && !(error instanceof IOException)) {
+                            org.slf4j.LoggerFactory.getLogger(SecurityConfiguration.class)
+                                    .error(
+                                            "Unhandled API exception: {}",
+                                            error.getClass().getName());
+                            responseHttp.reset();
+                            ApiFailure.write(requestHttp, responseHttp, 500, "internal_error");
+                            return;
                         }
                         if (error instanceof ServletException servlet) throw servlet;
                         if (error instanceof IOException io) throw io;
@@ -133,7 +146,8 @@ class SecurityConfiguration {
                         errors ->
                                 errors.authenticationEntryPoint(
                                         (request, response, error) ->
-                                                ApiFailure.write(response, 403, "forbidden")))
+                                                ApiFailure.write(
+                                                        request, response, 403, "forbidden")))
                 .headers(
                         headers ->
                                 headers.contentSecurityPolicy(
@@ -195,7 +209,8 @@ class SecurityConfiguration {
                                     var session = request.getSession(false);
                                     if (session != null) session.invalidate();
                                 }
-                                ApiFailure.write(response, failure.status, failure.getMessage());
+                                ApiFailure.write(
+                                        request, response, failure.status, failure.getMessage());
                                 return;
                             }
                         }
@@ -230,6 +245,7 @@ class SecurityConfiguration {
                                 errors.authenticationEntryPoint(
                                                 (request, response, error) ->
                                                         ApiFailure.write(
+                                                                request,
                                                                 response,
                                                                 request.getRequestURI()
                                                                                 .startsWith("/api/")
@@ -239,7 +255,10 @@ class SecurityConfiguration {
                                         .accessDeniedHandler(
                                                 (request, response, error) ->
                                                         ApiFailure.write(
-                                                                response, 403, "forbidden")))
+                                                                request,
+                                                                response,
+                                                                403,
+                                                                "forbidden")))
                 .logout(
                         logout ->
                                 logout.logoutUrl("/api/auth/logout")

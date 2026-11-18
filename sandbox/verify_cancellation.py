@@ -39,7 +39,13 @@ def request(method, path, body=None, headers=None):
     extra.setdefault('Content-Type', 'application/json')
     with client.open(urllib.request.Request(args.url + path, data=data, method=method, headers=extra), timeout=20) as response:
         raw = response.read()
-        return json.loads(raw) if 'application/json' in response.headers.get('Content-Type', '') else raw
+        if 'json' not in response.headers.get('Content-Type', ''):
+            return raw
+        payload = json.loads(raw)
+        if path.startswith('/api/'):
+            assert payload['success'] is True and payload['error'] is None
+            return payload['data']
+        return payload
 
 def until(check, timeout=30):
     end = time.monotonic() + timeout
@@ -87,8 +93,13 @@ try:
             paused = False
         final = until(lambda: (state if (state := request('GET', '/api/tasks/' + task + '/parses')[0])['cleanup'] == 'CONFIRMED' else None), 40)
         assert not containers(parse['id']), 'Docker still reports the job container'
-        versions = request('GET', '/api/conversations/' + conversation + '/documents')
-        assert all(version['taskId'] != task for version in versions)
+        page = 0
+        while True:
+            versions = request('GET', f'/api/conversations/{conversation}/documents?page={page}')
+            assert all(version['taskId'] != task for version in versions['items'])
+            if not versions['hasMore']:
+                break
+            page += 1
         assert request('GET', '/api/document-versions/' + args.base_version + '/content') == original
         calls = request('GET', '/api/tasks/' + task + '/calls')
         assert calls and all(call['status'] == 'CLOSED' for call in calls)

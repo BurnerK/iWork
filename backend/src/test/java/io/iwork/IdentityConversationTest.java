@@ -102,7 +102,9 @@ class IdentityConversationTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    path.startsWith("/api/")
+                            ? ApiTestResponse.body()
+                            : HttpResponse.BodyHandlers.ofString());
         }
 
         void csrf() throws Exception {
@@ -409,7 +411,9 @@ class IdentityConversationTest {
             try {
                 var response = browser.request("GET", "/api/auth/me", null, false);
                 assertThat(response.statusCode()).isEqualTo(503);
-                assertThat(response.body()).isEqualTo("{\"error\":\"service_unavailable\"}");
+                assertThat(response.body())
+                        .isEqualTo(
+                                "{\"success\":false,\"data\":null,\"error\":\"service_unavailable\"}");
                 assertThat(
                                 browser.request("GET", "/actuator/health/liveness", null, false)
                                         .statusCode())

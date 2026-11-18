@@ -73,7 +73,7 @@ class DocumentRevisionTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    io.iwork.ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -163,10 +163,14 @@ class DocumentRevisionTest {
                         finish = "stop";
                     } else {
                         String tool =
-                                source && !read ? "read_document_version" : "prepare_document";
+                                source && !read && !user.contains("fixture skip read")
+                                        ? "read_document_version"
+                                        : "prepare_document";
                         var args =
                                 tool.equals("read_document_version")
-                                        ? Map.of("offset", 0)
+                                        ? Map.of(
+                                                "offset",
+                                                user.contains("fixture bad offset") ? -1 : 0)
                                         : Map.of(
                                                 "title",
                                                 "项目计划",
@@ -229,6 +233,8 @@ class DocumentRevisionTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName(
+            "Saved versions remain immutable and can be reused across conversations")
     void savedVersionsRemainImmutableAndCanBeReusedAcrossConversations() throws Exception {
         var admin = new Browser();
         admin.login("admin", "Initial-password-11");
@@ -287,6 +293,7 @@ class DocumentRevisionTest {
                                                 null,
                                                 false)
                                         .body())
+                        .path("items")
                         .get(0);
         String id = version.path("versionId").asString(), artifact = version.path("id").asString();
         var original =
@@ -297,12 +304,13 @@ class DocumentRevisionTest {
         await(admin, revised);
         var versions =
                 json.readTree(
-                        admin.request(
-                                        "GET",
-                                        "/api/conversations/" + other + "/documents",
-                                        null,
-                                        false)
-                                .body());
+                                admin.request(
+                                                "GET",
+                                                "/api/conversations/" + other + "/documents",
+                                                null,
+                                                false)
+                                        .body())
+                        .path("items");
         assertThat(versions.size()).isEqualTo(2);
         var latest = versions.get(0);
         assertThat(latest.path("id").asString()).isEqualTo(artifact);
@@ -544,6 +552,171 @@ class DocumentRevisionTest {
                                 .path("items")
                                 .isEmpty())
                 .isTrue();
+
+        for (String prompt : List.of("fixture skip read", "fixture bad offset")) {
+            String blocked = start(admin, conversation(admin), model, id, prompt);
+            await(admin, blocked, "FAILED");
+            assertThat(
+                            db.queryForObject(
+                                    "SELECT COUNT(*) FROM document_versions WHERE task_id=?",
+                                    Integer.class,
+                                    blocked))
+                    .isZero();
+        }
+
+        String documentsPath = "/api/conversations/" + first + "/documents";
+        db.update(
+                "UPDATE document_versions SET created_at='2000-01-01 00:00:00' WHERE document_id=?",
+                artifact);
+        for (int i = 0; i < 40; i++) {
+            String taskId = UUID.randomUUID().toString();
+            String versionId = new UUID(0, i + 1).toString();
+            db.update(
+                    "INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,status,execution_state) VALUES(?,?,?,?,?,?,'COMPLETED','STOPPED')",
+                    taskId,
+                    uid,
+                    first,
+                    model,
+                    taskId,
+                    "0".repeat(64));
+            db.update(
+                    "INSERT INTO document_versions(id,document_id,task_id,version_number,byte_size,sha256,title,created_at) VALUES(?,?,?,?,?,?,?,'2020-01-01 00:00:00')",
+                    versionId,
+                    artifact,
+                    taskId,
+                    100 + i,
+                    0,
+                    "0".repeat(64),
+                    "分页测试版本");
+        }
+        var observed = new ArrayList<String>();
+        int page = 0;
+        while (true) {
+            var result =
+                    json.readTree(
+                            admin.request("GET", documentsPath + "?page=" + page, null, false)
+                                    .body());
+            var rows = result.path("items");
+            assertThat(rows.size()).isLessThanOrEqualTo(20);
+            rows.forEach(row -> observed.add(row.path("versionId").asString()));
+            if (!result.path("hasMore").asBoolean()) break;
+            assertThat(++page).isLessThan(3);
+        }
+        assertThat(page).isEqualTo(2);
+        assertThat(observed).doesNotHaveDuplicates().contains(id);
+        assertThat(observed.subList(0, 40))
+                .containsExactlyElementsOf(
+                        java.util.stream.IntStream.iterate(40, n -> n > 0, n -> n - 1)
+                                .mapToObj(n -> new UUID(0, n).toString())
+                                .toList());
+        assertThat(admin.request("GET", documentsPath + "?page=-1", null, false).statusCode())
+                .isEqualTo(400);
+        assertThat(ordinary.request("GET", documentsPath + "?page=1", null, false).statusCode())
+                .isEqualTo(404);
+        assertThat(admin.request("GET", documentsPath + "?page=invalid", null, false).statusCode())
+                .isEqualTo(400);
+        assertThat(admin.request("POST", documentsPath, "{}", true).statusCode()).isEqualTo(405);
+        assertThat(admin.request("GET", "/api/nonexistent", null, false).statusCode())
+                .isEqualTo(404);
+        var oldTasks =
+                json.readTree(
+                                admin.request(
+                                                "GET",
+                                                "/api/conversations/" + first + "/tasks?page=2",
+                                                null,
+                                                false)
+                                        .body())
+                        .path("items");
+        assertThat(oldTasks.toString()).contains(id, "publishedVersion");
+
+        String workerId = created.path("user").path("id").asString();
+        admin.request(
+                "PUT",
+                "/api/admin/users/" + workerId + "/model-access",
+                json.writeValueAsString(Map.of("modelIds", List.of(model))),
+                true);
+        admin.request("PUT", "/api/admin/users/" + workerId + "/budget", "{\"limit\":\"5\"}", true);
+        preparedGate = new java.util.concurrent.CountDownLatch(1);
+        finishGate = reactor.core.publisher.Sinks.empty();
+        String inFlight = start(ordinary, own, model, null, "gated administrator recovery");
+        try {
+            assertThat(preparedGate.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            String budget = ordinary.request("GET", "/api/budget", null, false).body();
+            assertThat(json.readTree(budget).path("reserved").asString()).isNotEqualTo("0.000000");
+            var workspace =
+                    java.nio.file.Path.of(
+                            "target/document-revision-files/document-workspaces", inFlight);
+            assertThat(workspace).exists();
+            recoverAdministrator();
+            assertThat(admin.request("GET", "/api/auth/me", null, false).statusCode())
+                    .isEqualTo(401);
+            assertThat(workspace).exists();
+            assertThat(ordinary.request("GET", "/api/budget", null, false).body())
+                    .isEqualTo(budget);
+            assertThat(ordinary.request("GET", "/api/tasks/" + inFlight, null, false).body())
+                    .contains("RUNNING");
+            assertThat(
+                            db.queryForObject(
+                                    "SELECT COUNT(*) FROM model_calls WHERE task_id=? AND status='OPEN'",
+                                    Integer.class,
+                                    inFlight))
+                    .isPositive();
+        } finally {
+            finishGate.tryEmitEmpty();
+        }
+        await(ordinary, inFlight);
+        assertThat(
+                        json.readTree(ordinary.request("GET", "/api/budget", null, false).body())
+                                .path("reserved")
+                                .asString())
+                .isEqualTo("0.000000");
+    }
+
+    private void recoverAdministrator() throws Exception {
+        var file =
+                java.nio.file.Files.createTempFile(
+                        java.nio.file.Path.of("target"),
+                        "recover-",
+                        ".secret",
+                        java.nio.file.attribute.PosixFilePermissions.asFileAttribute(
+                                java.nio.file.attribute.PosixFilePermissions.fromString(
+                                        "rw-------")));
+        try {
+            java.nio.file.Files.writeString(file, "Recovered-test-password-18");
+            var command = new ArrayList<String>();
+            command.add(
+                    java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java")
+                            .toString());
+            // The recovery JVM exits before this test JVM writes its coverage data.
+            java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments().stream()
+                    .filter(
+                            argument ->
+                                    argument.startsWith("-javaagent:")
+                                            && argument.contains("org.jacoco.agent"))
+                    .forEach(command::add);
+            command.addAll(
+                    List.of(
+                            "-cp",
+                            System.getProperty("java.class.path"),
+                            "io.iwork.IWorkApplication",
+                            "--recover-admin"));
+            var process = new ProcessBuilder(command).redirectErrorStream(true).inheritIO();
+            process.environment()
+                    .put("IWORK_RECOVERY_PASSWORD_FILE", file.toAbsolutePath().toString());
+            process.environment().put("SPRING_DATASOURCE_URL", MYSQL.getJdbcUrl());
+            process.environment().put("SPRING_DATASOURCE_USERNAME", MYSQL.getUsername());
+            process.environment().put("SPRING_DATASOURCE_PASSWORD", MYSQL.getPassword());
+            process.environment().put("IWORK_BOOTSTRAP_USERNAME", "admin");
+            var child = process.start();
+            try {
+                assertThat(child.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                assertThat(child.exitValue()).isZero();
+            } finally {
+                if (child.isAlive()) child.destroyForcibly();
+            }
+        } finally {
+            java.nio.file.Files.deleteIfExists(file);
+        }
     }
 
     String conversation(Browser browser) throws Exception {

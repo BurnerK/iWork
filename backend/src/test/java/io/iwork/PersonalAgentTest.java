@@ -79,7 +79,7 @@ public class PersonalAgentTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    io.iwork.ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -100,6 +100,7 @@ public class PersonalAgentTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Personal configuration is owned validated and reusable")
     void personalConfigurationIsOwnedValidatedAndReusable() throws Exception {
         var admin = new Browser();
         admin.login("admin", "Initial-password-11");
@@ -252,7 +253,7 @@ public class PersonalAgentTest {
                                 .header("Content-Type", "application/octet-stream")
                                 .POST(HttpRequest.BodyPublishers.ofString("蓝鲸项目，周五交付。"))
                                 .build(),
-                        HttpResponse.BodyHandlers.ofString());
+                        io.iwork.ApiTestResponse.body());
         assertThat(upload.statusCode()).isEqualTo(201);
         String material = json.readTree(upload.body()).path("id").asString();
         var taskBody =
@@ -288,6 +289,7 @@ public class PersonalAgentTest {
                                                 null,
                                                 false)
                                         .body())
+                        .path("items")
                         .get(0);
         assertThat(
                         admin.request(
@@ -330,6 +332,7 @@ public class PersonalAgentTest {
                                                 null,
                                                 false)
                                         .body())
+                        .path("items")
                         .get(0);
         assertThat(
                         admin.request(
@@ -456,7 +459,7 @@ public class PersonalAgentTest {
                                 .header("Content-Type", "application/octet-stream")
                                 .POST(HttpRequest.BodyPublishers.ofString("蓝鲸项目，周五交付。"))
                                 .build(),
-                        HttpResponse.BodyHandlers.ofString());
+                        io.iwork.ApiTestResponse.body());
         next.put("materialIds", List.of(json.readTree(ownUpload.body()).path("id").asString()));
         String budgetBefore = admin.request("GET", "/api/budget", null, false).body();
         String ownTask =

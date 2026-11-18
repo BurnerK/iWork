@@ -73,7 +73,7 @@ class TaskLifecycleTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    io.iwork.ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -117,6 +117,7 @@ class TaskLifecycleTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Task submission is persistent and idempotent")
     void taskSubmissionIsPersistentAndIdempotent() throws Exception {
         var admin = new Browser();
         admin.login("admin", "Initial-password-11");
@@ -172,7 +173,7 @@ class TaskLifecycleTest {
                                 .header("Content-Type", "application/octet-stream")
                                 .POST(HttpRequest.BodyPublishers.ofString("source material"))
                                 .build(),
-                        HttpResponse.BodyHandlers.ofString());
+                        io.iwork.ApiTestResponse.body());
         assertThat(uploaded.statusCode()).isEqualTo(201);
         var materialId = json.readTree(uploaded.body()).get("id").asString();
         String body =

@@ -73,7 +73,7 @@ class ConversationContextTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    io.iwork.ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -180,6 +180,8 @@ class ConversationContextTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName(
+            "Explicit tasks continue only their own completed conversation")
     void explicitTasksContinueOnlyTheirOwnCompletedConversation() throws Exception {
         var admin = new Browser();
         admin.login("admin", "Initial-password-11");

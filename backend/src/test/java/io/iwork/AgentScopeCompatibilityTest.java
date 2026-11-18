@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class AgentScopeCompatibilityTest {
     @Test
+    @org.junit.jupiter.api.DisplayName("Sdk message round trips with boot managed dependencies")
     void sdkMessageRoundTripsWithBootManagedDependencies() {
         var message = Msg.builder().name("user").role(MsgRole.USER).textContent("兼容性检查").build();
         var codec = JsonUtils.getJsonCodec();

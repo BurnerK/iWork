@@ -43,6 +43,7 @@ class ApplicationTest {
     @Autowired TestRestTemplate http;
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Readiness is public but only reports status")
     void readinessIsPublicButOnlyReportsStatus() {
         var response = http.getForEntity("/actuator/health/readiness", String.class);
         assertThat(response.getStatusCode().value()).isEqualTo(200);
@@ -50,6 +51,7 @@ class ApplicationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Private and diagnostic endpoints are not public")
     void privateAndDiagnosticEndpointsAreNotPublic() {
         for (var path :
                 new String[] {
@@ -68,6 +70,7 @@ class ApplicationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Database outage fails readiness but not liveness")
     void databaseOutageFailsReadinessButNotLiveness() {
         var docker = MYSQL.getDockerClient();
         docker.pauseContainerCmd(MYSQL.getContainerId()).exec();
@@ -84,6 +87,7 @@ class ApplicationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Unavailable file storage fails readiness")
     void unavailableFileStorageFailsReadiness() throws Exception {
         var directory = Path.of("target/test-files");
         var backup = Path.of("target/test-files-backup");

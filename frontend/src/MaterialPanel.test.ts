@@ -1,3 +1,4 @@
+import { apiResponse } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import MaterialPanel from './MaterialPanel.vue'
@@ -9,7 +10,7 @@ it('uploads original bytes then makes the saved material selectable', async () =
   const fetch = vi.fn((url: string, init?: RequestInit) => {
     if (init?.method === 'POST') uploaded = true
     return Promise.resolve(
-      new Response(
+      apiResponse(
         JSON.stringify(
           url.endsWith('/csrf')
             ? { token: 'proof' }

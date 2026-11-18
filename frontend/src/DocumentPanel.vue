@@ -40,25 +40,16 @@ async function load(nextPage = page.value) {
   loading.value = true
   error.value = ''
   try {
-    if (all.value || props.projectId) {
-      const result = await request<{ items: Version[]; hasMore: boolean }>(
-        props.projectId && !all.value
-          ? `/api/projects/${props.projectId}/documents?page=${nextPage}`
-          : `/api/document-versions?page=${nextPage}`
-      )
-      if (!disposed) {
-        items.value = result.items
-        hasMore.value = result.hasMore
-        page.value = nextPage
-      }
-    } else {
-      const result = await request<Version[]>(
-        `/api/conversations/${props.conversationId}/documents`
-      )
-      if (!disposed) {
-        items.value = result
-        hasMore.value = false
-      }
+    const path = all.value
+      ? '/api/document-versions'
+      : props.projectId
+        ? `/api/projects/${props.projectId}/documents`
+        : `/api/conversations/${props.conversationId}/documents`
+    const result = await request<{ items: Version[]; hasMore: boolean }>(`${path}?page=${nextPage}`)
+    if (!disposed) {
+      items.value = result.items
+      hasMore.value = result.hasMore
+      page.value = nextPage
     }
   } catch (cause) {
     if (!disposed) error.value = errorMessage(cause)
@@ -84,7 +75,7 @@ function revisePreview() {
   emit('selectVersion', selected.value)
   dialog.value?.close()
 }
-async function preview(version: Version) {
+async function preview(version: Pick<Version, 'versionId'>) {
   if (previewing.value) return
   if (selected.value?.versionId === version.versionId) {
     selected.value = undefined
@@ -175,7 +166,7 @@ onUnmounted(() => {
           </button>
         </li>
       </ul>
-      <nav v-if="all || projectId" aria-label="个人版本分页">
+      <nav aria-label="文档版本分页">
         <button
           type="button"
           class="secondary"

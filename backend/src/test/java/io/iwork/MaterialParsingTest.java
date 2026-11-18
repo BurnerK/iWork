@@ -159,7 +159,7 @@ class MaterialParsingTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    io.iwork.ApiTestResponse.body());
         }
 
         void login(String user, String pass) throws Exception {
@@ -191,7 +191,7 @@ class MaterialParsingTest {
                                     .header("X-File-Name", "source.md")
                                     .POST(HttpRequest.BodyPublishers.ofByteArray(bytes))
                                     .build(),
-                            HttpResponse.BodyHandlers.ofString());
+                            io.iwork.ApiTestResponse.body());
             assertThat(response.statusCode()).isEqualTo(201);
             return json.readTree(response.body()).get("id").asString();
         }
@@ -450,6 +450,8 @@ class MaterialParsingTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName(
+            "Real harness parses authorized material and publishes only task material")
     void realHarnessParsesAuthorizedMaterialAndPublishesOnlyTaskMaterial() throws Exception {
         var admin = new Browser();
         admin.login("admin", "Initial-password-16");
@@ -543,11 +545,14 @@ class MaterialParsingTest {
                 .isEqualTo("COMPLETED");
         var documents =
                 json.readTree(
-                        admin.send(
-                                        "GET",
-                                        "/api/conversations/" + documentConversation + "/documents",
-                                        null)
-                                .body());
+                                admin.send(
+                                                "GET",
+                                                "/api/conversations/"
+                                                        + documentConversation
+                                                        + "/documents",
+                                                null)
+                                        .body())
+                        .path("items");
         assertThat(documents.size()).isEqualTo(1);
         String version = documents.get(0).get("versionId").asString();
         assertThat(version)
@@ -575,6 +580,7 @@ class MaterialParsingTest {
                                                                 + "/documents",
                                                         null)
                                                 .body())
+                                .path("items")
                                 .size())
                 .isEqualTo(1);
         assertThat(
@@ -626,6 +632,7 @@ class MaterialParsingTest {
                                                                 + "/documents",
                                                         null)
                                                 .body())
+                                .path("items")
                                 .isEmpty())
                 .isTrue();
         String storage =
@@ -669,6 +676,7 @@ class MaterialParsingTest {
                                                                     + "/documents",
                                                             null)
                                                     .body())
+                                    .path("items")
                                     .isEmpty())
                     .isTrue();
         }

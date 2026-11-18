@@ -16,9 +16,11 @@ class DocumentController {
     }
 
     @GetMapping("/api/conversations/{id}/documents")
-    List<Map<String, Object>> list(
-            @AuthenticationPrincipal Caller caller, @PathVariable String id) {
-        return documents.list(caller, id);
+    io.iwork.conversation.TaskService.Page<Map<String, Object>> list(
+            @AuthenticationPrincipal Caller caller,
+            @PathVariable String id,
+            @RequestParam(defaultValue = "0") int page) {
+        return documents.list(caller, id, page);
     }
 
     @GetMapping("/api/document-versions")

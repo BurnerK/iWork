@@ -1,3 +1,4 @@
+import { apiResponse } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import TaskPanel from './TaskPanel.vue'
@@ -8,22 +9,22 @@ afterEach(() => {
 it('retries an uncertain submission with the same request identity and never cancels on unmount', async () => {
   const bodies: string[] = []
   const fetch = vi.fn((url: string, init?: RequestInit) => {
-    if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+    if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
     if (init?.method === 'POST') {
       bodies.push(String(init.body))
       if (bodies.length === 1) return Promise.reject(new TypeError('connection lost'))
       return Promise.resolve(
-        new Response('{"id":"task-one","status":"RUNNING","executionState":"RUNNING"}', {
+        apiResponse('{"id":"task-one","status":"RUNNING","executionState":"RUNNING"}', {
           status: 202,
         })
       )
     }
     return Promise.resolve(
-      new Response(
+      apiResponse(
         JSON.stringify(
           url === '/api/models'
             ? [{ id: 'model', name: '模型' }]
-            : url.endsWith('/documents')
+            : url.includes('/documents')
               ? []
               : { items: [], hasMore: false }
         )
@@ -50,17 +51,17 @@ it('keeps an uncertain request identity after reopening the same conversation', 
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
-      if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+      if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
       if (init?.method === 'POST') {
         bodies.push(String(init.body))
         return Promise.reject(new TypeError('lost'))
       }
       return Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url === '/api/models'
               ? [{ id: 'model', name: '模型' }]
-              : url.endsWith('/documents')
+              : url.includes('/documents')
                 ? []
                 : { items: [], hasMore: false }
           )
@@ -88,17 +89,17 @@ it('keeps an uncertain request identity after reopening the same conversation', 
 it('waits for an in-flight upload before accepting the task input', async () => {
   let finish!: (response: Response) => void
   const fetch = vi.fn((url: string, init?: RequestInit) => {
-    if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+    if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
     if (url === '/api/materials' && init?.method === 'POST')
       return new Promise<Response>((resolve) => {
         finish = resolve
       })
     return Promise.resolve(
-      new Response(
+      apiResponse(
         JSON.stringify(
           url === '/api/models'
             ? [{ id: 'model', name: '模型' }]
-            : url.endsWith('/documents')
+            : url.includes('/documents')
               ? []
               : { items: [], hasMore: false }
         )
@@ -120,7 +121,7 @@ it('waits for an in-flight upload before accepting the task input', async () => 
   expect(
     fetch.mock.calls.some(([url, init]) => url.includes('/tasks') && init?.method === 'POST')
   ).toBe(false)
-  finish(new Response('{"id":"saved","name":"source.txt","byteSize":6}'))
+  finish(apiResponse('{"id":"saved","name":"source.txt","byteSize":6}'))
   await flushPromises()
   expect(form.get('button[type=submit]').attributes('disabled')).toBeUndefined()
   panel.unmount()
@@ -131,17 +132,17 @@ it('preserves explicit document output when retrying an uncertain request', asyn
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
-      if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+      if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
       if (init?.method === 'POST') {
         bodies.push(String(init.body))
         return Promise.reject(new TypeError('lost'))
       }
       return Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url === '/api/models'
               ? [{ id: 'model', name: '模型' }]
-              : url.endsWith('/documents')
+              : url.includes('/documents')
                 ? []
                 : { items: [], hasMore: false }
           )
@@ -183,13 +184,13 @@ it('selects a personal version and preserves its source across an uncertain retr
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
-      if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+      if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
       if (init?.method === 'POST') {
         bodies.push(String(init.body))
         return Promise.reject(new TypeError('lost'))
       }
       return Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url === '/api/models'
               ? [{ id: 'model', name: '模型' }]
@@ -197,7 +198,7 @@ it('selects a personal version and preserves its source across an uncertain retr
                 ? version
                 : url === '/api/document-versions?page=0'
                   ? { items: [version], hasMore: false }
-                  : url.endsWith('/documents')
+                  : url.includes('/documents')
                     ? []
                     : { items: [], hasMore: false }
           )
@@ -239,7 +240,7 @@ it('retains a selected personal agent across uncertain submission and reopening 
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
-      if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+      if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
       if (init?.method === 'POST') {
         bodies.push(String(init.body))
         return Promise.reject(new TypeError('lost'))
@@ -251,10 +252,10 @@ it('retains a selected personal agent across uncertain submission and reopening 
             ? agent
             : url.startsWith('/api/agents')
               ? { items: [agent], hasMore: false }
-              : url.endsWith('/documents')
+              : url.includes('/documents')
                 ? []
                 : { items: [], hasMore: false }
-      return Promise.resolve(new Response(JSON.stringify(value)))
+      return Promise.resolve(apiResponse(JSON.stringify(value)))
     })
   )
   let panel = mount(TaskPanel, {
@@ -282,17 +283,17 @@ it('retains a selected personal agent across uncertain submission and reopening 
 it('creates a draft conversation once and retries its first task with the same request', async () => {
   const submissions: string[] = []
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
-    if (url.endsWith('/csrf')) return new Response('{"token":"proof"}')
-    if (url === '/api/models') return new Response('[{"id":"model","name":"模型"}]')
-    if (url.endsWith('/documents')) return new Response('[]')
+    if (url.endsWith('/csrf')) return apiResponse('{"token":"proof"}')
+    if (url === '/api/models') return apiResponse('[{"id":"model","name":"模型"}]')
+    if (url.includes('/documents')) return apiResponse('{"items":[],"hasMore":false}')
     if (url === '/api/conversations' && init?.method === 'POST')
-      return new Response('{"id":"first"}', { status: 201 })
+      return apiResponse('{"id":"first"}', { status: 201 })
     if (url === '/api/conversations/first/tasks' && init?.method === 'POST') {
       submissions.push(String(init.body))
       if (submissions.length === 1) throw new TypeError('connection lost')
-      return new Response('{}', { status: 202 })
+      return apiResponse('{"id":"task"}', { status: 202 })
     }
-    return new Response('{"items":[],"hasMore":false}')
+    return apiResponse('{"items":[],"hasMore":false}')
   })
   vi.stubGlobal('fetch', fetch)
   const panel = mount(TaskPanel, { props: { ownerId: 'draft-owner' } })

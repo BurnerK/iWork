@@ -73,7 +73,7 @@ class ModelConfigurationTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    io.iwork.ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -94,6 +94,7 @@ class ModelConfigurationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Administrator saves model without returning credentials")
     void administratorSavesModelWithoutReturningCredentials() throws Exception {
         var admin = new Browser();
         admin.login("admin", "Initial-password-11");

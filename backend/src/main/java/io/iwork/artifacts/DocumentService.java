@@ -334,20 +334,26 @@ public class DocumentService {
     private static final String VERSION_COLUMNS =
             "SELECT d.id,v.title,v.id AS versionId,v.version_number AS versionNumber,v.task_id AS taskId,v.byte_size AS byteSize,v.created_at AS createdAt,v.base_version_id AS baseVersionId FROM documents d JOIN document_versions v ON v.document_id=d.id ";
 
-    public List<Map<String, Object>> list(Caller caller, String conversation) {
+    public io.iwork.conversation.TaskService.Page<Map<String, Object>> list(
+            Caller caller, String conversation, int page) {
+        if (page < 0 || page > 100000) throw new ApiFailure(400, "invalid_pagination");
         if (db.queryForList(
                         "SELECT id FROM conversations WHERE id=? AND owner_id=?",
                         String.class,
                         conversation,
                         caller.id())
                 .isEmpty()) throw new ApiFailure(404, "not_found");
-        return db.queryForList(
-                VERSION_COLUMNS
-                        + "WHERE d.owner_id=? AND (d.conversation_id=? OR d.id IN (SELECT source.document_id FROM tasks t JOIN document_versions source ON source.id=t.base_version_id WHERE t.owner_id=? AND t.conversation_id=?)) ORDER BY v.created_at DESC,v.id DESC",
-                caller.id(),
-                conversation,
-                caller.id(),
-                conversation);
+        var rows =
+                db.queryForList(
+                        VERSION_COLUMNS
+                                + "WHERE d.owner_id=? AND (d.conversation_id=? OR d.id IN (SELECT source.document_id FROM tasks t JOIN document_versions source ON source.id=t.base_version_id WHERE t.owner_id=? AND t.conversation_id=?)) ORDER BY v.created_at DESC,v.id DESC LIMIT 21 OFFSET ?",
+                        caller.id(),
+                        conversation,
+                        caller.id(),
+                        conversation,
+                        page * 20);
+        return new io.iwork.conversation.TaskService.Page<>(
+                rows.stream().limit(20).toList(), rows.size() > 20);
     }
 
     public io.iwork.conversation.TaskService.Page<Map<String, Object>> personal(

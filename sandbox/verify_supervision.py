@@ -39,7 +39,13 @@ def request(method, path, body=None, headers=None):
     data = body if isinstance(body, bytes) else None if body is None else json.dumps(body).encode()
     with client.open(urllib.request.Request('http://127.0.0.1:18092' + path, data=data, method=method, headers=extra), timeout=15) as response:
         raw = response.read()
-        return json.loads(raw) if 'json' in response.headers.get('Content-Type', '') else raw
+        if 'json' not in response.headers.get('Content-Type', ''):
+            return raw
+        payload = json.loads(raw)
+        if path.startswith('/api/'):
+            assert payload['success'] is True and payload['error'] is None
+            return payload['data']
+        return payload
 
 def until(check, timeout=40):
     end = time.monotonic() + timeout

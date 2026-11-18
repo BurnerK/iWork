@@ -92,7 +92,7 @@ IDEA 调试时先执行 `npm run dev:infra`，将 `.env.development` 作为后�
 
 生产默认 `IWORK_COOKIE_SECURE=true`，必须通过 HTTPS 使用。仅本机 HTTP 开发显式设置 `IWORK_COOKIE_SECURE=false`。Redis 只保存 Spring Session，Compose 使用内部网络/AOF命名卷，无宿主端口；MySQL 用户与会话不存 Redis。Cookie HttpOnly/SameSite=Lax，最长 30 天；服务端另校验自登录起 30 天绝对期限及 7 天闲置期限。多设备可同时登录，改密/重置/禁用原子递增 authVersion 撤销所有旧登录；重新启用不会复活旧登录。
 
-登录和所有写请求须先 GET `/api/auth/csrf`，将 token 放在 `X-CSRF-TOKEN` 请求头；登录为 form POST，其他写请求为 JSON。登录更换 Session ID；自行改密拒绝保留原密码，成功返回 204 并撤销当前及其他设备登录，用户须用新密码显式重新登录。下次写入应获取新 CSRF。临时密码只能访问本人、改密、退出及 CSRF 接口。错误 401/403/404/409/503 分别表示身份、权限/CSRF、资源不存在（含非本人）、重复用户名、依赖不可用，不回传内部异常。会话和用户分页参数 page 从 0 开始、size 默认 20，最大 100。
+登录和所有写请求须先 GET `/api/auth/csrf`，将 `data.token` 放在 `X-CSRF-TOKEN` 请求头；登录为 form POST，其他写请求为 JSON。登录更换 Session ID；自行改密拒绝保留原密码，成功返回 204 并撤销当前及其他设备登录，用户须用新密码显式重新登录。下次写入应获取新 CSRF。临时密码只能访问本人、改密、退出及 CSRF 接口。错误 401/403/404/409/503 分别表示身份、权限/CSRF、资源不存在（含非本人）、重复用户名、依赖不可用，不回传内部异常。会话和用户分页参数 page 从 0 开始、size 默认 20，最大 100。
 
 Redis 正常重建保留登录；删除 Redis 命名卷只丢失登录，重新登录后业务记录仍在 MySQL。不兼容 Session 序列化升级可以使旧登录失效，应在升级说明中要求重新登录；不能把 Redis 当作业务备份。AOF everysec 不保证断电零丢失。
 
@@ -184,3 +184,12 @@ DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等
 任务聚合诊断见 [#24 受限诊断契约](issue24-diagnostics-contract.md) 和 [验证记录](validation/issue24-diagnostics.md)。管理员只读取运行投影，不获得正文或摘要权限；SDK 异常日志默认关闭，排错优先使用任务/调用/处理作业标识及固定错误码。
 
 离线协调备份/空环境恢复工具：`python3 scripts/backup.py --help`，操作和前置条件见 [#25部署准备](issue25-operations.md)，[本地恢复证据](validation/issue25-local-restore.md)。目标Linux验收尚未完成。[#26真实试用矩阵](validation/issue26-acceptance-matrix.md)列出T01–T19证据和仍需人员/资料/模型预算授权的步骤。
+
+
+## 业务 HTTP 响应
+
+`/api/**` 中有正文的业务 JSON 使用统一信封。成功示例为 `{"success":true,"data":{"id":"…"},"error":null}`，失败示例为 `{"success":false,"data":null,"error":"not_found"}`。HTTP 状态和 Cookie、CSRF 机制继续作为协议的一部分。204 无正文，文件下载成功时返回原始字节。
+
+`GET /api/conversations/{id}/documents?page=0` 的 `data` 为 `{items,hasMore}`，每页最多 20 个版本，从第 0 页开始。旧客户端需升级为先解包 `data`，再处理分页。任务对象的 `publishedVersion` 提供已发布版本的 ID、标题和序号。
+
+`mvn verify` 在 `backend/target/site/jacoco/` 生成 JaCoCo 行覆盖率报告，合并测试 JVM 和管理员恢复测试启动的子 JVM。沙箱管理器与看门狗在独立容器运行，其内部执行未计入该报告。

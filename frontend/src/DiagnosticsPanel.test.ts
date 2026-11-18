@@ -1,3 +1,4 @@
+import { apiResponse } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import DiagnosticsPanel from './DiagnosticsPanel.vue'
@@ -16,6 +17,8 @@ it('keeps supplier uncertainty and cleanup retry separate after business cancell
       updatedAt: '2026-11-17T00:01:00Z',
       contextState: 'SNAPSHOT_REJECTED',
       summaryState: 'FALLBACK',
+      contextAt: null,
+      summaryAt: null,
     },
     calls: [
       {
@@ -27,6 +30,12 @@ it('keeps supplier uncertainty and cleanup retry separate after business cancell
         inputTokens: 100,
         outputTokens: null,
         charged: '0.1',
+        reservation: '0.2',
+        startedAt: '2026-11-17T00:00:00Z',
+        errorCode: null,
+        sentAt: null,
+        usageAt: null,
+        endedAt: null,
         currency: 'CNY',
       },
     ],
@@ -38,6 +47,10 @@ it('keeps supplier uncertainty and cleanup retry separate after business cancell
         status: 'FAILED',
         cleanup: 'UNKNOWN',
         cleanupAttempts: 2,
+        createdAt: '2026-11-17T00:00:00Z',
+        updatedAt: '2026-11-17T00:00:00Z',
+        cleanupAttemptedAt: null,
+        cleanupConfirmedAt: null,
         errorCode: 'sandbox_unavailable',
       },
     ],
@@ -45,7 +58,7 @@ it('keeps supplier uncertainty and cleanup retry separate after business cancell
   }
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(diagnostic))))
+    vi.fn().mockImplementation(() => Promise.resolve(apiResponse(JSON.stringify(diagnostic))))
   )
   const panel = mount(DiagnosticsPanel, { props: { taskId: 'task' } })
   await flushPromises()

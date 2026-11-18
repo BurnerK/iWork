@@ -2,7 +2,7 @@
 
 首版接收 UTF-8 `.txt` 与 `.md`，单份 1–2097152 字节，文件名最长 200 字符，不接收路径、控制字符、空文件或其他后缀。上传阶段只保存字节，UTF-8 解码及内容处理由 #16 的受限执行环境完成；后缀不代表内容已经验证。首版不包含 Office/PDF、外链抓取或知识库。
 
-`POST /api/materials` 使用 `application/octet-stream` 原始请求体及 URL 编码的 `X-File-Name`，沿用身份和 CSRF。成功返回 201 与 `id/name/format/byteSize/createdAt`；400 表示名称或完整性错误，413 超限，415 格式不支持，503 存储不可用。断线后先刷新资料列表核对，重复上传创建独立资源而不覆盖同名文件。
+`POST /api/materials` 使用 `application/octet-stream` 原始请求体及 URL 编码的 `X-File-Name`，沿用身份和 CSRF。成功返回 201，响应的 `data` 含 `id/name/format/byteSize/createdAt`；400 表示名称或完整性错误，413 超限，415 格式不支持，503 存储不可用。断线后先刷新资料列表核对，重复上传创建独立资源而不覆盖同名文件。
 
 `GET /api/materials?page=0` 每页 20 条；`GET /api/materials/{id}` 与 `GET /api/materials/{id}/content` 只返回调用者所有资源，跨用户与不存在均为 404。下载强制 attachment/octet-stream，并验证长度和 SHA-256。公开接口不返回宿主机路径，不直接渲染文档 HTML。
 

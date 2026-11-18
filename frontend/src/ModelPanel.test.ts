@@ -1,3 +1,4 @@
+import { apiResponse } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import ModelPanel from './ModelPanel.vue'
@@ -7,7 +8,7 @@ it('clears the draft when cancelling model editing', async () => {
     'fetch',
     vi.fn((url: string) =>
       Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url.includes('/users')
               ? { items: [], hasMore: false }
@@ -50,7 +51,7 @@ it('shows the personal budget and only server-authorized models', async () => {
     'fetch',
     vi.fn((url: string) =>
       Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url === '/api/models'
               ? [
@@ -82,7 +83,7 @@ it('shows the personal budget and only server-authorized models', async () => {
 it('lets administrators save a model reference without accepting a secret', async () => {
   const fetch = vi.fn((url: string, init?: RequestInit) =>
     Promise.resolve(
-      new Response(
+      apiResponse(
         JSON.stringify(
           url.endsWith('/csrf')
             ? { token: 'proof' }
@@ -91,7 +92,7 @@ it('lets administrators save a model reference without accepting a secret', asyn
               : url.endsWith('/model-settings')
                 ? { currency: 'CNY', locked: false }
                 : init?.method === 'POST'
-                  ? { id: 'saved' }
+                  ? { id: 'saved', ...JSON.parse(String(init.body)) }
                   : []
         )
       )
@@ -122,16 +123,38 @@ it('clears the previous user details when paging the user selector', async () =>
     'fetch',
     vi.fn((url: string) =>
       Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url.includes('/model-access')
               ? []
               : url.endsWith('/budget')
                 ? { currency: 'CNY', limit: '10', spent: '0', reserved: '0', available: '10' }
                 : url.includes('/users?page=0')
-                  ? { items: [{ id: 'alice', username: 'Alice' }], hasMore: true }
+                  ? {
+                      items: [
+                        {
+                          id: 'alice',
+                          username: 'Alice',
+                          displayName: 'Alice',
+                          role: 'USER',
+                          mustChangePassword: false,
+                        },
+                      ],
+                      hasMore: true,
+                    }
                   : url.includes('/users?page=1')
-                    ? { items: [{ id: 'bob', username: 'Bob' }], hasMore: false }
+                    ? {
+                        items: [
+                          {
+                            id: 'bob',
+                            username: 'Bob',
+                            displayName: 'Bob',
+                            role: 'USER',
+                            mustChangePassword: false,
+                          },
+                        ],
+                        hasMore: false,
+                      }
                     : url.endsWith('/model-settings')
                       ? { currency: 'CNY', locked: true }
                       : []

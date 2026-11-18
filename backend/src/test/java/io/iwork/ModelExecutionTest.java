@@ -76,7 +76,7 @@ class ModelExecutionTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    io.iwork.ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -218,6 +218,8 @@ class ModelExecutionTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName(
+            "Harness persists reply and provider usage under the caller budget")
     void harnessPersistsReplyAndProviderUsageUnderTheCallerBudget(
             org.springframework.boot.test.system.CapturedOutput output) throws Exception {
         var admin = new Browser();

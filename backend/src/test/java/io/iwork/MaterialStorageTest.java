@@ -73,7 +73,7 @@ class MaterialStorageTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    io.iwork.ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -94,6 +94,7 @@ class MaterialStorageTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Owner uploads and retrieves an independent original")
     void ownerUploadsAndRetrievesAnIndependentOriginal() throws Exception {
         var admin = new Browser();
         admin.login("admin", "Initial-password-11");
@@ -215,6 +216,6 @@ class MaterialStorageTest {
                         .header("Content-Type", "application/octet-stream")
                         .POST(HttpRequest.BodyPublishers.ofByteArray(bytes))
                         .build();
-        return browser.client.send(request, HttpResponse.BodyHandlers.ofString());
+        return browser.client.send(request, io.iwork.ApiTestResponse.body());
     }
 }

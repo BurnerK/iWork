@@ -1,3 +1,4 @@
+import { apiResponse } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import ParsingPanel from './ParsingPanel.vue'
@@ -7,7 +8,7 @@ it('keeps unconfirmed cleanup visible and renders parsed text as data', async ()
     'fetch',
     vi.fn((url: string) =>
       Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url.includes('?offset=')
               ? { text: '<script>unsafe()</script>', nextOffset: 24, hasMore: false }

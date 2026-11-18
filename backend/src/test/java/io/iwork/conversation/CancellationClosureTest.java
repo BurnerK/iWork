@@ -73,7 +73,7 @@ public class CancellationClosureTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    io.iwork.ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -334,7 +334,7 @@ public class CancellationClosureTest {
                                                                     + id))
                                             .GET()
                                             .build(),
-                                    HttpResponse.BodyHandlers.ofString());
+                                    io.iwork.ApiTestResponse.body());
             if (response.statusCode() != 200) throw new AssertionError("Remote receipt failed");
             return new ObjectMapper().readTree(response.body()).path("result").asString();
         }
@@ -386,6 +386,8 @@ public class CancellationClosureTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName(
+            "Cancellation and commit arbitrate late remote results without losing versions")
     void cancellationAndCommitArbitrateLateRemoteResultsWithoutLosingVersions() throws Exception {
         var admin = new Browser();
         admin.login("admin", "Initial-password-11");
@@ -445,6 +447,7 @@ public class CancellationClosureTest {
                                                 null,
                                                 false)
                                         .body())
+                        .path("items")
                         .get(0);
         String base = original.path("versionId").asString(),
                 artifact = original.path("id").asString();

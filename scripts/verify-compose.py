@@ -94,9 +94,17 @@ class Browser:
         try:
             with self.http.open(req, timeout=20) as response:
                 content = response.read()
-                return response.status, json.loads(content) if content else None
+                if not content:
+                    assert response.status == 204
+                    return response.status, None
+                envelope = json.loads(content)
+                assert envelope["success"] is True and envelope["error"] is None
+                return response.status, envelope["data"]
         except urllib.error.HTTPError as error:
-            return error.code, json.loads(error.read())
+            envelope = json.loads(error.read())
+            assert envelope["success"] is False and envelope["data"] is None
+            assert isinstance(envelope["error"], str)
+            return error.code, envelope
 
     def login(self, password):
         code, body = self.request("/api/auth/login", "POST", {"username": "admin", "password": password})
@@ -129,6 +137,11 @@ try:
     code, page = request("/")
     assert code == 200 and '<div id="app">' in page
     assert request("/actuator/env")[0] == 403
+    for asset in (root / "frontend/public/assets").rglob("*.svg"):
+        path = "/" + asset.relative_to(root / "frontend/public").as_posix()
+        with urllib.request.urlopen(f"http://127.0.0.1:{http_port}{path}", timeout=5) as response:
+            assert response.status == 200
+            assert response.headers.get_content_type() == "image/svg+xml"
     assert request("/api/tasks")[0] == 401
     assert migration_count() == "1"
     browser = Browser()

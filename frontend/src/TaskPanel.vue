@@ -21,11 +21,13 @@ const emit = defineEmits<{
 type Task = {
   agentName?: string
   id: string
+  publishedVersion?: PublishedVersion | null
   requestId: string
   status: string
   executionState: string
   errorCode: string | null
 }
+type PublishedVersion = { versionId: string; title: string; versionNumber: number }
 type Message = { id: number; taskId: string; role: string; content: string }
 type Page<T> = { items: T[]; hasMore: boolean }
 const models = ref<{ id: string; name: string }[]>([]),
@@ -337,7 +339,7 @@ onUnmounted(() => {
         :disabled="busy || !!pending || active"
         @select-version="selectVersion"
         :revision="tasks.map((task) => task.id + task.status).join(',')"
-        v-slot="{ items, preview, previewing }"
+        v-slot="{ preview, previewing }"
       >
         <div v-for="[taskId, turn] in turns" :key="taskId" class="task-turn">
           <ol class="messages">
@@ -402,15 +404,15 @@ onUnmounted(() => {
               </button>
             </details>
             <button
-              v-for="version in items.filter((item) => item.taskId === taskId)"
-              :key="version.versionId"
+              v-if="turn.task?.publishedVersion"
               type="button"
               class="artifact-card"
               :disabled="previewing"
-              @click="preview(version)"
+              @click="preview(turn.task.publishedVersion)"
             >
               <img :src="'/assets/icons/file-text.svg'" alt="" />
-              {{ version.title }} · 版本 {{ version.versionNumber }}
+              {{ turn.task.publishedVersion.title }} · 版本
+              {{ turn.task.publishedVersion.versionNumber }}
             </button>
           </div>
         </div>

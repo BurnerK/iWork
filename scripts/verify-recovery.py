@@ -63,7 +63,11 @@ def request(method, path, body=None, headers=None):
     data = body if isinstance(body, bytes) else None if body is None else json.dumps(body).encode()
     with client.open(urllib.request.Request('http://127.0.0.1:18092' + path, data=data, method=method, headers=extra), timeout=15) as response:
         raw = response.read()
-        return json.loads(raw) if 'json' in response.headers.get('Content-Type', '') else raw
+        if 'json' not in response.headers.get('Content-Type', ''):
+            return raw
+        envelope = json.loads(raw)
+        assert envelope['success'] is True and envelope['error'] is None
+        return envelope['data']
 
 def until(check, timeout=40):
     end = time.monotonic() + timeout
@@ -105,6 +109,15 @@ def submit(cid, message, materials=None, mode='DOCUMENT'):
     task = request('POST', '/api/conversations/' + cid + '/tasks', body)
     return cid, body, task['id']
 
+def document_versions(cid):
+    page = 0
+    while True:
+        result = request('GET', f'/api/conversations/{cid}/documents?page={page}')
+        yield from result['items']
+        if not result['hasMore']:
+            return
+        page += 1
+
 def recovered(item):
     cid, body, task = item
     state = request('GET', '/api/tasks/' + task)
@@ -113,7 +126,7 @@ def recovered(item):
     calls = request('GET', '/api/tasks/' + task + '/calls')
     assert all(call['status'] == 'CLOSED' for call in calls)
     assert request('GET', '/api/budget')['reserved'] == '0.000000'
-    assert all(v['taskId'] != task for v in request('GET', '/api/conversations/' + cid + '/documents'))
+    assert all(v['taskId'] != task for v in document_versions(cid))
     assert request('GET', '/api/document-versions/' + a.base_version + '/content') == original
     return {'task': state, 'calls': calls, 'budget': request('GET', '/api/budget')}
 

@@ -1,3 +1,4 @@
+import { apiResponse } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import AgentPanel from './AgentPanel.vue'
@@ -11,17 +12,17 @@ it('keeps an edited instruction after authorization failure and saves the same o
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
-      if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+      if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
       if (init?.method === 'PUT') {
         writes.push({ url, body: JSON.parse(String(init.body)) })
         return Promise.resolve(
           writes.length === 1
-            ? new Response('{"error":"model_not_authorized"}', { status: 403 })
-            : new Response(JSON.stringify({ ...agent, ...writes[1]!.body }))
+            ? apiResponse('{"error":"model_not_authorized"}', { status: 403 })
+            : apiResponse(JSON.stringify({ ...agent, ...writes[1]!.body }))
         )
       }
       return Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url === '/api/models'
               ? [{ id: 'model', name: '写作模型' }]

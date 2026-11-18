@@ -74,15 +74,27 @@ public class TaskService implements ApplicationRunner {
             String agentId,
             String agentName,
             String projectId,
-            String projectName) {}
+            String projectName,
+            PublishedVersion publishedVersion) {}
+
+    public record PublishedVersion(String versionId, String title, int versionNumber) {}
 
     public record Message(long id, String taskId, String role, String content, Instant createdAt) {}
 
     public record Page<T>(List<T> items, boolean hasMore) {}
 
     private List<Task> query(String condition, Object... args) {
+        return query(false, condition, args);
+    }
+
+    private List<Task> query(boolean withVersions, String condition, Object... args) {
+        String select =
+                withVersions
+                        ? "SELECT tasks.*, v.id AS published_id, v.title AS published_title, v.version_number AS published_number "
+                                + "FROM tasks LEFT JOIN document_versions v ON v.task_id=tasks.id "
+                        : "SELECT tasks.* FROM tasks ";
         return db.query(
-                "SELECT * FROM tasks WHERE " + condition,
+                select + "WHERE " + condition,
                 (r, n) ->
                         new Task(
                                 r.getString("id"),
@@ -99,7 +111,13 @@ public class TaskService implements ApplicationRunner {
                                 r.getString("agent_id"),
                                 r.getString("agent_name"),
                                 r.getString("project_id"),
-                                r.getString("project_name")),
+                                r.getString("project_name"),
+                                !withVersions || r.getString("published_id") == null
+                                        ? null
+                                        : new PublishedVersion(
+                                                r.getString("published_id"),
+                                                r.getString("published_title"),
+                                                r.getInt("published_number"))),
                 args);
     }
 
@@ -135,7 +153,8 @@ public class TaskService implements ApplicationRunner {
         conversation(caller, conversationId, false);
         var rows =
                 query(
-                        "owner_id=? AND conversation_id=? ORDER BY created_at DESC,id DESC LIMIT 21 OFFSET ?",
+                        true,
+                        "tasks.owner_id=? AND tasks.conversation_id=? ORDER BY tasks.created_at DESC,tasks.id DESC LIMIT 21 OFFSET ?",
                         caller.id(),
                         conversationId,
                         page * 20);

@@ -80,7 +80,7 @@ public class ProjectSpaceTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    io.iwork.ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -101,6 +101,8 @@ public class ProjectSpaceTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName(
+            "Project references organize owned work without taking ownership")
     void projectReferencesOrganizeOwnedWorkWithoutTakingOwnership() throws Exception {
         var admin = new Browser();
         admin.login("admin", "Initial-password-11");
@@ -203,7 +205,7 @@ public class ProjectSpaceTest {
                                 .header("Content-Type", "application/octet-stream")
                                 .POST(HttpRequest.BodyPublishers.ofString("蓝鲸项目，周五交付。"))
                                 .build(),
-                        HttpResponse.BodyHandlers.ofString());
+                        io.iwork.ApiTestResponse.body());
         String material = json.readTree(upload.body()).path("id").asString();
         assertThat(
                         admin.request(
@@ -323,6 +325,7 @@ public class ProjectSpaceTest {
                                                 null,
                                                 false)
                                         .body())
+                        .path("items")
                         .get(0);
         assertThat(
                         admin.request(
@@ -517,6 +520,7 @@ public class ProjectSpaceTest {
                                                 null,
                                                 false)
                                         .body())
+                        .path("items")
                         .get(0);
         assertThat(
                         admin.request(

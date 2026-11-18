@@ -1,3 +1,4 @@
+import { apiResponse } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import DocumentPanel from './DocumentPanel.vue'
@@ -15,10 +16,10 @@ it('previews the saved version as text and links the same version for download',
     'fetch',
     vi.fn((url: string) =>
       Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
-            url.endsWith('/documents')
-              ? [version]
+            url.includes('/documents')
+              ? { items: [version], hasMore: false }
               : { ...version, markdown: '<script>unsafe()</script>\n正文' }
           )
         )
@@ -40,9 +41,7 @@ it('keeps the last successful page when loading the next page fails', async () =
   const fetch = vi.fn((url: string) => {
     if (url === '/api/document-versions?page=1' && attempts++ === 0)
       return Promise.reject(new TypeError('lost'))
-    return Promise.resolve(
-      new Response(JSON.stringify(url.endsWith('/documents') ? [] : { items: [], hasMore: true }))
-    )
+    return Promise.resolve(apiResponse(JSON.stringify({ items: [], hasMore: true })))
   })
   vi.stubGlobal('fetch', fetch)
   const panel = mount(DocumentPanel, { props: { conversationId: 'conversation', revision: '' } })

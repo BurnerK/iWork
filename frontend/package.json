@@ -14,14 +14,17 @@
     "format:check": "prettier --check 'src/**/*.{ts,vue,css}' vite.config.ts index.html",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
-    "build": "vite build"
+    "build": "vite build",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "markdown-it": "15.0.3",
     "vue": "3.5.45",
-    "vue-router": "4.6.5"
+    "vue-router": "4.6.5",
+    "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@types/markdown-it": "14.2.0",
     "@vitejs/plugin-vue": "6.0.11",
     "@vue/test-utils": "2.6.0",
@@ -31,5 +34,14 @@
     "vite": "8.3.8",
     "vitest": "5.1.0",
     "vue-tsc": "3.3.14"
+  },
+  "overrides": {
+    "js-beautify": {
+      "glob": "14.0.2",
+      "minimatch": "11.0.1",
+      "editorconfig": {
+        "minimatch": "11.0.1"
+      }
+    }
   }
 }

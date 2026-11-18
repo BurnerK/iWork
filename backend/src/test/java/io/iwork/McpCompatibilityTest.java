@@ -13,6 +13,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class McpCompatibilityTest {
+    @org.junit.jupiter.api.DisplayName("Validates supported MCP transport configurations")
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void agentScopeCanInitializeListAndCallTools(boolean async) throws Exception {

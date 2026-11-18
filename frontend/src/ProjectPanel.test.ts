@@ -1,3 +1,4 @@
+import { apiResponse } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
@@ -12,13 +13,13 @@ it('only deletes project references after explicit confirmation and clears dialo
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
-      if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
+      if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
       if (init?.method === 'DELETE') {
         writes.push(url)
-        return Promise.resolve(new Response(null, { status: 204 }))
+        return Promise.resolve(apiResponse(null, { status: 204 }))
       }
       return Promise.resolve(
-        new Response(
+        apiResponse(
           JSON.stringify(
             url === '/api/projects/owned'
               ? { id: 'owned', name: '蓝鲸', instructions: '' }
