@@ -114,7 +114,7 @@ it('waits for an in-flight upload before accepting the task input', async () => 
   await panel.get('form[aria-label="上传资料"]').trigger('submit')
   await flushPromises()
   const form = panel.get('form[aria-label="提交任务"]')
-  expect(form.get('button').attributes('disabled')).toBeDefined()
+  expect(form.get('button[type=submit]').attributes('disabled')).toBeDefined()
   await form.trigger('submit')
   await flushPromises()
   expect(
@@ -122,7 +122,7 @@ it('waits for an in-flight upload before accepting the task input', async () => 
   ).toBe(false)
   finish(new Response('{"id":"saved","name":"source.txt","byteSize":6}'))
   await flushPromises()
-  expect(form.get('button').attributes('disabled')).toBeUndefined()
+  expect(form.get('button[type=submit]').attributes('disabled')).toBeUndefined()
   panel.unmount()
 })
 it('preserves explicit document output when retrying an uncertain request', async () => {
@@ -277,4 +277,39 @@ it('retains a selected personal agent across uncertain submission and reopening 
   expect(JSON.parse(bodies[0]!)).not.toHaveProperty('modelId')
   panel.unmount()
   localStorage.clear()
+})
+
+it('creates a draft conversation once and retries its first task with the same request', async () => {
+  const submissions: string[] = []
+  const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/csrf')) return new Response('{"token":"proof"}')
+    if (url === '/api/models') return new Response('[{"id":"model","name":"模型"}]')
+    if (url.endsWith('/documents')) return new Response('[]')
+    if (url === '/api/conversations' && init?.method === 'POST')
+      return new Response('{"id":"first"}', { status: 201 })
+    if (url === '/api/conversations/first/tasks' && init?.method === 'POST') {
+      submissions.push(String(init.body))
+      if (submissions.length === 1) throw new TypeError('connection lost')
+      return new Response('{}', { status: 202 })
+    }
+    return new Response('{"items":[],"hasMore":false}')
+  })
+  vi.stubGlobal('fetch', fetch)
+  const panel = mount(TaskPanel, { props: { ownerId: 'draft-owner' } })
+  await flushPromises()
+  expect(fetch.mock.calls.some(([url]) => url === '/api/conversations')).toBe(false)
+  await panel.get('#task-model').setValue('model')
+  await panel.get('#task-message').setValue('生成项目报告')
+  const form = panel.get('form[aria-label="提交任务"]')
+  await form.trigger('submit')
+  await form.trigger('submit')
+  await flushPromises()
+  expect(submissions).toHaveLength(1)
+  await form.trigger('submit')
+  await flushPromises()
+  expect(submissions).toHaveLength(2)
+  expect(submissions[1]).toBe(submissions[0])
+  expect(fetch.mock.calls.filter(([url]) => url === '/api/conversations')).toHaveLength(1)
+  expect(panel.emitted('sent')).toEqual([['first']])
+  panel.unmount()
 })

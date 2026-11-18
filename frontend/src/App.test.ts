@@ -147,7 +147,7 @@ it('clears a generated temporary password when leaving user management', async (
   await flushPromises()
   await page.get('#new-username').setValue('alice')
   await page.get('#display-name').setValue('Alice')
-  await page.get('form').trigger('submit')
+  await page.get('form[aria-label="创建用户"]').trigger('submit')
   await flushPromises()
   expect(page.get('code').text()).toBe('one-time-secret')
   await router.push('/conversations')
@@ -167,6 +167,8 @@ it('does not expose the previous account conversations after expiry, another log
         status = 200
       if (url.endsWith('/me'))
         data = { id: 'A', displayName: 'A', role: 'USER', mustChangePassword: false }
+      else if (url.endsWith('/models')) data = [{ id: 'model', name: 'Model' }]
+      else if (url.endsWith('/agents?page=0')) data = { items: [], hasMore: false }
       else if (url.endsWith('/login')) {
         account = 'B'
         data = { id: 'B', displayName: 'B', role: 'USER', mustChangePassword: false }
@@ -194,10 +196,9 @@ it('does not expose the previous account conversations after expiry, another log
   const page = mount(App, { global: { plugins: [router] } })
   await flushPromises()
   expect(page.text()).toContain('A confidential title')
-  await page
-    .findAll('button')
-    .find((button) => button.text() === '新建会话')!
-    .trigger('click')
+  await page.get('#task-model').setValue('model')
+  await page.get('#task-message').setValue('整理资料')
+  await page.get('form[aria-label="提交任务"]').trigger('submit')
   await flushPromises()
   await page.get('#username').setValue('B')
   await page.get('#password').setValue('B-password-11')
@@ -219,6 +220,8 @@ it('ignores a conversation response that arrives after logout', async () => {
         )
       if (url.endsWith('/csrf')) return Promise.resolve(new Response('{"token":"proof"}'))
       if (url.endsWith('/logout')) return Promise.resolve(new Response(null, { status: 204 }))
+      if (url.startsWith('/api/projects'))
+        return Promise.resolve(new Response('{"items":[],"hasMore":false}'))
       if (firstList) {
         firstList = false
         return new Promise<Response>((resolve) => {

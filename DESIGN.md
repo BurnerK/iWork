@@ -10,6 +10,8 @@ colors:
   deep-green: "#003c33"
   dark-navy: "#071829"
   canvas: "#ffffff"
+  navigation-background: "#f8f8f8"
+  navigation-secondary-background: "#fcfcfc"
   soft-stone: "#eeece7"
   pale-green: "#edfce9"
   pale-blue: "#f1f5ff"
@@ -223,7 +225,9 @@ What makes the system distinctive is the mix of austere black-and-white UI with 
 
 ### Surface & Background
 
-- **Canvas White** (`#ffffff`): Dominant page background and form/card surface.
+- **Canvas White** (`#ffffff`): Dominant page background, conversation canvas, selected conversation rows, and form/card surface.
+- **Navigation Background** (`#f8f8f8`): Top bar and primary navigation rail surface.
+- **Secondary Navigation Background** (`#fcfcfc`): Expanded project and conversation sidebar surface, lighter than the primary navigation.
 - **Soft Stone** (`#eeece7`): Product cards, testimonial placeholders, and warm neutral surface blocks.
 - **Pale Green Wash** (`#edfce9`): North page section backdrop behind stacked dark capability panels.
 - **Pale Blue Wash** (`#f1f5ff`): Blog CTA surface behind abstract 3D imagery.

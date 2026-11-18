@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import MarkdownContent from './MarkdownContent.vue'
 import { errorMessage, request } from './api'
 const props = defineProps<{
   conversationId: string
   revision: string
   projectId?: string
   disabled?: boolean
+  conversationPreview?: boolean
 }>()
 type Version = {
   id: string
@@ -26,6 +28,7 @@ const items = ref<Version[]>([]),
   loading = ref(false),
   previewing = ref(false),
   error = ref('')
+const dialog = ref<HTMLDialogElement>()
 let disposed = false,
   reload = false
 async function load(nextPage = page.value) {
@@ -76,6 +79,11 @@ function changeScope() {
 function paginate(delta: number) {
   void load(page.value + delta)
 }
+function revisePreview() {
+  if (!selected.value) return
+  emit('selectVersion', selected.value)
+  dialog.value?.close()
+}
 async function preview(version: Version) {
   if (previewing.value) return
   if (selected.value?.versionId === version.versionId) {
@@ -91,6 +99,10 @@ async function preview(version: Version) {
     if (!disposed) {
       selected.value = result
       markdown.value = result.markdown
+      if (props.conversationPreview) {
+        await nextTick()
+        if (!disposed && dialog.value && !dialog.value.open) dialog.value.showModal()
+      }
     }
   } catch (cause) {
     if (!disposed) error.value = errorMessage(cause)
@@ -109,73 +121,104 @@ onUnmounted(() => {
 </script>
 <template>
   <section aria-label="正式文档">
-    <h2>正式文档</h2>
-    <p class="hint">只有已保存的版本显示在这里。Markdown 原样预览，不执行其中的 HTML 或代码。</p>
-    <div class="check-row">
-      <input
-        id="all-document-versions"
-        v-model="all"
-        type="checkbox"
-        :disabled="loading"
-        @change="changeScope"
-      /><label for="all-document-versions">查看我的全部版本</label>
-    </div>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <p v-if="!items.length && !loading">
-      {{ all ? '还没有已保存文档。' : '当前范围还没有已保存文档。' }}
-    </p>
-    <ul class="rows">
-      <li v-for="version in items" :key="version.versionId">
-        <div>
-          <p>{{ version.title }} · 版本 {{ version.versionNumber }}</p>
-          <small>Markdown · {{ version.byteSize }} 字节</small><small>成果 {{ version.id }}</small
-          ><small v-if="version.baseVersionId">来源版本 {{ version.baseVersionId }}</small
-          ><small>任务 {{ version.taskId }}</small>
-        </div>
+    <slot :items="items" :preview="preview" :previewing="previewing" />
+    <details :open="!conversationPreview">
+      <summary v-if="conversationPreview">浏览文档版本</summary>
+      <h2>正式文档</h2>
+      <p class="hint">只有已保存的版本显示在这里。Markdown 原样预览，不执行其中的 HTML 或代码。</p>
+      <div class="check-row">
+        <input
+          id="all-document-versions"
+          v-model="all"
+          type="checkbox"
+          :disabled="loading"
+          @change="changeScope"
+        /><label for="all-document-versions">查看我的全部版本</label>
+      </div>
+      <p v-if="error" role="alert">{{ error }}</p>
+      <p v-if="!items.length && !loading">
+        {{ all ? '还没有已保存文档。' : '当前范围还没有已保存文档。' }}
+      </p>
+      <ul class="rows">
+        <li v-for="version in items" :key="version.versionId">
+          <div>
+            <p>{{ version.title }} · 版本 {{ version.versionNumber }}</p>
+            <small>Markdown · {{ version.byteSize }} 字节</small><small>成果 {{ version.id }}</small
+            ><small v-if="version.baseVersionId">来源版本 {{ version.baseVersionId }}</small
+            ><small>任务 {{ version.taskId }}</small>
+          </div>
+          <button
+            type="button"
+            class="secondary"
+            :disabled="previewing"
+            :aria-expanded="selected?.versionId === version.versionId"
+            :aria-controls="conversationPreview ? undefined : 'document-preview'"
+            @click="preview(version)"
+          >
+            预览文档</button
+          ><a :href="`/api/document-versions/${version.versionId}/content`">下载 .md</a
+          ><button
+            type="button"
+            class="secondary"
+            :disabled="disabled"
+            @click="emit('selectVersion', version)"
+          >
+            基于此版本修改</button
+          ><button
+            v-if="projectId && !all"
+            type="button"
+            class="secondary"
+            :disabled="disabled"
+            @click="emit('removeReference', version.id)"
+          >
+            移除成果引用
+          </button>
+        </li>
+      </ul>
+      <nav v-if="all || projectId" aria-label="个人版本分页">
         <button
           type="button"
           class="secondary"
-          :disabled="previewing"
-          :aria-expanded="selected?.versionId === version.versionId"
-          aria-controls="document-preview"
-          @click="preview(version)"
+          :disabled="loading || page === 0"
+          @click="paginate(-1)"
         >
-          预览文档</button
-        ><a :href="`/api/document-versions/${version.versionId}/content`">下载 .md</a
+          上一页版本</button
+        ><span>第 {{ page + 1 }} 页</span
         ><button
           type="button"
           class="secondary"
-          :disabled="disabled"
-          @click="emit('selectVersion', version)"
+          :disabled="loading || !hasMore"
+          @click="paginate(1)"
         >
-          基于此版本修改</button
-        ><button
-          v-if="projectId && !all"
-          type="button"
-          class="secondary"
-          :disabled="disabled"
-          @click="emit('removeReference', version.id)"
-        >
-          移除成果引用
+          下一页版本
         </button>
-      </li>
-    </ul>
-    <div v-if="selected" id="document-preview" class="messages" aria-label="文档只读预览">
+      </nav>
+      <button type="button" class="secondary" :disabled="loading" @click="load()">刷新文档</button>
+    </details>
+    <dialog
+      v-if="conversationPreview"
+      ref="dialog"
+      class="document-drawer"
+      aria-label="文档预览"
+      @close="selected = undefined"
+    >
+      <template v-if="selected">
+        <form method="dialog"><button class="secondary">关闭预览</button></form>
+        <h2>{{ selected.title }} · 版本 {{ selected.versionNumber }}</h2>
+        <MarkdownContent :content="markdown" />
+        <a :href="`/api/document-versions/${selected.versionId}/content`">下载 .md</a>
+        <button type="button" class="secondary" :disabled="disabled" @click="revisePreview">
+          基于此版本修改
+        </button>
+      </template>
+    </dialog>
+    <div
+      v-if="!conversationPreview && selected"
+      id="document-preview"
+      class="messages"
+      aria-label="文档只读预览"
+    >
       <p>{{ markdown }}</p>
     </div>
-    <nav v-if="all || projectId" aria-label="个人版本分页">
-      <button
-        type="button"
-        class="secondary"
-        :disabled="loading || page === 0"
-        @click="paginate(-1)"
-      >
-        上一页版本</button
-      ><span>第 {{ page + 1 }} 页</span
-      ><button type="button" class="secondary" :disabled="loading || !hasMore" @click="paginate(1)">
-        下一页版本
-      </button>
-    </nav>
-    <button type="button" class="secondary" :disabled="loading" @click="load()">刷新文档</button>
   </section>
 </template>
