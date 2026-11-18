@@ -36,11 +36,8 @@ env = dict({key: value for key, value in os.environ.items() if not key.startswit
 compose = ["docker", "compose", "--env-file", str(env_file), "-p", name,
            "-f", str(root / "compose.yaml"), "-f", str(root / "scripts/compose.test-sandbox.yaml")]
 
-try:
-    subprocess.run(compose + ["build", "sandbox-manager", "text-parser-image"], cwd=root, env=env, check=True)
-    subprocess.run(compose + ["up", "-d", "sandbox-manager", "sandbox-watchdog"], cwd=root, env=env, check=True)
-    url = f"http://127.0.0.1:{port}"
-    request = urllib.request.Request(url + "/health", headers={"Authorization": "Bearer " + key})
+
+def wait_for_sandbox(request):
     deadline = time.monotonic() + 90
     while True:
         try:
@@ -55,6 +52,14 @@ try:
                            cwd=root, env=env, check=False)
             raise RuntimeError("Sandbox manager and watchdog did not become ready")
         time.sleep(1)
+
+
+try:
+    subprocess.run(compose + ["build", "sandbox-manager", "text-parser-image"], cwd=root, env=env, check=True)
+    subprocess.run(compose + ["up", "-d", "sandbox-manager", "sandbox-watchdog"], cwd=root, env=env, check=True)
+    url = f"http://127.0.0.1:{port}"
+    request = urllib.request.Request(url + "/health", headers={"Authorization": "Bearer " + key})
+    wait_for_sandbox(request)
     env.update(IWORK_SANDBOX_TEST_URL=url, IWORK_SANDBOX_TEST_KEY_FILE=str(key_file))
     try:
         subprocess.run([str(root / "backend/mvnw"), "-B", "-f", str(root / "backend/pom.xml"),
@@ -67,6 +72,22 @@ try:
         report = ET.parse(root / "backend/target/surefire-reports" / f"TEST-io.iwork.{test}.xml").getroot()
         if int(report.get("tests", "0")) == 0 or int(report.get("skipped", "0")) != 0:
             raise RuntimeError(f"{test} did not run fully")
+    registry_stats = compose + [
+        "exec", "-T", "sandbox-manager", "sh", "-c",
+        """for file in /registry/*.json; do
+               if grep -q '"cleanup":"CONFIRMED"' "$file" &&
+                  ! grep -q '"status":"RUNNING"' "$file"; then
+                   stat -c '%n %i %y' "$file"
+               fi
+           done""",
+    ]
+    before = subprocess.check_output(registry_stats, cwd=root, env=env, text=True).splitlines()
+    assert before, "No sandbox receipts were produced"
+    subprocess.run(compose + ["restart", "sandbox-manager"], cwd=root, env=env, check=True)
+    wait_for_sandbox(request)
+    after = subprocess.check_output(registry_stats, cwd=root, env=env, text=True).splitlines()
+    assert set(before).issubset(after), "Sandbox startup rewrote settled receipts"
+    print("PASS: settled sandbox receipts survived restart without writes", flush=True)
     print("PASS: all three sandbox-backed integration tests ran", flush=True)
 finally:
     cleanup = subprocess.run(compose + ["down", "--volumes", "--remove-orphans"], cwd=root, env=env)

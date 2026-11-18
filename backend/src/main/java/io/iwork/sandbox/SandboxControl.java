@@ -474,12 +474,13 @@ public final class SandboxControl {
                 var job = JSON.readValue(Files.readAllBytes(path), Job.class);
                 if (!job.name.equals("iwork-" + INSTANCE + "-" + job.id))
                     throw new IOException("Registry instance mismatch");
-                if (job.status.equals("RUNNING")) {
+                boolean interrupted = job.status.equals("RUNNING");
+                if (interrupted) {
                     job.status = "INTERRUPTED";
                     job.error = "manager_restarted";
                 }
                 jobs.put(job.id, job);
-                job.clean();
+                if (interrupted || !job.cleanup.equals("CONFIRMED")) job.clean();
             }
         }
         for (var id : containers()) {
