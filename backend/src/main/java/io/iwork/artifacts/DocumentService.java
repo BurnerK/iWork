@@ -112,7 +112,7 @@ public class DocumentService {
         }
     }
 
-    public Map<String, Object> prepare(TaskRunner.Input input, String title, String markdown) {
+    private Map<String, Object> prepare(TaskRunner.Input input, String title, String markdown) {
         if (title == null
                 || title.isBlank()
                 || title.length() > 120
@@ -265,6 +265,8 @@ public class DocumentService {
     public final class Tools {
         private final TaskRunner.Input input;
 
+        private boolean sourceRead;
+
         public Tools(TaskRunner.Input input) {
             this.input = input;
         }
@@ -276,7 +278,47 @@ public class DocumentService {
         public Map<String, Object> prepare(
                 @ToolParam(name = "title", description = "文档标题，无路径或扩展名") String title,
                 @ToolParam(name = "markdown", description = "完整Markdown正文") String markdown) {
+            if (baseVersion(input) != null && !sourceRead)
+                throw new ApiFailure(409, "document_source_required");
             return DocumentService.this.prepare(input, title, markdown);
+        }
+
+        public final class SourceTools {
+            @Tool(
+                    name = "read_document_version",
+                    description = "读取本任务已选定的来源文档版本，每页最多12000字符。按 nextOffset 继续读取，不接受其他版本或路径。")
+            public Map<String, Object> read(
+                    @ToolParam(name = "offset", description = "字符起点，首次为0") int offset) {
+                tx.executeWithoutResult(status -> authorize(input));
+                String base = baseVersion(input);
+                if (base == null) throw new ApiFailure(403, "document_not_authorized");
+                var metadata = version(input.caller(), base);
+                String text = new String(content(input.caller(), base), StandardCharsets.UTF_8);
+                if (offset < 0
+                        || offset > text.length()
+                        || offset > 0
+                                && offset < text.length()
+                                && Character.isLowSurrogate(text.charAt(offset))
+                                && Character.isHighSurrogate(text.charAt(offset - 1)))
+                    throw new ApiFailure(400, "invalid_offset");
+                int end = Math.min(text.length(), offset + 12000);
+                if (end < text.length() && Character.isHighSurrogate(text.charAt(end - 1))) end--;
+                tx.executeWithoutResult(status -> authorize(input));
+                if (end > offset) sourceRead = true;
+                return Map.of(
+                        "versionId",
+                        base,
+                        "title",
+                        metadata.get("title"),
+                        "versionNumber",
+                        metadata.get("versionNumber"),
+                        "markdown",
+                        text.substring(offset, end),
+                        "nextOffset",
+                        end,
+                        "hasMore",
+                        end < text.length());
+            }
         }
     }
 
@@ -287,49 +329,6 @@ public class DocumentService {
                 input.taskId(),
                 input.caller().id(),
                 input.conversationId());
-    }
-
-    public final class SourceTools {
-        private final TaskRunner.Input input;
-
-        public SourceTools(TaskRunner.Input input) {
-            this.input = input;
-        }
-
-        @Tool(
-                name = "read_document_version",
-                description = "读取本任务已选定的来源文档版本，每页最多12000字符。按 nextOffset 继续读取，不接受其他版本或路径。")
-        public Map<String, Object> read(
-                @ToolParam(name = "offset", description = "字符起点，首次为0") int offset) {
-            tx.executeWithoutResult(status -> authorize(input));
-            String base = baseVersion(input);
-            if (base == null) throw new ApiFailure(403, "document_not_authorized");
-            var metadata = version(input.caller(), base);
-            String text = new String(content(input.caller(), base), StandardCharsets.UTF_8);
-            if (offset < 0
-                    || offset > text.length()
-                    || offset > 0
-                            && offset < text.length()
-                            && Character.isLowSurrogate(text.charAt(offset))
-                            && Character.isHighSurrogate(text.charAt(offset - 1)))
-                throw new ApiFailure(400, "invalid_offset");
-            int end = Math.min(text.length(), offset + 12000);
-            if (end < text.length() && Character.isHighSurrogate(text.charAt(end - 1))) end--;
-            tx.executeWithoutResult(status -> authorize(input));
-            return Map.of(
-                    "versionId",
-                    base,
-                    "title",
-                    metadata.get("title"),
-                    "versionNumber",
-                    metadata.get("versionNumber"),
-                    "markdown",
-                    text.substring(offset, end),
-                    "nextOffset",
-                    end,
-                    "hasMore",
-                    end < text.length());
-        }
     }
 
     private static final String VERSION_COLUMNS =

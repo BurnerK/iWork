@@ -51,9 +51,10 @@ public class HarnessTaskRunner implements TaskRunner {
                 new Toolkit(
                         io.agentscope.core.tool.ToolkitConfig.builder().parallel(false).build());
         if (!attachments.isEmpty()) toolkit.registerTool(parsing.new Tools(input));
-        if (input.outputMode().equals("DOCUMENT")) toolkit.registerTool(documents.new Tools(input));
+        var documentTools = documents.new Tools(input);
+        if (input.outputMode().equals("DOCUMENT")) toolkit.registerTool(documentTools);
         if (documents.baseVersion(input) != null)
-            toolkit.registerTool(documents.new SourceTools(input));
+            toolkit.registerTool(documentTools.new SourceTools());
         var allowedTools = java.util.Set.copyOf(toolkit.getToolNames());
         var prepared = conversations.load(input);
         var store = new InMemoryAgentStateStore();

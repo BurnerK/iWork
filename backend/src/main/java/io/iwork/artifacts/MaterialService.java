@@ -101,7 +101,19 @@ public class MaterialService {
                     java.nio.channels.FileChannel.open(pending, StandardOpenOption.WRITE)) {
                 channel.force(true);
             }
-            Files.move(pending, originals.resolve(id), StandardCopyOption.ATOMIC_MOVE);
+            Path original = originals.resolve(id);
+            Files.move(pending, original, StandardCopyOption.ATOMIC_MOVE);
+            try (var channel =
+                    java.nio.channels.FileChannel.open(originals, StandardOpenOption.READ)) {
+                channel.force(true);
+            } catch (IOException failure) {
+                try {
+                    Files.deleteIfExists(original);
+                } catch (IOException cleanupFailure) {
+                    failure.addSuppressed(cleanupFailure);
+                }
+                throw failure;
+            }
             // A commit error can be ambiguous; keep the complete file rather than delete a possibly
             // indexed original.
             return tx.execute(
