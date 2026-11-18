@@ -123,6 +123,12 @@ spacing:
   xxl: 32px
   section: 80px
 
+layout:
+  workspace-rail: 50px
+  workspace-sidebar: 280px
+  workspace-topbar: 44px
+  workspace-topbar-mobile: 50px
+
 components:
   button-primary:
     backgroundColor: "{colors.primary}"

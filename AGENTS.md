@@ -8,6 +8,10 @@
 
 使用默认的五个任务分类标签。见 `docs/agents/triage-labels.md`。
 
+### 本地技能来源
+
+`skills-lock.json` 锁定可追溯到上游提交的安装项。`.agents/skills/` 中其余技能由本仓库随 Git 维护，恢复时使用对应的仓库版本。
+
 ### Domain docs
 
 采用单一领域文档结构。见 `docs/agents/domain.md`。
@@ -26,9 +30,9 @@
 1. BEFORE generating any visual component, read DESIGN.md completely
 2. Use EXCLUSIVELY the tokens defined in the YAML front matter
 3. Follow the typographic scale without inventing intermediate sizes
-4. Spacing must be multiples of the base value
+4. Use the spacing tokens and documented alignment exceptions in DESIGN.md
 5. Every interactive element needs: hover, focus, disabled
-6. The "Constraints" section of DESIGN.md is inviolable
+6. The "Do's and Don'ts" section of DESIGN.md is inviolable
 
 ## Java 编码风格
 

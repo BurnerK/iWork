@@ -1,15 +1,15 @@
 # iWork
 
-自托管的 AI 工作应用。当前提供账号登录、首次改密、普通用户管理与个人会话创建/列表/空详情；模型、消息、任务和资料处理随后续工单交付。
+自托管的 AI 工作应用，提供账号管理、个人会话、后台任务、模型授权与额度、项目空间、个人智能体、资料上传和沙箱解析，以及 Markdown 成果版本。
 
-首版运行方案已确定采用 HarnessAgent，包含会话上下文恢复与自动压缩，见 [ADR 0004](docs/adr/0004-harness-runtime-and-context.md)、[首版规格](docs/web-first-release-spec.md)和[开发任务](docs/web-first-release-tickets.md)。当前依赖仍为 core；Harness 接入、恢复与压缩尚待相应工单实现。
+后端使用 AgentScope Java 2.0.4 HarnessAgent 管理上下文恢复与压缩。真实模型效果、目标 Linux 升级与灾难恢复仍需实环境验收。[运行机制](docs/adr/0004-harness-runtime-and-context.md) · [首版规格](docs/web-first-release-spec.md)
 
 ## 工具与目录
 
 - Java 21；交付镜像 Temurin 21.0.13+9，镜像摘要固定在 `Dockerfile`。
 - Maven 3.9.11 / Wrapper 3.3.4：使用 `backend/mvnw`，无需系统 Maven。
 - Node 26.13.1 / npm 11.20.0：版本在 `.nvmrc` 和前端 `package.json`。
-- Spring Boot 4.0.9 / AgentScope Java core 2.0.4 / MySQL 8.4.7；Vue 3.5.45 / TypeScript 5.9.3 / Vite 8.3.8。前端传递依赖由 lockfile 固定，后端使用 Boot BOM。
+- Spring Boot 4.0.9 / AgentScope Java 2.0.4 / MySQL 8.4.7；Vue 3.5.45 / TypeScript 5.9.3 / Vite 8.3.8。前端传递依赖由 lockfile 固定，后端使用 Boot BOM。
 - Docker Engine 与 Compose v2 或更高版本；Python 3 用于 Compose 验收脚本。
 
 `backend/` 是正式 Java 主应用，`frontend/` 是 Vue 入口。`prototypes/` 只保留决策探针，不参与正式构建。模块职责见 [工程说明](docs/development.md)。
@@ -58,6 +58,8 @@ npm ci --prefix frontend
 npm --prefix frontend run format:check
 npm --prefix frontend run typecheck
 npm --prefix frontend test
+npm --prefix frontend exec -- playwright install chromium
+npm --prefix frontend run test:e2e
 npm --prefix frontend run build
 backend/mvnw -B -f backend/pom.xml spotless:check
 python3 scripts/verify-backend.py

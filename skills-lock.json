@@ -1,13 +1,6 @@
 {
   "version": 2,
   "skills": {
-    "322-frameworks-spring-boot-testing-integration-tests": {
-      "source": "jabrena/plinth",
-      "commit": "17ab7cf02be1cb035d57e81f0003896a1a0cf756",
-      "sourceType": "github",
-      "skillPath": "skills/322-frameworks-spring-boot-testing-integration-tests/SKILL.md",
-      "computedHash": "6d83704d454a03ec8295577d49322dff5cc56fef6d9aedf1f7c3222d6509ef03"
-    },
     "api-design-principles": {
       "source": "wshobson/agents",
       "commit": "9c61ab243def98f72da12abd41cfcf5bcd91af9d",
