@@ -96,6 +96,14 @@ function scrollLatest() {
   trackScroll()
 }
 const storageKey = computed(() => `iwork-pending:${props.ownerId}:${conversationId.value}`)
+const draftKey = computed(() => `iwork-first-send:${props.ownerId}`)
+function acceptPending() {
+  clearPending()
+  message.value = ''
+  baseVersion.value = undefined
+  materialIds.value = []
+  if (!disposed && !props.conversationId && conversationId.value) emit('sent', conversationId.value)
+}
 function clearPending() {
   localStorage.removeItem(storageKey.value)
   pending.value = null
@@ -160,10 +168,7 @@ async function load() {
       pending.value &&
       recent.items.some((task) => task.requestId === pending.value?.requestId)
     ) {
-      clearPending()
-      message.value = ''
-      baseVersion.value = undefined
-      if (!props.conversationId && conversationId.value) emit('sent', conversationId.value)
+      acceptPending()
     }
   } catch (cause) {
     await failure(cause)
@@ -215,12 +220,10 @@ async function submit() {
       materialIds: [...materialIds.value],
     }
     localStorage.setItem(storageKey.value, JSON.stringify(pending.value))
+    if (!props.conversationId) sessionStorage.setItem(draftKey.value, conversationId.value)
     await request(`/api/conversations/${conversationId.value}/tasks`, 'POST', pending.value)
-    clearPending()
-    message.value = ''
-    baseVersion.value = undefined
+    acceptPending()
     await load()
-    if (!disposed && !props.conversationId) emit('sent', conversationId.value)
   } catch (cause) {
     if (
       cause instanceof ApiError &&
@@ -264,6 +267,13 @@ async function earlierTasks() {
   }
 }
 onMounted(async () => {
+  const firstConversation = sessionStorage.getItem(draftKey.value)
+  if (!conversationId.value && firstConversation) {
+    emit('sent', firstConversation)
+    return
+  }
+  if (firstConversation && conversationId.value === firstConversation)
+    sessionStorage.removeItem(draftKey.value)
   try {
     const stored = conversationId.value && localStorage.getItem(storageKey.value)
     if (stored) {
@@ -399,7 +409,7 @@ onUnmounted(() => {
               :disabled="previewing"
               @click="preview(version)"
             >
-              <img :src="'/icons/file-text.svg'" alt="" />
+              <img :src="'/assets/icons/file-text.svg'" alt="" />
               {{ version.title }} · 版本 {{ version.versionNumber }}
             </button>
           </div>

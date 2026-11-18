@@ -572,7 +572,7 @@ dialog::backdrop {
 .sidebar-heading:not(:first-of-type) {
   margin-top: 16px;
 }
-.sidebar-collapsed .workspace {
+.sidebar-collapsed .conversation-main > .workspace {
   grid-template-columns: 0px minmax(0, 1fr);
 }
 .sidebar-collapsed .conversation-sidebar {

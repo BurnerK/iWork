@@ -294,7 +294,7 @@ onMounted(loadIdentity)
         <img
           v-if="!conversationRoute"
           class="workspace-logo desktop-brand"
-          :src="'/iwork-icon.svg'"
+          :src="'/assets/iwork-icon.svg'"
           alt="iWork"
           width="28"
           height="28"
@@ -308,21 +308,30 @@ onMounted(loadIdentity)
           :class="{ 'mobile-only': !conversationRoute }"
           @click="toggleNavigation"
         >
-          <img class="workspace-logo" :src="'/iwork-icon.svg'" alt="" width="28" height="28" />
-          <img class="workspace-toggle-icon" :src="'/icons/panel-left.svg'" alt="" />
+          <img
+            class="workspace-logo"
+            :src="'/assets/iwork-icon.svg'"
+            alt=""
+            width="28"
+            height="28"
+          />
+          <img class="workspace-toggle-icon" :src="'/assets/icons/panel-left.svg'" alt="" />
         </button>
       </div>
       <h1 tabindex="-1">
         {{
           conversationRoute
             ? selected?.title || '新会话'
-            : navigation.find((item) => route.path.startsWith(item.to))?.name
+            : navigation.find(
+                (item) =>
+                  item.to === '/' + (route.name === 'project' ? 'projects' : String(route.name))
+              )?.name
         }}
       </h1>
     </header>
     <nav v-if="workspace" class="workspace-rail" aria-label="主导航">
       <RouterLink v-for="item in navigation" :key="item.to" :to="item.to" :aria-label="item.name">
-        <img :src="`/icons/${item.icon}.svg`" alt="" />
+        <img :src="`/assets/icons/${item.icon}.svg`" alt="" />
       </RouterLink>
       <details class="workspace-account">
         <summary :aria-label="`账户设置 · ${user?.displayName}`">
@@ -594,7 +603,7 @@ onMounted(loadIdentity)
         <aside class="conversation-sidebar" aria-label="会话列表" :inert="sidebarCollapsed">
           <div class="conversation-sidebar-content">
             <RouterLink class="new-conversation" to="/conversations"
-              ><img :src="'/icons/square-pen.svg'" alt="" />新建会话</RouterLink
+              ><img :src="'/assets/icons/square-pen.svg'" alt="" />新建会话</RouterLink
             >
             <h2 class="sidebar-heading">最近会话</h2>
             <p v-if="loading && !conversations.length" class="sidebar-state" role="status">
