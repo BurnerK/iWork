@@ -1,18 +1,47 @@
 package io.iwork.identity;
 
-import io.iwork.IWorkApplication;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import java.time.Clock;
 import java.util.Arrays;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** A deployment-only entry point. Passwords never travel in process arguments. */
 public final class AdministratorRecovery {
     private AdministratorRecovery() {}
+
+    @ImportAutoConfiguration({
+        DataSourceAutoConfiguration.class,
+        DataSourceTransactionManagerAutoConfiguration.class,
+        JdbcTemplateAutoConfiguration.class
+    })
+    static class RecoveryConfiguration {
+        @Bean
+        IdentityService recoveryIdentity(
+                JdbcTemplate db,
+                PlatformTransactionManager transactionManager,
+                @Value("${iwork.bootstrap.username:admin}") String username) {
+            return new IdentityService(
+                    db,
+                    new TransactionTemplate(transactionManager),
+                    Clock.systemUTC(),
+                    username,
+                    "");
+        }
+    }
 
     public static int run() {
         char[] secret = null;
@@ -38,7 +67,7 @@ public final class AdministratorRecovery {
             }
             if (secret == null) throw new IllegalArgumentException();
             IdentityService.validatePassword(new String(secret));
-            var app = new SpringApplication(IWorkApplication.class);
+            var app = new SpringApplication(RecoveryConfiguration.class);
             app.setWebApplicationType(WebApplicationType.NONE);
             try (var context = app.run()) {
                 context.getBean(IdentityService.class).recoverAdministrator(new String(secret));

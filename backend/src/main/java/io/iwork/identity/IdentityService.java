@@ -7,15 +7,13 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
-public class IdentityService implements ApplicationRunner {
+public class IdentityService {
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final Clock clock;
@@ -58,8 +56,7 @@ public class IdentityService implements ApplicationRunner {
                 args);
     }
 
-    @Override
-    public void run(ApplicationArguments args) {
+    public void bootstrap() {
         if (!accounts("role = 'ADMIN'").isEmpty()) return;
         if (bootstrapPassword.isEmpty())
             throw new IllegalStateException("Initial administrator secret is required");
