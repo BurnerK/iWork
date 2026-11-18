@@ -7,6 +7,7 @@ frontend/dist/
 data/
 .DS_Store
 .archify/
+.taste-skill/
 .idea/
 frontend/test-results/
 frontend/playwright-report/
