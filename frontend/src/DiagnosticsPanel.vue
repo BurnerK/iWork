@@ -65,6 +65,7 @@ const labels: Record<string, string> = {
   COMPLETED: '已完成',
   FAILED: '失败',
   CANCELLED: '已取消',
+  PAUSED: '已暂停',
   INTERRUPTED: '重启中断',
   STOP_REQUESTED: '已请求停止，尚待确认',
   STOPPED: '本地执行已结束',

@@ -25,6 +25,7 @@ const version = publishedVersion.extend({
   baseVersionId: nullableText.optional(),
 })
 const task = id.extend({
+  replyTaskId: nullableText.optional(),
   requestId: text,
   outputMode: text.optional(),
   status: text,
@@ -151,7 +152,7 @@ const routes: [RegExp, z.ZodType, z.ZodType?][] = [
   [/^conversations\/[^/]+$/, conversation],
   [/^conversations\/[^/]+\/tasks$/, taskPage, id],
   [/^conversations\/[^/]+\/messages$/, page(message)],
-  [/^tasks\/[^/]+\/cancel$/, task],
+  [/^tasks\/[^/]+\/(cancel|pause|continue)$/, task],
   [/^tasks\/[^/]+\/calls$/, z.array(call)],
   [/^tasks\/[^/]+\/parses$/, z.array(parse)],
   [/^tasks\/[^/]+\/parses\/[^/]+$/, z.object({ text, nextOffset: number, hasMore: flag })],

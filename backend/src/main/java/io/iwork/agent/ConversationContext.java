@@ -5,6 +5,7 @@ import io.agentscope.core.message.*;
 import io.agentscope.core.model.*;
 import io.agentscope.core.state.AgentState;
 import io.agentscope.harness.agent.memory.compaction.*;
+import io.iwork.conversation.TaskAttempts;
 import io.iwork.conversation.TaskRunner;
 import io.iwork.identity.ApiFailure;
 import java.nio.charset.StandardCharsets;
@@ -16,16 +17,17 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConversationContext {
     private final JdbcTemplate db;
+    private final TaskAttempts attempts;
     private final io.iwork.model.GovernedModel models;
 
-    public ConversationContext(JdbcTemplate db, io.iwork.model.GovernedModel models) {
+    public ConversationContext(
+            JdbcTemplate db, TaskAttempts attempts, io.iwork.model.GovernedModel models) {
         this.db = db;
+        this.attempts = attempts;
         this.models = models;
     }
 
     public record Prepared(AgentState state, long through, String historyHash) {}
-
-    private record History(long id, String role, String content) {}
 
     public Prepared load(TaskRunner.Input input) {
         var snapshots =
@@ -42,46 +44,31 @@ public class ConversationContext {
         var tail = new ArrayList<Msg>();
         long[] through = {0}, rebuiltBytes = {0}, tailBytes = {0};
         boolean[] foundMark = {mark == 0};
-        db.query(
-                connection -> {
-                    var query =
-                            connection.prepareStatement(
-                                    "SELECT m.* FROM messages m JOIN tasks t ON t.id=m.task_id WHERE t.owner_id=? AND t.conversation_id=? AND t.status='COMPLETED' ORDER BY m.id");
-                    query.setString(1, input.caller().id());
-                    query.setString(2, input.conversationId());
-                    query.setFetchSize(Integer.MIN_VALUE);
-                    return query;
-                },
-                (org.springframework.jdbc.core.RowCallbackHandler)
-                        r -> {
-                            var message =
-                                    new History(
-                                            r.getLong("id"),
-                                            r.getString("role"),
-                                            r.getString("content"));
-                            add(digest, message);
-                            through[0] = message.id();
-                            if (message.id() <= mark) add(prefix, message);
-                            if (message.id() == mark) foundMark[0] = true;
-                            var value =
-                                    Msg.builder()
-                                            .name(message.role())
-                                            .role(
-                                                    message.role().equals("user")
-                                                            ? MsgRole.USER
-                                                            : MsgRole.ASSISTANT)
-                                            .textContent(message.content())
-                                            .build();
-                            long bytes =
-                                    message.content().getBytes(StandardCharsets.UTF_8).length
-                                            + 512L;
-                            rebuiltBytes[0] += bytes;
-                            if (rebuiltBytes[0] <= 2 * 1024 * 1024) rebuilt.add(value);
-                            if (message.id() > mark) {
-                                tailBytes[0] += bytes;
-                                if (tailBytes[0] <= 2 * 1024 * 1024) tail.add(value);
-                            }
-                        });
+        attempts.forEachCompletedMessage(
+                input.caller().id(),
+                input.conversationId(),
+                message -> {
+                    add(digest, message);
+                    through[0] = message.id();
+                    if (message.id() <= mark) add(prefix, message);
+                    if (message.id() == mark) foundMark[0] = true;
+                    var value =
+                            Msg.builder()
+                                    .name(message.role())
+                                    .role(
+                                            message.role().equals("user")
+                                                    ? MsgRole.USER
+                                                    : MsgRole.ASSISTANT)
+                                    .textContent(message.content())
+                                    .build();
+                    long bytes = message.content().getBytes(StandardCharsets.UTF_8).length + 512L;
+                    rebuiltBytes[0] += bytes;
+                    if (rebuiltBytes[0] <= 2 * 1024 * 1024) rebuilt.add(value);
+                    if (message.id() > mark) {
+                        tailBytes[0] += bytes;
+                        if (tailBytes[0] <= 2 * 1024 * 1024) tail.add(value);
+                    }
+                });
         var state =
                 AgentState.builder()
                         .userId(input.caller().id())
@@ -139,7 +126,7 @@ public class ConversationContext {
         if (window == null) throw new ApiFailure(409, "context_window_not_configured");
         int original =
                 state.toJson().getBytes(StandardCharsets.UTF_8).length
-                        + input.message().getBytes(StandardCharsets.UTF_8).length
+                        + input.prompt().getBytes(StandardCharsets.UTF_8).length
                         + input.instructions().getBytes(StandardCharsets.UTF_8).length;
         int budget = window - 4096;
         if (original < budget / 2) {
@@ -222,7 +209,7 @@ public class ConversationContext {
                             .summary(summary.toString())
                             .build();
             if (candidate.toJson().getBytes(StandardCharsets.UTF_8).length
-                            + input.message().getBytes(StandardCharsets.UTF_8).length
+                            + input.prompt().getBytes(StandardCharsets.UTF_8).length
                             + input.instructions().getBytes(StandardCharsets.UTF_8).length
                     <= budget) {
                 state.contextMutable().clear();
@@ -234,7 +221,7 @@ public class ConversationContext {
         summaryState(input, accepted ? "COMPACTED" : original <= budget ? "FALLBACK" : "FAILED");
         if (!accepted && original > budget) throw new ApiFailure(413, "context_compaction_failed");
         if (state.toJson().getBytes(StandardCharsets.UTF_8).length
-                        + input.message().getBytes(StandardCharsets.UTF_8).length
+                        + input.prompt().getBytes(StandardCharsets.UTF_8).length
                         + input.instructions().getBytes(StandardCharsets.UTF_8).length
                 > budget) throw new ApiFailure(413, "context_limit");
     }
@@ -268,7 +255,7 @@ public class ConversationContext {
         }
     }
 
-    private static void add(MessageDigest digest, History message) {
+    private static void add(MessageDigest digest, TaskAttempts.CompletedMessage message) {
         digest.update(
                 (message.id()
                                 + ":"

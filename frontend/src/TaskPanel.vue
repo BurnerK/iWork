@@ -24,6 +24,7 @@ type Task = {
   id: string
   publishedVersion?: PublishedVersion | null
   requestId: string
+  replyTaskId?: string | null
   status: string
   executionState: string
   errorCode: string | null
@@ -147,9 +148,8 @@ function returnToLatest() {
   thread.value?.focus({ preventScroll: true })
 }
 const liveReply = ref<{ taskId: string; version: number; content: string }>()
-const streamingTaskId = computed(
-  () => tasks.value.find((task) => task.status === 'RUNNING' && task.outputMode !== 'DOCUMENT')?.id
-)
+const runningTask = computed(() => tasks.value.find((task) => task.status === 'RUNNING'))
+const streamingTaskId = computed(() => runningTask.value?.id)
 watch(streamingTaskId, (taskId, _, onCleanup) => {
   if (!taskId || typeof EventSource === 'undefined') return
   const stream = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/reply-stream`)
@@ -197,7 +197,6 @@ const usageTaskId = ref(''),
 const taskPage = ref(0),
   moreTasks = ref(false),
   moreMessages = ref(false)
-const runningTask = computed(() => tasks.value.find((task) => task.status === 'RUNNING'))
 const showPause = computed(() => !!runningTask.value && !pending.value && !message.value.trim())
 const queuedItems = ref<QueuedItem[]>([]),
   queuePaused = ref(false),
@@ -211,27 +210,48 @@ const labels: Record<string, string> = {
   COMPLETED: '已完成',
   FAILED: '失败',
   CANCELLED: '已取消',
+  PAUSED: '已暂停',
   INTERRUPTED: '重启中断',
 }
+const replyId = (task: Task) => task.replyTaskId ?? task.id
+const latestPrompt = computed(() => messages.value.filter((item) => item.role === 'user').at(-1))
+const latestTask = computed(() =>
+  latestPrompt.value
+    ? tasks.value.find((task) => replyId(task) === latestPrompt.value?.taskId)
+    : tasks.value[0]
+)
+const pausedTask = computed(() =>
+  !runningTask.value && latestTask.value?.status === 'PAUSED' ? latestTask.value : undefined
+)
+const showContinue = computed(() => !!pausedTask.value && !pending.value && !message.value.trim())
+const composerAction = computed(() =>
+  showPause.value ? '暂停回答' : showContinue.value ? '继续回答' : '提交任务'
+)
 const turns = computed(() => {
   const groups = new Map<
     string,
-    { messages: Message[]; task?: Task; publishedVersion?: PublishedVersion | null }
+    { prompt?: Message; reply?: Message; task?: Task; publishedVersion?: PublishedVersion | null }
   >()
   for (const message of messages.value) {
-    const group = groups.get(message.taskId) ?? { messages: [] }
-    group.messages.push(message)
-    group.publishedVersion ??= message.publishedVersion
+    const group = groups.get(message.taskId) ?? {}
+    if (message.role === 'user') group.prompt = message
+    else {
+      group.reply = message
+      group.publishedVersion = message.publishedVersion
+    }
     groups.set(message.taskId, group)
   }
   for (const task of [...tasks.value].reverse()) {
-    const group = groups.get(task.id) ?? { messages: [] }
+    const key = replyId(task)
+    const group = groups.get(key) ?? {}
     group.task = task
     group.publishedVersion ??= task.publishedVersion
-    groups.set(task.id, group)
+    groups.set(key, group)
   }
   return groups
 })
+let executionRevision = 0
+const retryError = ref<{ taskId: string; message: string }>()
 let timer: ReturnType<typeof setTimeout> | undefined,
   disposed = false
 async function failure(cause: unknown) {
@@ -243,36 +263,47 @@ async function load() {
   if (!conversationId.value || loading.value || disposed) return
   loading.value = true
   const revision = queueRevision
+  const taskRevision = executionRevision
   try {
     const pendingQuery = pending.value
       ? `?requestId=${encodeURIComponent(pending.value.requestId)}`
       : ''
-    const [recent, incoming] = await Promise.all([
-      request<
-        Page<Task> & {
-          queuedItems: QueuedItem[]
-          queuePaused: boolean
-          confirmedRequestId: string | null
-        }
-      >(`/api/conversations/${conversationId.value}/tasks${pendingQuery}`),
-      request<Page<Message>>(
-        `/api/conversations/${conversationId.value}/messages?after=${messages.value.at(-1)?.id || 0}`
-      ),
-    ])
+    const recent = await request<
+      Page<Task> & {
+        queuedItems: QueuedItem[]
+        queuePaused: boolean
+        confirmedRequestId: string | null
+      }
+    >(`/api/conversations/${conversationId.value}/tasks${pendingQuery}`)
+    // Terminal status and its saved reply commit together; read the reply after the status.
+    const incoming = await request<Page<Message>>(
+      `/api/conversations/${conversationId.value}/messages?after=${messages.value.at(-1)?.id || 0}`
+    )
     if (disposed) return
-    tasks.value = [
-      ...recent.items,
-      ...tasks.value.filter(
-        (task) => task.status !== 'RUNNING' && !recent.items.some((item) => item.id === task.id)
-      ),
-    ]
+    if (taskRevision === executionRevision) {
+      const recentReplies = new Set(recent.items.map(replyId))
+      tasks.value = [
+        ...recent.items,
+        ...tasks.value.filter(
+          (task) => task.status !== 'RUNNING' && !recentReplies.has(replyId(task))
+        ),
+      ]
+    }
     if (revision === queueRevision) {
       queuedItems.value = recent.queuedItems
       queuePaused.value = recent.queuePaused
     }
     if (taskPage.value === 0) moreTasks.value = recent.hasMore
     const follow = !showLatest.value
-    messages.value.push(...incoming.items)
+    const updatedReplies = new Set(
+      incoming.items.filter((item) => item.role === 'assistant').map((item) => item.taskId)
+    )
+    messages.value = [
+      ...messages.value.filter(
+        (item) => item.role !== 'assistant' || !updatedReplies.has(item.taskId)
+      ),
+      ...incoming.items,
+    ]
     if (follow) void nextTick(keepFollowing)
     moreMessages.value = incoming.hasMore
     if (
@@ -324,7 +355,7 @@ function sendOnEnter(event: KeyboardEvent) {
   // Safari can report the IME confirmation after compositionend.
   if (event.isComposing || event.keyCode === 229) return
   event.preventDefault()
-  if (!event.repeat && !showPause.value)
+  if (!event.repeat && !showPause.value && !showContinue.value)
     (event.currentTarget as HTMLTextAreaElement).form?.requestSubmit()
 }
 async function submit() {
@@ -381,15 +412,31 @@ async function submit() {
     busy.value = false
   }
 }
-async function cancel(task: Task) {
-  if (busy.value) return
+async function actOnReply(task: Task, action: 'cancel' | 'pause' | 'continue') {
+  if (busy.value || (action === 'continue' && task.executionState === 'STOP_REQUESTED')) return
   busy.value = true
   error.value = ''
+  retryError.value = undefined
   try {
-    await request(`/api/tasks/${task.id}/cancel`, 'POST', { pauseQueue: true })
+    const updated = await request<Task>(
+      `/api/tasks/${encodeURIComponent(task.id)}/${action}`,
+      'POST',
+      action === 'cancel' ? { pauseQueue: true } : undefined
+    )
+    if (disposed) return
+    executionRevision++
+    if (action === 'continue') {
+      tasks.value = tasks.value.map((item) => (item.id === task.id ? updated : item))
+    }
     await load()
   } catch (cause) {
-    await failure(cause)
+    if (
+      action === 'continue' &&
+      task.status === 'FAILED' &&
+      !(cause instanceof ApiError && cause.status === 401)
+    )
+      retryError.value = { taskId: task.id, message: errorMessage(cause) }
+    else await failure(cause)
   } finally {
     busy.value = false
   }
@@ -494,20 +541,18 @@ onUnmounted(() => {
       >
         <div v-for="[taskId, turn] in turns" :key="taskId" class="task-turn">
           <ol class="messages">
-            <li
-              v-for="item in turn.messages.filter((item) => item.role === 'user')"
-              :key="item.id"
-              class="user-message"
-            >
+            <li v-if="turn.prompt" class="user-message">
               <small>你</small>
-              <p>{{ item.content }}</p>
+              <p>{{ turn.prompt.content }}</p>
             </li>
             <li
               v-if="
                 turn.task?.status === 'RUNNING' ||
                 turn.publishedVersion ||
-                turn.messages.some((item) => item.role === 'assistant') ||
-                (turn.task?.status === 'COMPLETED' && liveReply?.taskId === taskId)
+                turn.reply ||
+                turn.task?.status === 'FAILED' ||
+                turn.task?.status === 'PAUSED' ||
+                (turn.task?.status === 'COMPLETED' && liveReply?.taskId === turn.task.id)
               "
               aria-label="助手"
             >
@@ -515,18 +560,37 @@ onUnmounted(() => {
                 {{ labels.RUNNING }}
               </p>
               <MarkdownContent
-                v-for="item in turn.messages.filter((item) => item.role === 'assistant')"
-                :key="item.id"
-                :content="item.content"
-              />
-              <MarkdownContent
                 v-if="
-                  liveReply?.taskId === taskId &&
-                  liveReply.content &&
-                  !turn.messages.some((item) => item.role === 'assistant')
+                  liveReply?.content &&
+                  liveReply.taskId === turn.task?.id &&
+                  (turn.task.status === 'RUNNING' || !turn.reply)
                 "
                 :content="liveReply.content"
               />
+              <MarkdownContent v-else-if="turn.reply" :content="turn.reply.content" />
+              <p v-if="turn.task?.status === 'PAUSED'" class="hint" role="status">已暂停</p>
+              <template v-if="turn.task?.status === 'FAILED'">
+                <p role="alert">
+                  {{ errorMessage(new ApiError(400, turn.task.errorCode || 'execution_failed')) }}
+                </p>
+                <button
+                  v-if="turn.task.id === latestTask?.id"
+                  type="button"
+                  class="secondary"
+                  :disabled="
+                    busy ||
+                    !!runningTask ||
+                    turn.task.executionState === 'STOP_REQUESTED' ||
+                    turn.task.executionState === 'RUNNING'
+                  "
+                  @click="actOnReply(turn.task, 'continue')"
+                >
+                  重试回答
+                </button>
+                <p v-if="retryError?.taskId === turn.task.id" role="alert">
+                  {{ retryError.message }}
+                </p>
+              </template>
               <button
                 v-if="turn.publishedVersion"
                 type="button"
@@ -549,9 +613,11 @@ onUnmounted(() => {
           </ol>
           <div v-if="turn.task" class="task-status" aria-label="任务状态">
             <div>
-              <span v-if="turn.task.status !== 'RUNNING'" role="status">{{
-                labels[turn.task.status] || turn.task.status
-              }}</span><small v-if="turn.task.agentName"
+              <span
+                v-if="!['RUNNING', 'PAUSED', 'FAILED'].includes(turn.task.status)"
+                role="status"
+                >{{ labels[turn.task.status] || turn.task.status }}</span><small
+                v-if="turn.task.agentName"
                 >智能体：{{ turn.task.agentName }}（提交时配置）</small
               ><small v-if="turn.task.executionState === 'STOP_REQUESTED'"
                 >已请求停止，执行结束尚待确认。</small
@@ -559,7 +625,7 @@ onUnmounted(() => {
                 v-if="turn.task.status === 'CANCELLED' && turn.task.executionState === 'STOPPED'"
                 >本地执行已结束，不代表供应商已停止。处理容器状态见资料处理。</small
               ><small v-if="turn.task.executionState === 'UNKNOWN'">执行状态未知。</small
-              ><small v-if="turn.task.errorCode">{{
+              ><small v-if="turn.task.errorCode && turn.task.status !== 'FAILED'">{{
                 errorMessage(new ApiError(400, turn.task.errorCode))
               }}</small>
             </div>
@@ -568,33 +634,33 @@ onUnmounted(() => {
               type="button"
               class="secondary"
               :disabled="busy"
-              @click="cancel(turn.task)"
+              @click="actOnReply(turn.task, 'cancel')"
             >
               取消任务
             </button>
             <details class="task-details">
               <summary>任务详情</summary>
-              <small>任务 {{ taskId }}</small>
+              <small>任务 {{ turn.task.id }}</small>
               <small v-if="turn.task.status === 'RUNNING'">关闭页面不会取消任务。</small>
               <button
                 type="button"
                 class="secondary"
-                :aria-expanded="usageTaskId === taskId"
-                @click="usageTaskId = usageTaskId === taskId ? '' : taskId"
+                :aria-expanded="usageTaskId === turn.task.id"
+                @click="usageTaskId = usageTaskId === turn.task.id ? '' : turn.task.id"
               >
                 查看用量</button
               ><button
                 type="button"
                 class="secondary"
-                :aria-expanded="parsingTaskId === taskId"
-                @click="parsingTaskId = parsingTaskId === taskId ? '' : taskId"
+                :aria-expanded="parsingTaskId === turn.task.id"
+                @click="parsingTaskId = parsingTaskId === turn.task.id ? '' : turn.task.id"
               >
                 资料处理</button
               ><button
                 type="button"
                 class="secondary"
-                :aria-expanded="diagnosticTaskId === taskId"
-                @click="diagnosticTaskId = diagnosticTaskId === taskId ? '' : taskId"
+                :aria-expanded="diagnosticTaskId === turn.task.id"
+                @click="diagnosticTaskId = diagnosticTaskId === turn.task.id ? '' : turn.task.id"
               >
                 运行诊断
               </button>
@@ -779,26 +845,33 @@ onUnmounted(() => {
             </optgroup>
           </select>
           <button
-            :type="showPause ? 'button' : 'submit'"
+            :type="showPause || showContinue ? 'button' : 'submit'"
             :class="{ 'composer-send': !pending }"
-            :aria-label="pending ? undefined : showPause ? '暂停回答' : '提交任务'"
-            :title="pending ? undefined : showPause ? '暂停回答' : '提交任务'"
+            :aria-label="pending ? undefined : composerAction"
+            :title="pending ? undefined : composerAction"
             :disabled="
               busy ||
-              (!showPause && (materialBusy || creationUnconfirmed || (!pending && !message.trim())))
+              (showContinue && pausedTask?.executionState === 'STOP_REQUESTED') ||
+              (!showPause &&
+                !showContinue &&
+                (materialBusy || creationUnconfirmed || (!pending && !message.trim())))
             "
-            @click="showPause && runningTask && cancel(runningTask)"
+            @click="
+              showPause && runningTask
+                ? actOnReply(runningTask, 'pause')
+                : showContinue && pausedTask && actOnReply(pausedTask, 'continue')
+            "
           >
             <template v-if="pending">重试确认</template>
             <svg
-              v-else-if="showPause"
+              v-else-if="showPause || showContinue"
               width="24"
               height="24"
               viewBox="0 0 24 24"
               aria-hidden="true"
             >
               <path
-                d="M9 6v12m6-12v12"
+                :d="showPause ? 'M9 6v12m6-12v12' : 'M9 6l9 6-9 6z'"
                 fill="none"
                 stroke="currentColor"
                 stroke-width="2"

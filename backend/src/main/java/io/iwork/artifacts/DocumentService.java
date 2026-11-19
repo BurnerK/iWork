@@ -1,6 +1,7 @@
 package io.iwork.artifacts;
 
 import io.agentscope.core.tool.*;
+import io.iwork.conversation.TaskAttempts;
 import io.iwork.conversation.TaskRunner;
 import io.iwork.identity.*;
 import java.io.*;
@@ -20,12 +21,15 @@ public class DocumentService {
     public static final int MAX_BYTES = 256 * 1024;
     private final Path workspaces, documents;
     private final JdbcTemplate db;
+    private final NamedParameterJdbcTemplate named;
+    private final TaskAttempts attempts;
     private final TransactionTemplate tx;
     private final IdentityService identity;
 
     public DocumentService(
             @Value("${iwork.files-directory}") Path root,
             JdbcTemplate db,
+            TaskAttempts attempts,
             TransactionTemplate tx,
             IdentityService identity)
             throws IOException {
@@ -34,6 +38,8 @@ public class DocumentService {
         Files.createDirectories(workspaces);
         Files.createDirectories(documents);
         this.db = db;
+        this.named = new NamedParameterJdbcTemplate(db);
+        this.attempts = attempts;
         this.tx = tx;
         this.identity = identity;
     }
@@ -51,31 +57,31 @@ public class DocumentService {
 
     public Map<String, PublishedVersion> publishedVersions(Caller caller, List<String> taskIds) {
         if (taskIds.isEmpty()) return Map.of();
-        return new NamedParameterJdbcTemplate(db)
-                .query(
-                        """
+        return named.query(
+                """
                         SELECT v.task_id, v.id, v.title, v.version_number
                         FROM document_versions v JOIN documents d ON d.id=v.document_id
                         WHERE d.owner_id=:owner AND v.task_id IN (:tasks)
                         """,
-                        Map.of("owner", caller.id(), "tasks", taskIds),
-                        rows -> {
-                            var versions = new HashMap<String, PublishedVersion>();
-                            while (rows.next()) {
-                                versions.put(
-                                        rows.getString("task_id"),
-                                        new PublishedVersion(
-                                                rows.getString("id"),
-                                                rows.getString("title"),
-                                                rows.getInt("version_number")));
-                            }
-                            return versions;
-                        });
+                Map.of("owner", caller.id(), "tasks", taskIds),
+                rows -> {
+                    var versions = new HashMap<String, PublishedVersion>();
+                    while (rows.next()) {
+                        versions.put(
+                                rows.getString("task_id"),
+                                new PublishedVersion(
+                                        rows.getString("id"),
+                                        rows.getString("title"),
+                                        rows.getInt("version_number")));
+                    }
+                    return versions;
+                });
     }
 
     private List<Draft> drafts(String task) {
-        return db.query(
-                "SELECT * FROM document_drafts WHERE task_id=?",
+        return named.query(
+                "SELECT * FROM document_drafts WHERE task_id IN (:attemptIds)",
+                Map.of("attemptIds", attempts.through(task)),
                 (r, n) ->
                         new Draft(
                                 r.getString("id"),
@@ -84,8 +90,11 @@ public class DocumentService {
                                 r.getString("version_id"),
                                 r.getString("title"),
                                 r.getLong("byte_size"),
-                                r.getString("sha256")),
-                task);
+                                r.getString("sha256")));
+    }
+
+    public boolean hasPreparedDraft(TaskRunner.Input input) {
+        return !drafts(input.taskId()).isEmpty();
     }
 
     private static String checksum(byte[] bytes) {
@@ -215,7 +224,7 @@ public class DocumentService {
                         });
         byte[] bytes =
                 read(
-                        workspaces.resolve(input.taskId()).resolve(draft.id() + ".md"),
+                        workspaces.resolve(draft.taskId()).resolve(draft.id() + ".md"),
                         draft.byteSize(),
                         draft.sha256());
         var target = documents.resolve(draft.versionId() + ".md");
@@ -231,7 +240,7 @@ public class DocumentService {
 
     /** Caller holds the task row lock; this participates in the reply/completion transaction. */
     public void publish(TaskRunner.Input input, Draft draft) {
-        if (!draft.taskId().equals(input.taskId()))
+        if (!drafts(input.taskId()).contains(draft))
             throw new ApiFailure(403, "document_not_authorized");
         String base = baseVersion(input);
         int number = 1;
@@ -271,6 +280,22 @@ public class DocumentService {
                 draft.artifactId(),
                 input.taskId(),
                 draft.artifactId());
+    }
+
+    public void cleanupAbandoned(Set<String> retainedTaskIds) {
+        db.queryForList("SELECT task_id FROM document_drafts", String.class).stream()
+                .filter(taskId -> !retainedTaskIds.contains(taskId))
+                .forEach(this::cleanup);
+    }
+
+    public void cleanupExecution(TaskRunner.Input input, String status) {
+        if (!input.outputMode().equals("DOCUMENT")) return;
+        var drafts = drafts(input.taskId());
+        if (Set.of("PAUSED", "FAILED").contains(status) && !drafts.isEmpty()) return;
+        cleanup(input.taskId());
+        for (var draft : drafts) {
+            if (!draft.taskId().equals(input.taskId())) cleanup(draft.taskId());
+        }
     }
 
     public void cleanup(String task) {

@@ -62,7 +62,7 @@ test('queues consecutive follow-ups and switches between pause and send', async 
             {
               id: 'running',
               requestId: 'request',
-              status: running ? 'RUNNING' : 'CANCELLED',
+              status: running ? 'RUNNING' : 'PAUSED',
               executionState: running ? 'RUNNING' : 'STOPPED',
             },
           ],
@@ -81,11 +81,10 @@ test('queues consecutive follow-ups and switches between pause and send', async 
       queuedItems = queuedItems.filter(({ id }) => id !== 'queued-2')
       return route.fulfill({ status: 204 })
     }
-    if (path === '/api/tasks/running/cancel') {
+    if (path === '/api/tasks/running/pause') {
       expect(request.method()).toBe('POST')
-      expect(request.postDataJSON()).toEqual({ pauseQueue: true })
       running = false
-      data = { id: 'running', requestId: 'request', status: 'CANCELLED', executionState: 'STOPPED' }
+      data = { id: 'running', requestId: 'request', status: 'PAUSED', executionState: 'STOPPED' }
     }
     await route.fulfill({ json: envelope(data) })
   })

@@ -549,6 +549,61 @@ public class CancellationClosureTest {
                                         false)
                                 .body())
                 .isEqualTo(bytes);
+
+        String continuedConversation = conversation(admin);
+        String first = start(admin, continuedConversation, model, null, "prepared");
+        awaitPrepared(admin, first);
+        assertThat(admin.request("POST", "/api/tasks/" + first + "/pause", null, true).statusCode())
+                .isEqualTo(200);
+        await(admin, first, "PAUSED");
+        String path = "/api/tasks/" + first + "/continue";
+        String successor;
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var one = pool.submit(() -> admin.request("POST", path, null, true));
+            var two = pool.submit(() -> admin.request("POST", path, null, true));
+            var firstResponse = one.get();
+            var secondResponse = two.get();
+            assertThat(firstResponse.statusCode()).isEqualTo(202);
+            assertThat(secondResponse.statusCode()).isEqualTo(202);
+            successor = json.readTree(firstResponse.body()).path("id").asString();
+            assertThat(json.readTree(secondResponse.body()).path("id").asString())
+                    .isEqualTo(successor);
+        }
+        awaitPrepared(admin, successor);
+        assertThat(admin.request("POST", "/api/test/deliver/" + first, "{}", true).statusCode())
+                .isEqualTo(409);
+        String conversationPath = "/api/conversations/" + continuedConversation;
+        assertThat(
+                        json.readTree(
+                                        admin.request(
+                                                        "GET",
+                                                        conversationPath + "/documents",
+                                                        null,
+                                                        false)
+                                                .body())
+                                .path("items"))
+                .isEmpty();
+        admin.request("POST", "/api/test/release/" + successor, "{}", true);
+        await(admin, successor, "COMPLETED");
+        assertThat(admin.request("POST", "/api/test/deliver/" + first, "{}", true).statusCode())
+                .isEqualTo(409);
+        assertThat(
+                        json.readTree(
+                                        admin.request(
+                                                        "GET",
+                                                        conversationPath + "/documents",
+                                                        null,
+                                                        false)
+                                                .body())
+                                .path("items"))
+                .hasSize(1);
+        var continuedMessages =
+                json.readTree(
+                                admin.request("GET", conversationPath + "/messages", null, false)
+                                        .body())
+                        .path("items");
+        assertThat(continuedMessages).hasSize(2);
+        assertThat(continuedMessages.get(1).path("content").asString()).isEqualTo("文档已准备已记录");
     }
 
     String conversation(Browser browser) throws Exception {

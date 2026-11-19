@@ -2365,6 +2365,44 @@ paths:
       security:
       - csrf: []
         session: []
+  /api/tasks/{id}/continue:
+    post:
+      tags:
+      - 会话任务
+      summary: "POST /api/tasks/{id}/continue"
+      operationId: post_api_tasks_id_continue
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.TaskService.Task"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
   /api/tasks/{id}/diagnostics:
     get:
       tags:
@@ -2441,6 +2479,44 @@ paths:
           $ref: "#/components/responses/ApiError"
       security:
       - session: []
+  /api/tasks/{id}/pause:
+    post:
+      tags:
+      - 会话任务
+      summary: "POST /api/tasks/{id}/pause"
+      operationId: post_api_tasks_id_pause
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.TaskService.Task"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
   /api/tasks/{id}/reply-stream:
     get:
       tags:
@@ -3030,6 +3106,8 @@ components:
           type: string
         publishedVersion:
           $ref: "#/components/schemas/io.iwork.artifacts.DocumentService.PublishedVersion"
+        replyTaskId:
+          type: string
         requestId:
           type: string
         status:

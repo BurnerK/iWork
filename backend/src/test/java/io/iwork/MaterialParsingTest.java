@@ -35,6 +35,8 @@ class MaterialParsingTest {
     static final GenericContainer<?> REDIS =
             new GenericContainer<>("redis:8.2.3-alpine").withExposedPorts(6379);
 
+    static final java.util.concurrent.atomic.AtomicInteger parseRequests =
+            new java.util.concurrent.atomic.AtomicInteger();
     static final java.util.concurrent.atomic.AtomicBoolean rejectAdmission =
             new java.util.concurrent.atomic.AtomicBoolean();
     static final java.util.concurrent.atomic.AtomicBoolean rejectCleanup =
@@ -55,6 +57,8 @@ class MaterialParsingTest {
                         "/",
                         exchange -> {
                             try (exchange) {
+                                if (exchange.getRequestMethod().equals("POST"))
+                                    parseRequests.incrementAndGet();
                                 if ((exchange.getRequestMethod().equals("POST")
                                                 && rejectAdmission.compareAndSet(true, false))
                                         || (exchange.getRequestMethod().equals("DELETE")
@@ -130,6 +134,10 @@ class MaterialParsingTest {
     final ObjectMapper json = new ObjectMapper();
     static final reactor.core.publisher.Sinks.Empty<Void> fileGate =
             reactor.core.publisher.Sinks.empty();
+    static final reactor.core.publisher.Sinks.Empty<Void> pauseGate =
+            reactor.core.publisher.Sinks.empty();
+    static final java.util.concurrent.CountDownLatch pauseReceived =
+            new java.util.concurrent.CountDownLatch(1);
     static final java.util.concurrent.CountDownLatch holdReceived =
             new java.util.concurrent.CountDownLatch(1);
     static final java.util.concurrent.CountDownLatch fileReceived =
@@ -342,6 +350,23 @@ class MaterialParsingTest {
                     } else
                         chunk =
                                 "{\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"资料处理已结束，请查看处理结果。\"},\"finish_reason\":\"stop\"}]}";
+                    if (request.getBody().contains("pause-document") && toolResult) {
+                        if (documentMode && request.getBody().contains("PREPARED")) {
+                            return reactor.core.publisher.Flux.just(answerChunk("资料已整理。", null))
+                                    .doOnNext(ignored -> pauseReceived.countDown())
+                                    .concatWith(
+                                            pauseGate
+                                                    .asMono()
+                                                    .thenMany(
+                                                            reactor.core.publisher.Flux.just(
+                                                                    answerChunk("旧回复。", "stop"),
+                                                                    "[DONE]")));
+                        }
+                        if (!documentMode) {
+                            assertThat(request.getBody()).contains("资料已整理。", "不要执行");
+                            chunk = answerChunk("可以查看成果。", "stop");
+                        }
+                    }
                     var answer =
                             reactor.core.publisher.Flux.just(
                                     chunk,
@@ -359,6 +384,15 @@ class MaterialParsingTest {
                         }
                     }
                     return answer.concatWithValues("[DONE]");
+                }
+
+                private String answerChunk(String text, String finish) {
+                    var choice =
+                            json.createObjectNode().put("index", 0).put("finish_reason", finish);
+                    choice.putObject("delta").put("role", "assistant").put("content", text);
+                    var event = json.createObjectNode();
+                    event.putArray("choices").add(choice);
+                    return event.toString();
                 }
 
                 public void close() {}
@@ -635,6 +669,84 @@ class MaterialParsingTest {
                                 .path("items")
                                 .isEmpty())
                 .isTrue();
+        String continuationConversation =
+                json.readTree(admin.send("POST", "/api/conversations", "{}").body())
+                        .get("id")
+                        .asString();
+        String original =
+                submitDocument(admin, continuationConversation, model, material, "pause-document");
+        awaitPreparedModelCall(admin, original, pauseReceived);
+        var parseBeforePause =
+                json.readTree(admin.send("GET", "/api/tasks/" + original + "/parses", null).body());
+        assertThat(parseBeforePause.get(0).path("status").asString()).isEqualTo("COMPLETED");
+        try (var events =
+                admin.client
+                        .send(
+                                HttpRequest.newBuilder(
+                                                URI.create(
+                                                        "http://localhost:"
+                                                                + port
+                                                                + "/api/tasks/"
+                                                                + original
+                                                                + "/reply-stream"))
+                                        .timeout(java.time.Duration.ofSeconds(10))
+                                        .GET()
+                                        .build(),
+                                HttpResponse.BodyHandlers.ofLines())
+                        .body()) {
+            assertThat(events.anyMatch(line -> line.contains("资料已整理。"))).isTrue();
+        }
+        String pausePath = "/api/tasks/" + original + "/pause";
+        assertThat(admin.send("POST", pausePath, null).statusCode()).isEqualTo(200);
+        awaitTask(admin, original, "PAUSED");
+        int parsesBeforeResume = parseRequests.get();
+        String resumePath = "/api/tasks/" + original + "/continue";
+        var resumed = admin.send("POST", resumePath, null);
+        assertThat(resumed.statusCode()).isEqualTo(202);
+        String resumedId = json.readTree(resumed.body()).path("id").asString();
+        assertThat(resumedId).isNotEqualTo(original);
+        assertThat(json.readTree(admin.send("POST", resumePath, null).body()).path("id").asString())
+                .isEqualTo(resumedId);
+        pauseGate.tryEmitEmpty();
+        awaitTask(admin, resumedId, "COMPLETED");
+        assertThat(parseRequests.get()).isEqualTo(parsesBeforeResume);
+        var continued =
+                json.readTree(
+                                admin.send(
+                                                "GET",
+                                                "/api/conversations/"
+                                                        + continuationConversation
+                                                        + "/messages",
+                                                null)
+                                        .body())
+                        .path("items");
+        assertThat(continued).hasSize(2);
+        for (var message : continued)
+            assertThat(message.path("taskId").asString()).isEqualTo(original);
+        assertThat(continued.get(1).path("content").asString()).isEqualTo("资料已整理。可以查看成果。");
+        assertThat(
+                        json.readTree(
+                                        admin.send(
+                                                        "GET",
+                                                        "/api/tasks/" + resumedId + "/parses",
+                                                        null)
+                                                .body())
+                                .get(0)
+                                .path("id")
+                                .asString())
+                .isEqualTo(parseBeforePause.get(0).path("id").asString());
+        assertThat(
+                        json.readTree(
+                                        admin.send(
+                                                        "GET",
+                                                        "/api/conversations/"
+                                                                + continuationConversation
+                                                                + "/documents",
+                                                        null)
+                                                .body())
+                                .path("items"))
+                .hasSize(1);
+
         String storage =
                 submitDocument(admin, failureConversation, model, material, "file-failure");
         awaitPreparedModelCall(admin, storage, fileReceived);

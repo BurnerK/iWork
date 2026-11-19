@@ -51,13 +51,24 @@ public class TaskService implements ApplicationRunner {
 
     private static final class LiveReply {
         private final Sinks.Many<ReplySnapshot> updates = Sinks.many().replay().latest();
+        private final String prefix;
         private final StringBuilder content = new StringBuilder();
         private String replyId;
         private int version;
         private boolean finished;
 
-        LiveReply() {
-            updates.tryEmitNext(new ReplySnapshot(0, ""));
+        LiveReply(String prefix) {
+            this.prefix = prefix;
+            updates.tryEmitNext(new ReplySnapshot(0, prefix));
+        }
+
+        synchronized String snapshot() {
+            return prefix + content;
+        }
+
+        synchronized String seal() {
+            finished = true;
+            return snapshot();
         }
 
         synchronized void append(String id, String delta) {
@@ -66,10 +77,15 @@ public class TaskService implements ApplicationRunner {
                 replyId = id;
                 content.setLength(0);
             }
-            int length = Math.min(delta.length(), MAX_REPLY_LENGTH - content.length());
+            int length =
+                    Math.min(delta.length(), MAX_REPLY_LENGTH - prefix.length() - content.length());
             if (length == 0) return;
             content.append(delta, 0, length);
-            updates.tryEmitNext(new ReplySnapshot(++version, content.toString()));
+            updates.tryEmitNext(new ReplySnapshot(++version, snapshot()));
+        }
+
+        synchronized void unseal() {
+            finished = false;
         }
 
         synchronized void finish() {
@@ -81,8 +97,7 @@ public class TaskService implements ApplicationRunner {
     Flux<ReplySnapshot> replyStream(Caller caller, String id) {
         var task = get(caller, id);
         var live = liveReplies.get(id);
-        if (!task.status().equals("RUNNING") || !task.outputMode().equals("TEXT") || live == null)
-            return Flux.empty();
+        if (!task.status().equals("RUNNING") || live == null) return Flux.empty();
         return live.updates
                 .asFlux()
                 .sample(Duration.ofMillis(50))
@@ -131,6 +146,7 @@ public class TaskService implements ApplicationRunner {
     public record Task(
             String id,
             String conversationId,
+            String replyTaskId,
             String modelId,
             String requestId,
             String status,
@@ -153,6 +169,8 @@ public class TaskService implements ApplicationRunner {
             String content,
             Instant createdAt,
             PublishedVersion publishedVersion) {}
+
+    private record StoredMessage(Message message, String replyTaskId) {}
 
     public record Page<T>(List<T> items, boolean hasMore) {}
 
@@ -184,6 +202,8 @@ public class TaskService implements ApplicationRunner {
                         new Task(
                                 r.getString("id"),
                                 r.getString("conversation_id"),
+                                Objects.requireNonNullElse(
+                                        r.getString("reply_task_id"), r.getString("id")),
                                 r.getString("model_id"),
                                 r.getString("request_id"),
                                 r.getString("status"),
@@ -221,8 +241,21 @@ public class TaskService implements ApplicationRunner {
                 });
         db.update(
                 "UPDATE tasks SET execution_state='UNKNOWN' WHERE execution_state IN ('RUNNING','STOP_REQUESTED')");
-        db.queryForList("SELECT task_id FROM document_drafts", String.class)
-                .forEach(documents::cleanup);
+        var resumableAttempts =
+                db.queryForList(
+                        """
+                        SELECT t.id FROM tasks t
+                        WHERE EXISTS (
+                            SELECT 1 FROM tasks leaf
+                            JOIN messages prompt ON prompt.task_id=COALESCE(leaf.reply_task_id,leaf.id) AND prompt.role='user'
+                            WHERE prompt.task_id=COALESCE(t.reply_task_id,t.id)
+                              AND leaf.status IN ('PAUSED','FAILED')
+                              AND NOT EXISTS (SELECT 1 FROM tasks n WHERE n.continued_from_id=leaf.id)
+                              AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id=t.conversation_id
+                                              AND m.role='user' AND m.id>prompt.id))
+                        """,
+                        String.class);
+        documents.cleanupAbandoned(Set.copyOf(resumableAttempts));
         dispatcher.scheduleWithFixedDelay(this::dispatch, 0, 250, TimeUnit.MILLISECONDS);
     }
 
@@ -251,7 +284,7 @@ public class TaskService implements ApplicationRunner {
                     var rows =
                             query(
                                     true,
-                                    "tasks.owner_id=? AND tasks.conversation_id=? AND tasks.status NOT IN ('QUEUED','REMOVED') ORDER BY tasks.created_at DESC,tasks.id DESC LIMIT 21 OFFSET ?",
+                                    "tasks.owner_id=? AND tasks.conversation_id=? AND tasks.status NOT IN ('QUEUED','REMOVED') AND NOT EXISTS (SELECT 1 FROM tasks successor WHERE successor.continued_from_id=tasks.id) ORDER BY tasks.created_at DESC,tasks.id DESC LIMIT 21 OFFSET ?",
                                     caller.id(),
                                     conversationId,
                                     page * 20);
@@ -353,15 +386,26 @@ public class TaskService implements ApplicationRunner {
         conversation(caller, conversationId, false);
         var rows =
                 db.query(
-                        "SELECT * FROM messages WHERE conversation_id=? AND id>? ORDER BY id LIMIT 101",
+                        """
+                        SELECT m.*, COALESCE(t.reply_task_id,t.id) AS reply_task_id
+                        FROM messages m JOIN tasks t ON t.id=m.task_id
+                        WHERE m.conversation_id=? AND m.id>? AND (
+                            m.role='user' OR NOT EXISTS (
+                                SELECT 1 FROM tasks n JOIN messages newer ON newer.task_id=n.id
+                                WHERE n.reply_task_id=COALESCE(t.reply_task_id,t.id)
+                                  AND newer.role='assistant' AND newer.id>m.id))
+                        ORDER BY m.id LIMIT 101
+                        """,
                         (r, n) ->
-                                new Message(
-                                        r.getLong("id"),
-                                        r.getString("task_id"),
-                                        r.getString("role"),
-                                        r.getString("content"),
-                                        r.getTimestamp("created_at").toInstant(),
-                                        null),
+                                new StoredMessage(
+                                        new Message(
+                                                r.getLong("id"),
+                                                r.getString("task_id"),
+                                                r.getString("role"),
+                                                r.getString("content"),
+                                                r.getTimestamp("created_at").toInstant(),
+                                                null),
+                                        r.getString("reply_task_id")),
                         conversationId,
                         after);
         var page = rows.stream().limit(100).toList();
@@ -369,23 +413,24 @@ public class TaskService implements ApplicationRunner {
                 documents.publishedVersions(
                         caller,
                         page.stream()
+                                .map(StoredMessage::message)
                                 .filter(message -> message.role().equals("assistant"))
                                 .map(Message::taskId)
                                 .toList());
         return new Page<>(
                 page.stream()
                         .map(
-                                message -> {
-                                    var version = versions.get(message.taskId());
-                                    return version == null || !message.role().equals("assistant")
-                                            ? message
-                                            : new Message(
-                                                    message.id(),
-                                                    message.taskId(),
-                                                    message.role(),
-                                                    message.content(),
-                                                    message.createdAt(),
-                                                    version);
+                                stored -> {
+                                    var message = stored.message();
+                                    return new Message(
+                                            message.id(),
+                                            stored.replyTaskId(),
+                                            message.role(),
+                                            message.content(),
+                                            message.createdAt(),
+                                            message.role().equals("assistant")
+                                                    ? versions.get(message.taskId())
+                                                    : null);
                                 })
                         .toList(),
                 rows.size() > 100);
@@ -537,7 +582,7 @@ public class TaskService implements ApplicationRunner {
         boolean[] acquired = {false};
         String[] initializedInstructions = {""};
         String id = UUID.randomUUID().toString();
-        var replyBuffer = new LiveReply();
+        var replyBuffer = new LiveReply("");
         Task accepted;
         try {
             accepted =
@@ -647,7 +692,8 @@ public class TaskService implements ApplicationRunner {
         return db.queryForObject(
                 """
                 SELECT EXISTS (SELECT 1 FROM tasks WHERE conversation_id=?
-                    AND (status='RUNNING' OR (? AND execution_state IN ('RUNNING','STOP_REQUESTED'))))
+                    AND (status='RUNNING' OR ((? OR status IN ('PAUSED','FAILED'))
+                        AND execution_state IN ('RUNNING','STOP_REQUESTED'))))
                 """,
                 Boolean.class,
                 conversationId,
@@ -678,6 +724,7 @@ public class TaskService implements ApplicationRunner {
                         message,
                         task.outputMode(),
                         instructions,
+                        replyBuffer.prefix,
                         replyBuffer::append);
         launch(input);
     }
@@ -729,7 +776,7 @@ public class TaskService implements ApplicationRunner {
     }
 
     private void dispatch(QueueHead head) {
-        var replyBuffer = new LiveReply();
+        var replyBuffer = new LiveReply("");
         TaskRunner.Input input = null;
         try {
             input = tx.execute(status -> promote(head, replyBuffer));
@@ -804,6 +851,7 @@ public class TaskService implements ApplicationRunner {
                 instructions(
                         (String) stored.get("project_instructions"),
                         (String) stored.get("agent_instructions")),
+                replyBuffer.prefix,
                 replyBuffer::append);
     }
 
@@ -825,30 +873,58 @@ public class TaskService implements ApplicationRunner {
                                                         stopping ? "INTERRUPTED" : "FAILED",
                                                         stopping ? "process_restarted" : errorCode,
                                                         input.taskId())
-                                                > 0) pauseQueue(input.conversationId());
+                                                > 0) {
+                                            savePartial(input.taskId(), input.conversationId());
+                                            pauseQueue(input.conversationId());
+                                        }
                                     }));
         } finally {
             Thread.interrupted();
             finishReply(input.taskId());
             try {
                 persist(
-                        () ->
-                                db.update(
-                                        "UPDATE tasks SET execution_state='STOPPED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",
-                                        input.taskId()));
+                        () -> {
+                            documents.cleanupExecution(
+                                    input, get(input.caller(), input.taskId()).status());
+                            workers.remove(input.taskId());
+                            db.update(
+                                    "UPDATE tasks SET execution_state='STOPPED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",
+                                    input.taskId());
+                        });
             } finally {
-                try {
-                    documents.cleanup(input.taskId());
-                } finally {
-                    workers.remove(input.taskId());
-                    capacity.release();
-                }
+                workers.remove(input.taskId());
+                capacity.release();
             }
         }
     }
 
+    private void savePartial(String taskId, String conversationId) {
+        var live = liveReplies.get(taskId);
+        if (live == null) return;
+        String snapshot = live.seal();
+        org.springframework.transaction.support.TransactionSynchronizationManager
+                .registerSynchronization(
+                        new org.springframework.transaction.support.TransactionSynchronization() {
+                            @Override
+                            public void afterCompletion(int status) {
+                                if (status == STATUS_ROLLED_BACK) live.unseal();
+                            }
+                        });
+        if (!snapshot.equals(live.prefix)) saveReply(taskId, conversationId, snapshot);
+    }
+
+    private void saveReply(String taskId, String conversationId, String reply) {
+        db.update(
+                "INSERT INTO messages(task_id,conversation_id,role,content) VALUES(?,?,'assistant',?)",
+                taskId,
+                conversationId,
+                reply);
+    }
+
     void acceptResult(TaskRunner.Input input, String reply) {
-        if (reply == null || reply.isBlank() || reply.length() > MAX_REPLY_LENGTH)
+        if (reply == null
+                || reply.isBlank()
+                || (long) input.partialReply().length() + reply.length() > MAX_REPLY_LENGTH)
             throw new IllegalStateException("Invalid execution result");
         var draft = input.outputMode().equals("DOCUMENT") ? documents.prepareFinal(input) : null;
         tx.executeWithoutResult(
@@ -858,11 +934,7 @@ public class TaskService implements ApplicationRunner {
                     var current = query("id=? FOR UPDATE", input.taskId()).getFirst();
                     if (!current.status().equals("RUNNING")) return;
                     if (draft != null) documents.publish(input, draft);
-                    db.update(
-                            "INSERT INTO messages(task_id,conversation_id,role,content) VALUES(?,?,'assistant',?)",
-                            input.taskId(),
-                            input.conversationId(),
-                            reply);
+                    saveReply(input.taskId(), input.conversationId(), input.partialReply() + reply);
                     db.update(
                             "UPDATE tasks SET status='COMPLETED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",
                             input.taskId());
@@ -913,26 +985,149 @@ public class TaskService implements ApplicationRunner {
     }
 
     public Task cancel(Caller caller, String id, boolean pausePending) {
-        var cancelled =
+        return stop(caller, id, "CANCELLED", pausePending);
+    }
+
+    public Task pause(Caller caller, String id) {
+        return stop(caller, id, "PAUSED", false);
+    }
+
+    private Task stop(Caller caller, String id, String state, boolean pausePending) {
+        boolean[] changed = {false};
+        var stopped =
                 tx.execute(
                         status -> {
                             identity.verify(caller, true);
                             var task = get(caller, id);
                             conversation(caller, task.conversationId(), true);
-                            int changed =
+                            changed[0] =
                                     db.update(
-                                            "UPDATE tasks SET status='CANCELLED',execution_state='STOP_REQUESTED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_id=? AND status='RUNNING'",
-                                            id,
-                                            caller.id());
-                            if (changed > 0 || pausePending) pauseQueue(task.conversationId());
+                                                    "UPDATE tasks SET status=?,execution_state='STOP_REQUESTED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_id=? AND status='RUNNING'",
+                                                    state,
+                                                    id,
+                                                    caller.id())
+                                            > 0;
+                            if (changed[0] && state.equals("PAUSED"))
+                                savePartial(id, task.conversationId());
+                            if (changed[0] || pausePending) pauseQueue(task.conversationId());
                             return query("id=? FOR UPDATE", id).getFirst();
                         });
-        if (cancelled.status().equals("CANCELLED")) {
+        if (changed[0]) {
             finishReply(id);
             var worker = workers.get(id);
             if (worker != null) worker.interrupt();
         }
-        return cancelled;
+        return stopped;
+    }
+
+    public Task continueReply(Caller caller, String sourceId) {
+        String cid = get(caller, sourceId).conversationId();
+        String id = UUID.randomUUID().toString();
+        boolean[] acquired = {false};
+        TaskRunner.Input[] execution = {null};
+        Task accepted;
+        try {
+            accepted =
+                    tx.execute(
+                            status -> {
+                                var live = verifyExecutionCaller(caller);
+                                conversation(live, cid, true);
+                                var existing = query("continued_from_id=? FOR UPDATE", sourceId);
+                                if (!existing.isEmpty()) return existing.getFirst();
+                                var source = query("id=? FOR UPDATE", sourceId).getFirst();
+                                if (!Set.of("PAUSED", "FAILED").contains(source.status()))
+                                    throw new ApiFailure(409, "reply_not_resumable");
+                                String root = source.replyTaskId();
+                                var original =
+                                        db.queryForMap(
+                                                "SELECT task_id,content FROM messages WHERE conversation_id=? AND role='user' ORDER BY id DESC LIMIT 1",
+                                                cid);
+                                if (!root.equals(original.get("task_id")))
+                                    throw new ApiFailure(409, "reply_not_resumable");
+                                if (hasActiveTask(cid, true))
+                                    throw new ApiFailure(409, "conversation_busy");
+                                if (runners.getIfAvailable() == null || stopping)
+                                    throw new ApiFailure(503, "execution_unavailable");
+                                authorizeContinuation(live, source);
+                                if (!capacity.tryAcquire())
+                                    throw new ApiFailure(429, "task_capacity_exceeded");
+                                acquired[0] = true;
+                                var partial =
+                                        db
+                                                .queryForList(
+                                                        """
+                        SELECT m.content FROM messages m JOIN tasks t ON t.id=m.task_id
+                        WHERE (t.id=? OR t.reply_task_id=?) AND m.role='assistant'
+                        ORDER BY m.id DESC LIMIT 1
+                        """,
+                                                        String.class,
+                                                        root,
+                                                        root)
+                                                .stream()
+                                                .findFirst()
+                                                .orElse("");
+                                if (partial.length() >= MAX_REPLY_LENGTH)
+                                    throw new ApiFailure(409, "reply_not_resumable");
+                                db.update(
+                                        """
+                        INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,
+                            status,execution_state,output_mode,base_version_id,agent_id,agent_name,agent_instructions,
+                            project_id,project_name,project_instructions,reply_task_id,continued_from_id)
+                        SELECT ?,owner_id,conversation_id,model_id,?,request_hash,
+                            'RUNNING','RUNNING',output_mode,base_version_id,agent_id,agent_name,agent_instructions,
+                            project_id,project_name,project_instructions,?,?
+                        FROM tasks WHERE id=?
+                        """,
+                                        id,
+                                        "continue:" + id,
+                                        root,
+                                        source.id(),
+                                        source.id());
+                                db.update(
+                                        """
+                        INSERT INTO task_materials(task_id,material_id,position)
+                        SELECT ?,material_id,position FROM task_materials WHERE task_id=?
+                        """,
+                                        id,
+                                        source.id());
+                                var stored =
+                                        db.queryForMap(
+                                                "SELECT project_instructions,agent_instructions FROM tasks WHERE id=?",
+                                                id);
+                                var buffer = new LiveReply(partial);
+                                liveReplies.put(id, buffer);
+                                execution[0] =
+                                        new TaskRunner.Input(
+                                                id,
+                                                cid,
+                                                live,
+                                                source.modelId(),
+                                                (String) original.get("content"),
+                                                source.outputMode(),
+                                                instructions(
+                                                        (String) stored.get("project_instructions"),
+                                                        (String) stored.get("agent_instructions")),
+                                                partial,
+                                                buffer::append);
+                                return get(live, id);
+                            });
+        } catch (RuntimeException failure) {
+            finishReply(id);
+            if (acquired[0]) capacity.release();
+            throw failure;
+        }
+        if (execution[0] != null) launch(execution[0]);
+        return accepted;
+    }
+
+    private void authorizeContinuation(Caller caller, Task source) {
+        models.require(caller.id(), source.modelId());
+        if (source.agentId() != null) agents.get(caller, source.agentId());
+        else if (source.agentName() != null) throw new ApiFailure(404, "not_found");
+        if (source.projectId() != null) projects.get(caller, source.projectId());
+        else if (source.projectName() != null) throw new ApiFailure(404, "not_found");
+        if (source.baseVersionId() != null) documents.version(caller, source.baseVersionId());
+        materials(caller, source.id());
     }
 
     @PreDestroy

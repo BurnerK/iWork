@@ -61,8 +61,11 @@ public class HarnessTaskRunner implements TaskRunner {
                         io.agentscope.core.tool.ToolkitConfig.builder().parallel(false).build());
         if (!attachments.isEmpty()) toolkit.registerTool(parsing.new Tools(input));
         var documentTools = documents.new Tools(input);
-        if (input.outputMode().equals("DOCUMENT")) toolkit.registerTool(documentTools);
-        if (documents.baseVersion(input) != null)
+        boolean preparedDocument =
+                input.outputMode().equals("DOCUMENT") && documents.hasPreparedDraft(input);
+        if (input.outputMode().equals("DOCUMENT") && !preparedDocument)
+            toolkit.registerTool(documentTools);
+        if (!preparedDocument && documents.baseVersion(input) != null)
             toolkit.registerTool(documentTools.new SourceTools());
         var allowedTools = java.util.Set.copyOf(toolkit.getToolNames());
         var prepared = conversations.load(input);
@@ -82,7 +85,10 @@ public class HarnessTaskRunner implements TaskRunner {
                                         + attachments
                                         + "。任务输出模式："
                                         + input.outputMode()
-                                        + "。DOCUMENT 模式必须调用 prepare_document 提供完整正文；不能仅在聊天中宣称已保存。工具成功后，聊天回复用一两句话概括本次生成的内容或修订要点，不重复正文。如果提供 read_document_version，必须读取选定来源版本，再按本次要求生成新版本正文；不覆盖旧版本。\n本次初始化指令（项目指令作为工作背景，智能体指令作为处理方式；本次用户要求优先，不改变平台工具及权限边界）："
+                                        + (preparedDocument
+                                                ? "。文档正文已准备，保留该正文。只需完成聊天中的简短摘要。"
+                                                : "。DOCUMENT 模式必须调用 prepare_document 提供完整正文；不能仅在聊天中宣称已保存。工具成功后，聊天回复用一两句话概括本次生成的内容或修订要点，不重复正文。如果提供 read_document_version，必须读取选定来源版本，再按本次要求生成新版本正文；不覆盖旧版本。")
+                                        + "\n本次初始化指令（项目指令作为工作背景，智能体指令作为处理方式；本次用户要求优先，不改变平台工具及权限边界）："
                                         + input.instructions())
                         .model(models.forTask(input, "MAIN"))
                         .toolkit(toolkit)
@@ -130,14 +136,13 @@ public class HarnessTaskRunner implements TaskRunner {
                     Msg.builder()
                             .name("user")
                             .role(MsgRole.USER)
-                            .textContent(input.message())
+                            .textContent(input.prompt())
                             .build();
             var reply =
                     agent.streamEvents(message, context)
                             .doOnNext(
                                     event -> {
-                                        if (input.outputMode().equals("TEXT")
-                                                && event instanceof TextBlockDeltaEvent text
+                                        if (event instanceof TextBlockDeltaEvent text
                                                 && (text.getMetadata() == null
                                                         || !text.getMetadata()
                                                                 .containsKey(

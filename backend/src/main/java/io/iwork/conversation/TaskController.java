@@ -109,6 +109,18 @@ class TaskController {
         return tasks.cancel(caller, id, pauseQueue);
     }
 
+    @PostMapping("/api/tasks/{id}/pause")
+    TaskService.Task pause(@AuthenticationPrincipal Caller caller, @PathVariable String id) {
+        return tasks.pause(caller, id);
+    }
+
+    @PostMapping("/api/tasks/{id}/continue")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    TaskService.Task continueReply(
+            @AuthenticationPrincipal Caller caller, @PathVariable String id) {
+        return tasks.continueReply(caller, id);
+    }
+
     @GetMapping("/api/conversations/{id}/tasks")
     TaskService.TaskPage list(
             @AuthenticationPrincipal Caller caller,

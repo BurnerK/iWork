@@ -3,6 +3,7 @@ package io.iwork.sandbox;
 import io.agentscope.core.tool.Tool;
 import io.agentscope.core.tool.ToolParam;
 import io.iwork.artifacts.MaterialService;
+import io.iwork.conversation.TaskAttempts;
 import io.iwork.conversation.TaskRunner;
 import io.iwork.identity.*;
 import jakarta.annotation.PreDestroy;
@@ -15,6 +16,7 @@ import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.*;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.*;
@@ -23,6 +25,8 @@ import tools.jackson.databind.*;
 @org.springframework.core.annotation.Order(2)
 public class MaterialParsing implements ApplicationRunner {
     private final JdbcTemplate db;
+    private final NamedParameterJdbcTemplate named;
+    private final TaskAttempts attempts;
     private final TransactionTemplate tx;
     private final IdentityService identity;
     private final MaterialService materials;
@@ -37,6 +41,7 @@ public class MaterialParsing implements ApplicationRunner {
 
     public MaterialParsing(
             JdbcTemplate db,
+            TaskAttempts attempts,
             TransactionTemplate tx,
             IdentityService identity,
             MaterialService materials,
@@ -44,6 +49,8 @@ public class MaterialParsing implements ApplicationRunner {
             @Value("${iwork.sandbox-url:}") String endpoint,
             @Value("${iwork.sandbox-key-file:}") String keyFile) {
         this.db = db;
+        this.named = new NamedParameterJdbcTemplate(db);
+        this.attempts = attempts;
         this.tx = tx;
         this.identity = identity;
         this.materials = materials;
@@ -203,10 +210,13 @@ public class MaterialParsing implements ApplicationRunner {
                         status -> {
                             authorize(input, material);
                             var rows =
-                                    db.queryForList(
-                                            "SELECT * FROM material_parses WHERE task_id=? AND material_id=?",
-                                            input.taskId(),
-                                            material);
+                                    named.queryForList(
+                                            "SELECT * FROM material_parses WHERE task_id IN (:attemptIds) AND material_id=:material",
+                                            Map.of(
+                                                    "attemptIds",
+                                                    attempts.through(input.taskId()),
+                                                    "material",
+                                                    material));
                             if (!rows.isEmpty()) return rows.getFirst();
                             byte[] token = new byte[32];
                             new SecureRandom().nextBytes(token);
@@ -220,6 +230,11 @@ public class MaterialParsing implements ApplicationRunner {
                             fresh[0] = true;
                             return db.queryForMap("SELECT * FROM material_parses WHERE id=?", id);
                         });
+        if (!input.taskId().equals(row.get("task_id"))) {
+            if (row.get("parsed_text") instanceof String text)
+                return materialPage(material, text, offset);
+            throw new ApiFailure(409, "material_result_unconfirmed");
+        }
         String id = (String) row.get("id"), token = (String) row.get("task_token");
         String localFailure = null;
         try {
@@ -249,22 +264,7 @@ public class MaterialParsing implements ApplicationRunner {
                 row = db.queryForMap("SELECT * FROM material_parses WHERE id=?", id);
                 if (row.get("status").equals("COMPLETED")
                         && row.get("parsed_text") instanceof String text) {
-                    if (offset > text.length()
-                            || offset > 0
-                                    && offset < text.length()
-                                    && Character.isLowSurrogate(text.charAt(offset)))
-                        throw new ApiFailure(400, "invalid_request");
-                    int end = Math.min(text.length(), offset + 12000);
-                    if (end < text.length() && Character.isLowSurrogate(text.charAt(end))) end--;
-                    return Map.of(
-                            "materialId",
-                            material,
-                            "text",
-                            text.substring(offset, end),
-                            "nextOffset",
-                            end,
-                            "hasMore",
-                            end < text.length());
+                    return materialPage(material, text, offset);
                 }
                 if (!row.get("status").equals("RUNNING"))
                     throw new ApiFailure(422, "material_parse_failed");
@@ -298,6 +298,29 @@ public class MaterialParsing implements ApplicationRunner {
         }
     }
 
+    private static Map<String, Object> materialPage(String material, String text, int offset) {
+        var page = new HashMap<>(textPage(text, offset));
+        page.put("materialId", material);
+        return page;
+    }
+
+    private static Map<String, Object> textPage(String text, int offset) {
+        if (offset > text.length()
+                || offset > 0
+                        && offset < text.length()
+                        && Character.isLowSurrogate(text.charAt(offset)))
+            throw new ApiFailure(400, "invalid_request");
+        int end = Math.min(text.length(), offset + 12000);
+        if (end < text.length() && Character.isLowSurrogate(text.charAt(end))) end--;
+        return Map.of(
+                "text",
+                text.substring(offset, end),
+                "nextOffset",
+                end,
+                "hasMore",
+                end < text.length());
+    }
+
     public final class Tools {
         private final TaskRunner.Input input;
 
@@ -316,43 +339,32 @@ public class MaterialParsing implements ApplicationRunner {
         }
     }
 
-    public List<Map<String, Object>> list(Caller caller, String task) {
+    private List<String> ownedAttemptIds(Caller caller, String task) {
         if (db.queryForList(
                         "SELECT id FROM tasks WHERE id=? AND owner_id=?",
                         String.class,
                         task,
                         caller.id())
                 .isEmpty()) throw new ApiFailure(404, "not_found");
-        return db.queryForList(
-                "SELECT p.id,p.material_id AS materialId,m.name,p.status,p.cleanup,p.error_code AS errorCode,CHAR_LENGTH(p.parsed_text) AS characters FROM material_parses p JOIN materials m ON m.id=p.material_id WHERE p.task_id=? ORDER BY p.created_at",
-                task);
+        return attempts.through(task);
+    }
+
+    public List<Map<String, Object>> list(Caller caller, String task) {
+        return named.queryForList(
+                "SELECT p.id,p.material_id AS materialId,m.name,p.status,p.cleanup,p.error_code AS errorCode,CHAR_LENGTH(p.parsed_text) AS characters FROM material_parses p JOIN materials m ON m.id=p.material_id WHERE p.task_id IN (:attemptIds) ORDER BY p.created_at",
+                Map.of("attemptIds", ownedAttemptIds(caller, task)));
     }
 
     public Map<String, Object> text(Caller caller, String task, String id, int offset) {
-        list(caller, task);
+        var attemptIds = ownedAttemptIds(caller, task);
         if (offset < 0) throw new ApiFailure(400, "invalid_request");
         var rows =
-                db.queryForList(
-                        "SELECT parsed_text FROM material_parses WHERE id=? AND task_id=? AND parsed_text IS NOT NULL",
-                        String.class,
-                        id,
-                        task);
+                named.queryForList(
+                        "SELECT parsed_text FROM material_parses WHERE id=:id AND task_id IN (:attemptIds) AND parsed_text IS NOT NULL",
+                        Map.of("id", id, "attemptIds", attemptIds),
+                        String.class);
         if (rows.isEmpty()) throw new ApiFailure(404, "not_found");
-        var text = rows.getFirst();
-        if (offset > text.length()
-                || offset > 0
-                        && offset < text.length()
-                        && Character.isLowSurrogate(text.charAt(offset)))
-            throw new ApiFailure(400, "invalid_request");
-        int end = Math.min(text.length(), offset + 12000);
-        if (end < text.length() && Character.isLowSurrogate(text.charAt(end))) end--;
-        return Map.of(
-                "text",
-                text.substring(offset, end),
-                "nextOffset",
-                end,
-                "hasMore",
-                end < text.length());
+        return textPage(rows.getFirst(), offset);
     }
 
     @Override

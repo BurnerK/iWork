@@ -13,7 +13,14 @@ public interface TaskRunner {
             String message,
             String outputMode,
             String instructions,
+            String partialReply,
             BiConsumer<String, String> replyDelta) {
+        public String prompt() {
+            return partialReply.isEmpty()
+                    ? message
+                    : message + "\n\n请从已生成回复的末尾接着写，只输出新增内容。以下是已生成的回复：\n" + partialReply;
+        }
+
         public Input(
                 String taskId,
                 String conversationId,
@@ -30,6 +37,7 @@ public interface TaskRunner {
                     message,
                     outputMode,
                     instructions,
+                    "",
                     (replyId, delta) -> {});
         }
 

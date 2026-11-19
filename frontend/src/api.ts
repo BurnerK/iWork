@@ -93,6 +93,8 @@ export function errorMessage(error: unknown): string {
     model_attempt_limit: '任务已达到模型调用次数上限，请检查已有结果。',
     model_output_limit: '模型输出超过接收上限，任务已停止。',
     model_timeout: '模型调用超时，已请求停止；供应商用量可能仍待核实。',
+    reply_not_resumable: '这条回答已无法继续。',
+    material_result_unconfirmed: '上次资料处理没有可确认的结果，本次没有重新处理。',
     task_not_running: '任务已经结束，不能再执行处理或模型调用。',
     task_not_queued: '这条消息已离开待发送队列。',
     invalid_file_name: '文件名无效，请移除路径或控制字符，长度不超过 200 字符。',
