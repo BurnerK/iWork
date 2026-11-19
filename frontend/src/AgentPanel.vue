@@ -121,6 +121,7 @@ onUnmounted(() => {
     </nav>
     <button type="button" class="secondary" :disabled="busy" @click="edit()">新建智能体</button>
     <form
+      class="surface-card"
       :action="`/api/agents${id ? `/${id}` : ''}`"
       method="post"
       aria-labelledby="agent-form-heading"

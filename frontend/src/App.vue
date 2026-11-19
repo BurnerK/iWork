@@ -48,10 +48,6 @@ const conversationRoute = computed(
 const sidebarCollapsed = ref(false)
 const mobileNavigation = ref<HTMLDialogElement>()
 const navigationToggle = ref<HTMLButtonElement>()
-function toggleNavigation() {
-  if (window.matchMedia('(max-width: 768px)').matches) mobileNavigation.value?.showModal()
-  else sidebarCollapsed.value = !sidebarCollapsed.value
-}
 function closeNavigation() {
   if (mobileNavigation.value?.open) mobileNavigation.value.close()
 }
@@ -300,25 +296,40 @@ onMounted(loadIdentity)
           height="28"
         />
         <button
-          ref="navigationToggle"
+          v-if="conversationRoute"
           type="button"
-          class="icon-control workspace-toggle"
+          class="icon-control workspace-toggle t-icon-swap"
           aria-label="切换导航"
-          :aria-expanded="conversationRoute && !sidebarCollapsed"
-          :class="{ 'mobile-only': !conversationRoute }"
-          @click="toggleNavigation"
+          aria-controls="conversation-sidebar"
+          :aria-expanded="!sidebarCollapsed"
+          @click="sidebarCollapsed = !sidebarCollapsed"
         >
           <img
-            class="workspace-logo"
+            class="workspace-logo t-icon"
+            data-icon="a"
             :src="'/assets/iwork-icon.svg'"
             alt=""
             width="28"
             height="28"
           />
-          <img class="workspace-toggle-icon" :src="'/assets/icons/panel-left.svg'" alt="" />
+          <span
+            class="navigation-icon workspace-toggle-icon t-icon"
+            data-icon="b"
+            aria-hidden="true"
+          ></span>
+        </button>
+        <button
+          ref="navigationToggle"
+          type="button"
+          class="icon-control mobile-toggle"
+          aria-label="打开导航"
+          aria-haspopup="dialog"
+          @click="mobileNavigation?.showModal()"
+        >
+          <span class="menu-icon" aria-hidden="true"></span>
         </button>
       </div>
-      <h1 tabindex="-1">
+      <h1 :class="{ 'conversation-title': conversationRoute }" tabindex="-1">
         {{
           conversationRoute
             ? selected?.title || '新会话'
@@ -330,8 +341,22 @@ onMounted(loadIdentity)
       </h1>
     </header>
     <nav v-if="workspace" class="workspace-rail" aria-label="主导航">
-      <RouterLink v-for="item in navigation" :key="item.to" :to="item.to" :aria-label="item.name">
-        <img :src="`/assets/icons/${item.icon}.svg`" alt="" />
+      <RouterLink
+        v-for="item in navigation"
+        :key="item.to"
+        :to="item.to"
+        :aria-label="item.name"
+        :class="{
+          'workspace-link-current':
+            (item.to === '/conversations' && conversationRoute) ||
+            (item.to === '/projects' && route.name === 'project'),
+        }"
+      >
+        <span
+          class="navigation-icon"
+          :style="{ '--icon': `url('/assets/icons/${item.icon}.svg')` }"
+          aria-hidden="true"
+        ></span>
       </RouterLink>
       <details class="workspace-account">
         <summary :aria-label="`账户设置 · ${user?.displayName}`">
@@ -361,11 +386,17 @@ onMounted(loadIdentity)
           >{{ item.name }}</RouterLink
         >
       </nav>
-      <nav v-if="conversationRoute" aria-label="最近会话">
+      <nav
+        v-if="conversationRoute"
+        class="mobile-conversations"
+        aria-labelledby="mobile-conversations-heading"
+      >
+        <h2 id="mobile-conversations-heading">最近会话</h2>
         <RouterLink
           v-for="item in conversations"
           :key="item.id"
           :to="`/conversations/${item.id}`"
+          :title="item.title"
           @click="closeNavigation"
           >{{ item.title }}</RouterLink
         >
@@ -600,11 +631,16 @@ onMounted(loadIdentity)
         @failure="failure"
       />
       <section v-else class="workspace">
-        <aside class="conversation-sidebar" aria-label="会话列表" :inert="sidebarCollapsed">
+        <aside
+          id="conversation-sidebar"
+          class="conversation-sidebar"
+          aria-label="会话列表"
+          :inert="sidebarCollapsed"
+        >
           <div class="conversation-sidebar-content">
-            <RouterLink class="new-conversation" to="/conversations"
-              ><img :src="'/assets/icons/square-pen.svg'" alt="" />新建会话</RouterLink
-            >
+            <RouterLink class="new-conversation" to="/conversations">
+              <span class="navigation-icon" aria-hidden="true"></span>新建会话
+            </RouterLink>
             <h2 class="sidebar-heading">最近会话</h2>
             <p v-if="loading && !conversations.length" class="sidebar-state" role="status">
               正在加载会话…

@@ -171,6 +171,7 @@ onMounted(load)
     <p v-if="notice" role="status">{{ notice }}</p>
     <template v-if="admin">
       <form
+        class="surface-card"
         method="post"
         action="/api/admin/model-settings"
         aria-label="实例币种"
@@ -193,6 +194,7 @@ onMounted(load)
       </form>
       <div class="workspace">
         <form
+          class="surface-card"
           method="post"
           action="/api/admin/models"
           aria-label="模型配置"
@@ -306,7 +308,7 @@ onMounted(load)
             取消编辑
           </button>
         </form>
-        <section>
+        <section class="surface-card">
           <h2>用户授权与额度</h2>
           <form
             method="get"

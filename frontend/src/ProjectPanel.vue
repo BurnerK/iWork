@@ -181,7 +181,7 @@ onUnmounted(() => {
         </button>
       </nav>
     </template>
-    <form method="post" aria-label="项目设置" @submit.prevent="save">
+    <form class="surface-card" method="post" aria-label="项目设置" @submit.prevent="save">
       <h2>{{ projectId ? '项目设置' : '新建项目' }}</h2>
       <label for="project-name">名称（必填，最多120字符）</label
       ><input id="project-name" v-model="name" required maxlength="120" :disabled="busy" />
