@@ -119,7 +119,8 @@ class ConversationContextTest {
                         io.agentscope.core.model.transport.HttpRequest request) {
                     var messages = new ObjectMapper().readTree(request.getBody()).path("messages");
                     String last = messages.get(messages.size() - 1).path("content").asString();
-                    boolean summarizing = last.contains("Context Extraction Assistant");
+                    boolean summarizing =
+                            messages.get(0).path("content").asString().startsWith("你负责提取历史对话的事实");
                     if (summarizing) {
                         summaryStarted.countDown();
                         if (summaryMode.equals("error"))
@@ -130,7 +131,7 @@ class ConversationContextTest {
                         if (summaryMode.equals("hold")) return reactor.core.publisher.Flux.never();
                     }
                     String reply =
-                            last.contains("Context Extraction Assistant")
+                            summarizing
                                     ? (last.contains("蓝鲸项目") ? "蓝鲸项目，周五交付" : "没有项目背景")
                                     : last.contains("请回忆")
                                             ? (messages.toString().contains("蓝鲸项目")
