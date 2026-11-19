@@ -41,6 +41,17 @@ const agents = ref<Agent[]>([]),
   agentPage = ref(0),
   moreAgents = ref(false),
   loadingAgents = ref(false)
+const target = computed({
+  get: () => (agentId.value ? `agent:${agentId.value}` : modelId.value),
+  set: (value: string) => {
+    if (value.startsWith('agent:')) {
+      agentId.value = value.slice('agent:'.length)
+    } else {
+      agentId.value = ''
+      modelId.value = value
+    }
+  },
+})
 async function loadAgents(next = 0) {
   loadingAgents.value = true
   try {
@@ -90,6 +101,20 @@ const creationUnconfirmed = ref(false)
 const thread = ref<HTMLElement>()
 const showLatest = ref(false)
 const materialsOpen = ref(false)
+const materialsToggle = ref<HTMLButtonElement>()
+const composerTools = ref<HTMLElement>()
+async function toggleMaterials() {
+  materialsOpen.value = !materialsOpen.value
+  if (materialsOpen.value) {
+    await nextTick()
+    composerTools.value?.focus()
+  }
+}
+function closeMaterials(event: KeyboardEvent) {
+  if (!materialsOpen.value || event.isComposing) return
+  materialsOpen.value = false
+  materialsToggle.value?.focus()
+}
 function trackScroll() {
   const el = thread.value
   if (el) showLatest.value = el.scrollHeight - el.scrollTop - el.clientHeight > 32
@@ -221,6 +246,13 @@ async function poll() {
   if (disposed) return
   if (!document.hidden) await load()
   if (!disposed) timer = setTimeout(poll, 2000)
+}
+function sendOnEnter(event: KeyboardEvent) {
+  if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
+  // Safari can report the IME confirmation after compositionend.
+  if (event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  if (!event.repeat) (event.currentTarget as HTMLTextAreaElement).form?.requestSubmit()
 }
 async function submit() {
   if (
@@ -450,6 +482,7 @@ onUnmounted(() => {
             <details class="task-details">
               <summary>任务详情</summary>
               <small>任务 {{ taskId }}</small>
+              <small v-if="turn.task.status === 'RUNNING'">关闭页面不会取消任务。</small>
               <button
                 type="button"
                 class="secondary"
@@ -526,8 +559,25 @@ onUnmounted(() => {
     >
       回到最新消息
     </button>
-    <div class="task-composer">
-      <div v-show="materialsOpen" id="composer-materials" class="composer-materials">
+    <div class="task-composer" @keydown.esc="closeMaterials">
+      <div
+        v-show="materialsOpen"
+        id="composer-materials"
+        ref="composerTools"
+        class="composer-materials"
+        role="group"
+        aria-label="资料与成果形式"
+        tabindex="-1"
+      >
+        <label for="task-output">成果形式</label>
+        <select
+          id="task-output"
+          v-model="outputMode"
+          :disabled="busy || !!pending || active || !!baseVersion"
+        >
+          <option value="TEXT">文字回复</option>
+          <option value="DOCUMENT">Markdown 文档</option>
+        </select>
         <MaterialPanel
           v-if="projectId"
           :key="projectId"
@@ -560,91 +610,86 @@ onUnmounted(() => {
           maxlength="20000"
           rows="2"
           :disabled="busy || !!pending || active"
+          @keydown.enter="sendOnEnter"
         ></textarea>
+        <p v-if="baseVersion" class="hint" role="status">
+          基于《{{ baseVersion.title }}》版本 {{ baseVersion.versionNumber }} 修改。<button
+            type="button"
+            class="secondary"
+            :disabled="busy || !!pending || active"
+            @click="baseVersion = undefined"
+          >
+            清除来源版本
+          </button>
+        </p>
+        <p v-else-if="outputMode === 'DOCUMENT'" class="hint">成果形式为 Markdown 文档</p>
         <div class="composer-toolbar">
           <button
+            ref="materialsToggle"
             type="button"
             class="composer-material-toggle"
             :aria-expanded="materialsOpen"
             aria-controls="composer-materials"
-            @click="materialsOpen = !materialsOpen"
+            title="资料与成果形式"
+            @click="toggleMaterials"
           >
             <span aria-hidden="true">＋</span> 资料<span v-if="materialIds.length"
               >({{ materialIds.length }})</span
             >
           </button>
-          <div class="composer-options">
-            <label class="composer-label" for="task-agent">使用方式</label
-            ><select
-              id="task-agent"
-              v-model="agentId"
-              name="agentId"
-              :disabled="busy || !!pending || active"
-            >
-              <option value="">直接选择模型</option>
-              <option v-for="agent in agents" :key="agent.id" :value="agent.id">
+          <label class="composer-label" for="task-model">模型或智能体（必选）</label>
+          <select
+            id="task-model"
+            v-model="target"
+            name="target"
+            required
+            :aria-describedby="agentId ? 'composer-agent-model' : undefined"
+            :disabled="busy || !!pending || active"
+          >
+            <option value="" disabled>选择模型或智能体</option>
+            <optgroup v-if="models.length" label="模型">
+              <option v-for="model in models" :key="model.id" :value="model.id">
+                {{ model.name }}
+              </option>
+            </optgroup>
+            <optgroup v-if="agents.length" label="智能体">
+              <option v-for="agent in agents" :key="agent.id" :value="`agent:${agent.id}`">
                 {{ agent.name }}
               </option>
-            </select>
-            <button
-              v-if="moreAgents"
-              type="button"
-              class="secondary"
-              :disabled="loadingAgents || busy || !!pending || active"
-              @click="loadAgents(agentPage + 1)"
-            >
-              加载更多智能体
-            </button>
-            <p v-if="agentId" class="hint">
-              使用所选智能体提交时的配置。模型：{{
-                models.find(
-                  (model) => model.id === agents.find((agent) => agent.id === agentId)?.modelId
-                )?.name || '当前不可用，请检查授权'
-              }}。
-            </p>
-            <template v-else
-              ><label class="composer-label" for="task-model">模型（必选）</label
-              ><select
-                id="task-model"
-                v-model="modelId"
-                name="modelId"
-                required
-                :disabled="busy || !!pending || active"
-              >
-                <option value="">请选择模型</option>
-                <option v-for="model in models" :key="model.id" :value="model.id">
-                  {{ model.name }}
-                </option>
-              </select></template
-            >
-            <p v-if="baseVersion" role="status">
-              基于《{{ baseVersion.title }}》版本 {{ baseVersion.versionNumber }} 修改。<button
-                type="button"
-                class="secondary"
-                :disabled="busy || !!pending || active"
-                @click="baseVersion = undefined"
-              >
-                清除来源版本
-              </button>
-            </p>
-            <label class="composer-label" for="task-output">成果形式</label
-            ><select
-              id="task-output"
-              v-model="outputMode"
-              name="outputMode"
-              :disabled="busy || !!pending || active || !!baseVersion"
-            >
-              <option value="TEXT">文字回复</option>
-              <option value="DOCUMENT">Markdown 文档</option>
-            </select>
-          </div>
+            </optgroup>
+          </select>
           <button
             type="submit"
-            :disabled="busy || materialBusy || creationUnconfirmed || (active && !pending)"
+            :class="{ 'composer-send': !pending }"
+            :aria-label="pending ? undefined : '提交任务'"
+            :title="pending ? undefined : '提交任务'"
+            :disabled="
+              busy ||
+              materialBusy ||
+              creationUnconfirmed ||
+              (!pending && (active || !message.trim()))
+            "
           >
-            {{ pending ? '重试确认' : '提交任务' }}
+            <template v-if="pending">重试确认</template>
+            <img v-else src="/assets/icons/arrow-up.svg" width="24" height="24" alt="" />
           </button>
         </div>
+        <p v-if="agentId" id="composer-agent-model" class="hint">
+          智能体模型：{{
+            models.find(
+              (model) => model.id === agents.find((agent) => agent.id === agentId)?.modelId
+            )?.name || '当前不可用，请检查授权'
+          }}。
+        </p>
+        <button
+          v-if="moreAgents"
+          type="button"
+          class="secondary"
+          :disabled="loadingAgents || busy || !!pending || active"
+          @click="loadAgents(agentPage + 1)"
+        >
+          加载更多智能体
+        </button>
         <button
           v-if="creationUnconfirmed"
           type="button"
@@ -654,7 +699,6 @@ onUnmounted(() => {
           已核对，允许重新提交
         </button>
         <p v-if="pending" class="hint">尚未确认受理结果。重试使用同一请求，不会重复执行。</p>
-        <p v-else-if="active" class="hint">当前会话已有运行任务。关闭页面不会取消任务。</p>
       </form>
     </div>
   </section>

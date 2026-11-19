@@ -703,21 +703,13 @@ summary:hover,
   padding: 12px 16px;
   margin-bottom: 16px;
   border: 1px solid var(--hairline);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: var(--canvas);
 }
 .task-composer form {
   margin-bottom: 0;
 }
-.task-composer textarea {
-  min-height: 64px;
-}
-.task-composer select {
-  padding: 8px;
-}
-.task-composer summary,
-.conversation-membership summary,
-.task-details summary {
+summary {
   cursor: pointer;
 }
 .latest-message {
@@ -820,27 +812,6 @@ summary:hover,
   width: 24px;
   height: 24px;
 }
-.composer-options {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.composer-options select {
-  width: auto;
-  max-width: 100%;
-  margin: 0;
-}
-.composer-options p {
-  flex-basis: 100%;
-  margin: 0;
-}
-.task-composer textarea {
-  margin: 0;
-}
-.task-composer button[type='submit'] {
-  align-self: end;
-}
 .task-turn {
   margin-bottom: 32px;
 }
@@ -855,84 +826,94 @@ summary:hover,
   justify-content: start;
   text-align: left;
 }
-@media (min-width: 769px) {
-  .topbar-controls .mobile-only {
-    display: none;
-  }
-}
-.task-composer textarea {
-  border-color: transparent;
+#task-message {
+  min-height: 56px;
+  max-height: 12rem;
+  field-sizing: content;
+  resize: none;
+  margin: 0;
   padding: 8px;
+  border-color: transparent;
+  border-radius: var(--radius-control);
 }
-.task-composer label[for='task-message'] {
+#task-message:focus {
+  outline: none;
+}
+#task-message::placeholder {
+  opacity: 0.62;
+}
+:is(#task-message, #task-model):disabled {
+  color: var(--black);
+  background: var(--canvas);
+  opacity: 1;
+}
+.task-composer label[for='task-message'],
+.composer-label {
   position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
-}
-.task-composer button[type='submit'] {
-  padding: 8px 24px;
 }
 .task-status .artifact-card {
   color: var(--ink);
   background: var(--canvas);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   padding: 12px 16px;
 }
-.task-status .artifact-card:hover:not(:disabled) {
-  background: var(--pale-green);
-}
 .task-status .artifact-card:disabled {
-  opacity: 0.6;
+  color: var(--ink);
+  background: var(--border-subtle);
 }
 
 .composer-toolbar {
   display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  border-top: 1px solid var(--border-light);
-  padding-top: 8px;
-}
-.composer-toolbar .composer-options {
-  flex: 1 1 240px;
-  min-width: 0;
-}
-.composer-toolbar .composer-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
 }
 .composer-toolbar select,
 .composer-toolbar .composer-material-toggle {
   min-height: 40px;
-  font-size: 14px;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
+  border-color: transparent;
+  border-radius: var(--radius-control);
+}
+.composer-toolbar select {
+  width: auto;
+  max-width: 100%;
+  margin: 0 0 0 auto;
+  padding: 6px 8px;
 }
 .composer-toolbar .composer-material-toggle {
-  padding: 8px 12px;
-  background: var(--canvas);
+  flex: none;
+  padding: 6px 8px;
+  background: transparent;
   color: var(--ink);
 }
-.composer-toolbar .composer-material-toggle:hover,
-.composer-toolbar .composer-material-toggle[aria-expanded='true'] {
-  background: var(--navigation-background);
-}
 .composer-toolbar button[type='submit'] {
-  margin-inline-start: auto;
+  flex: none;
   min-height: 40px;
-  align-self: flex-start;
+  padding: 6px 12px;
+}
+.composer-toolbar .composer-send[type='submit'] {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  padding: 0;
+}
+.composer-send:enabled:not(:hover) img {
+  filter: invert(1);
+}
+.composer-send:disabled img {
+  opacity: 0.5;
 }
 .composer-materials {
   margin-bottom: 8px;
   padding: 12px;
-  border-radius: 8px;
-  background: var(--navigation-secondary-background);
+  border-radius: var(--radius-control);
+  background: var(--snow);
 }
-.task-composer textarea {
-  resize: none;
+.composer-materials > select {
+  width: auto;
+  max-width: 100%;
+  padding: 6px 8px;
 }

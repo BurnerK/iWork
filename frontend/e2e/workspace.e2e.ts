@@ -10,12 +10,52 @@ const conversation = {
 }
 const envelope = (data: unknown) => ({ success: true, data, error: null })
 
+test('keeps the composer appearance stable while a reply is running', async ({ page }) => {
+  let running = false
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    let data: unknown = emptyPage
+    if (path === '/api/auth/me') data = user
+    if (path === '/api/models') data = [{ id: 'model', name: '测试模型' }]
+    if (path === '/api/conversations/first') data = conversation
+    if (path === '/api/conversations/first/tasks' && running) {
+      data = {
+        items: [
+          { id: 'running', requestId: 'request', status: 'RUNNING', executionState: 'RUNNING' },
+        ],
+        hasMore: false,
+      }
+    }
+    await route.fulfill({ json: envelope(data) })
+  })
+  await page.goto('/#/conversations/first')
+  const composer = page.locator('.task-composer')
+  const message = page.locator('#task-message')
+  const model = page.locator('#task-model')
+  await model.selectOption('model')
+  await message.fill('后续要求')
+  const send = page.getByRole('button', { name: '提交任务' })
+  await expect(send).toBeEnabled()
+  const initialHeight = (await composer.boundingBox())?.height
+
+  running = true
+  await page.getByRole('button', { name: '刷新任务' }).click()
+  await expect(page.getByRole('status').filter({ hasText: '运行中' })).toBeVisible()
+  await expect(send).toBeDisabled()
+  for (const field of [message, model]) {
+    await expect(field).toBeDisabled()
+    await expect(field).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+    await expect(field).toHaveCSS('color', 'rgb(0, 0, 0)')
+  }
+  expect((await composer.boundingBox())?.height).toBe(initialHeight)
+})
+
 for (const confirmByPolling of [false, true]) {
   test(`recovers the first send after a lost response (polling=${confirmByPolling})`, async ({
     page,
   }) => {
     let created = 0
-    const submissions: { requestId: string; materialIds: string[] }[] = []
+    const submissions: { requestId: string; materialIds: string[]; outputMode: string }[] = []
     const accepted: { id: string; status: string; executionState: string; requestId: string }[] = []
     await page.route('**/api/**', async (route) => {
       const request = route.request()
@@ -56,10 +96,59 @@ for (const confirmByPolling of [false, true]) {
     })
     await page.goto('/#/conversations')
     await page.locator('#task-model').selectOption('model')
-    await page.getByRole('button', { name: '资料' }).click()
+    const tools = page.getByRole('button', { name: '资料' })
+    const output = page.locator('#task-output')
+    await expect(output).toBeHidden()
+    await tools.press('Enter')
+    await expect(output).toBeVisible()
+    await output.selectOption('DOCUMENT')
     await page.locator('#material-source').check()
-    await page.locator('#task-message').fill('整理资料')
-    await page.getByRole('button', { name: '提交任务' }).click()
+    if (!confirmByPolling) {
+      const refresh = page.getByRole('button', { name: '刷新资料', exact: true })
+      await refresh.hover()
+      await expect(refresh).toHaveCSS('background-color', 'rgb(242, 242, 242)')
+      await expect(refresh).toHaveCSS('color', 'rgb(33, 33, 33)')
+    }
+    await page.keyboard.press('Escape')
+    await expect(tools).toBeFocused()
+    await expect(output).toBeHidden()
+    const message = page.locator('#task-message')
+    await message.hover()
+    const placeholderStyle = () =>
+      message.evaluate((field) => {
+        const { color, opacity } = getComputedStyle(field, '::placeholder')
+        return { color, opacity }
+      })
+    expect(await placeholderStyle()).toEqual({ color: 'rgb(33, 33, 33)', opacity: '0.62' })
+    await message.click()
+    expect(await placeholderStyle()).toEqual({ color: 'rgb(33, 33, 33)', opacity: '0.62' })
+    await expect(message).toHaveCSS('resize', 'none')
+    const emptyHeight = await message.evaluate((field) => field.offsetHeight)
+    await message.fill('第一行\n第二行\n第三行\n第四行')
+    expect(await message.evaluate((field) => field.offsetHeight)).toBeGreaterThan(emptyHeight)
+    await message.fill('多行内容\n'.repeat(20))
+    expect(await message.evaluate((field) => field.scrollHeight)).toBeGreaterThan(
+      await message.evaluate((field) => field.clientHeight)
+    )
+    await message.fill('整理资料')
+    expect(await message.evaluate((field) => field.offsetHeight)).toBe(emptyHeight)
+    await expect(message).toHaveCSS('outline-style', 'none')
+    await expect(message).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)')
+    const send = page.getByRole('button', { name: '提交任务' })
+    if (!confirmByPolling) {
+      for (const control of [
+        page.locator('.workspace-rail > a').first(),
+        page.getByRole('button', { name: '切换导航' }),
+        tools,
+        send,
+      ]) {
+        await control.hover()
+        await expect(control).toHaveCSS('background-color', 'rgb(242, 242, 242)')
+        await expect(control).toHaveCSS('color', 'rgb(33, 33, 33)')
+      }
+      await expect(send.locator('img')).toHaveCSS('filter', 'none')
+    }
+    await send.click()
     await expect(page.getByRole('button', { name: '重试确认' })).toBeVisible()
 
     if (!confirmByPolling) {
@@ -74,11 +163,31 @@ for (const confirmByPolling of [false, true]) {
     await expect(page).toHaveURL(/#\/conversations\/first$/)
     await expect(page.locator('#task-message')).toHaveValue('')
     await page.locator('#task-model').selectOption('model')
-    await page.locator('#task-message').fill('单独处理后续要求')
-    await page.getByRole('button', { name: '提交任务' }).click()
+    await message.fill('单独处理')
+    await message.press('Shift+Enter')
+    await page.keyboard.insertText('后续要求')
+    await expect(message).toHaveValue('单独处理\n后续要求')
+    for (const ime of [{ isComposing: true }, { keyCode: 229 }]) {
+      expect(
+        await message.evaluate(
+          (field, options) =>
+            field.dispatchEvent(
+              new KeyboardEvent('keydown', {
+                key: 'Enter',
+                cancelable: true,
+                bubbles: true,
+                ...options,
+              })
+            ),
+          ime
+        )
+      ).toBe(true)
+    }
+    await message.press('Enter')
     await expect.poll(() => submissions.length).toBe(confirmByPolling ? 2 : 3)
     expect(created).toBe(1)
     expect(submissions[0]?.materialIds).toEqual(['source'])
+    expect(submissions[0]?.outputMode).toBe('DOCUMENT')
     expect(submissions.at(-1)?.materialIds).toEqual([])
     expect(submissions.at(-1)?.requestId).not.toBe(submissions[0]?.requestId)
   })
