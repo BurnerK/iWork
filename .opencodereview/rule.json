@@ -1,0 +1,7 @@
+{
+  "include": [
+    "backend/src/test/**/*.java",
+    "frontend/src/**/*.test.{ts,tsx}",
+    "frontend/e2e/**/*.ts"
+  ]
+}

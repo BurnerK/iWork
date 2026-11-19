@@ -7,6 +7,13 @@
       "sourceType": "github",
       "skillPath": "plugins/backend-development/skills/api-design-principles/SKILL.md",
       "computedHash": "cd8889e86d651fbc7ec5f1cdf1920cdc0fa6bd2ca6ca01b8d93e9d2f6b54c7a6"
+    },
+    "open-code-review-delegate": {
+      "source": "alibaba/open-code-review",
+      "commit": "a74bcbbd4975eb3a92493d5eb537cf276d79b322",
+      "sourceType": "github",
+      "skillPath": "skills/open-code-review-delegate/SKILL.md",
+      "computedHash": "0bd41984c6c165f9e4c8065dd6621008e0526d4465dfb0585ee4014c38500baa"
     }
   }
 }
