@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import MarkdownContent from './MarkdownContent.vue'
 import DiagnosticsPanel from './DiagnosticsPanel.vue'
 import DocumentPanel from './DocumentPanel.vue'
@@ -20,6 +20,7 @@ const emit = defineEmits<{
 }>()
 type Task = {
   agentName?: string
+  outputMode?: string
   id: string
   publishedVersion?: PublishedVersion | null
   requestId: string
@@ -97,6 +98,44 @@ function scrollLatest() {
   if (thread.value) thread.value.scrollTop = thread.value.scrollHeight
   trackScroll()
 }
+function keepFollowing() {
+  if (!showLatest.value) scrollLatest()
+}
+function returnToLatest() {
+  scrollLatest()
+  thread.value?.focus({ preventScroll: true })
+}
+const liveReply = ref<{ taskId: string; version: number; content: string }>()
+const streamingTaskId = computed(
+  () => tasks.value.find((task) => task.status === 'RUNNING' && task.outputMode !== 'DOCUMENT')?.id
+)
+watch(streamingTaskId, (taskId, _, onCleanup) => {
+  if (!taskId || typeof EventSource === 'undefined') return
+  const stream = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/reply-stream`)
+  let closed = false
+  const close = () => {
+    closed = true
+    stream.close()
+  }
+  onCleanup(close)
+  stream.addEventListener('reply', (event: MessageEvent<string>) => {
+    if (closed) return
+    try {
+      const update = JSON.parse(event.data)
+      if (typeof update?.content !== 'string' || !Number.isSafeInteger(update.version)) return
+      if (liveReply.value?.taskId === taskId && liveReply.value.version >= update.version) return
+      liveReply.value = { taskId, version: update.version, content: update.content }
+      void nextTick(keepFollowing)
+    } catch {
+      // The next valid snapshot or the saved reply can still be rendered.
+    }
+  })
+  stream.addEventListener('done', () => {
+    if (closed) return
+    close()
+    void load()
+  })
+})
 const storageKey = computed(() => `iwork-pending:${props.ownerId}:${conversationId.value}`)
 const draftKey = computed(() => `iwork-first-send:${props.ownerId}`)
 function acceptPending() {
@@ -163,7 +202,7 @@ async function load() {
     if (taskPage.value === 0) moreTasks.value = recent.hasMore
     const follow = !showLatest.value
     messages.value.push(...incoming.items)
-    if (follow && incoming.items.length) void nextTick(scrollLatest)
+    if (follow) void nextTick(keepFollowing)
     moreMessages.value = incoming.hasMore
     if (
       !busy.value &&
@@ -323,7 +362,13 @@ onUnmounted(() => {
 </script>
 <template>
   <section class="task-workspace" aria-label="会话消息与后台任务">
-    <div ref="thread" class="task-thread" @scroll.passive="trackScroll">
+    <div
+      ref="thread"
+      class="task-thread"
+      tabindex="0"
+      aria-label="会话消息"
+      @scroll.passive="trackScroll"
+    >
       <p v-if="error" role="alert">{{ error }}</p>
       <div v-if="!conversationId" class="conversation-welcome">
         <h2>今天想推进哪件事？</h2>
@@ -344,19 +389,44 @@ onUnmounted(() => {
         <div v-for="[taskId, turn] in turns" :key="taskId" class="task-turn">
           <ol class="messages">
             <li
-              v-for="item in turn.messages"
+              v-for="item in turn.messages.filter((item) => item.role === 'user')"
               :key="item.id"
-              :class="{ 'user-message': item.role === 'user' }"
+              class="user-message"
             >
-              <small>{{ item.role === 'user' ? '你' : '助手' }}</small>
-              <p v-if="item.role === 'user'">{{ item.content }}</p>
-              <MarkdownContent v-else :content="item.content" />
+              <small>你</small>
+              <p>{{ item.content }}</p>
+            </li>
+            <li
+              v-if="
+                turn.task?.status === 'RUNNING' ||
+                turn.messages.some((item) => item.role === 'assistant') ||
+                (turn.task?.status === 'COMPLETED' && liveReply?.taskId === taskId)
+              "
+              aria-label="助手"
+            >
+              <p v-if="turn.task?.status === 'RUNNING'" class="hint" role="status">
+                {{ labels.RUNNING }}
+              </p>
+              <MarkdownContent
+                v-for="item in turn.messages.filter((item) => item.role === 'assistant')"
+                :key="item.id"
+                :content="item.content"
+              />
+              <MarkdownContent
+                v-if="
+                  liveReply?.taskId === taskId &&
+                  liveReply.content &&
+                  !turn.messages.some((item) => item.role === 'assistant')
+                "
+                :content="liveReply.content"
+              />
             </li>
           </ol>
           <div v-if="turn.task" class="task-status" aria-label="任务状态">
             <div>
-              <span role="status">{{ labels[turn.task.status] || turn.task.status }}</span><small
-                v-if="turn.task.agentName"
+              <span v-if="turn.task.status !== 'RUNNING'" role="status">{{
+                labels[turn.task.status] || turn.task.status
+              }}</span><small v-if="turn.task.agentName"
                 >智能体：{{ turn.task.agentName }}（提交时配置）</small
               ><small v-if="turn.task.executionState === 'STOP_REQUESTED'"
                 >已请求停止，执行结束尚待确认。</small
@@ -448,7 +518,12 @@ onUnmounted(() => {
         刷新任务
       </button>
     </div>
-    <button v-if="showLatest" class="secondary latest-message" type="button" @click="scrollLatest">
+    <button
+      v-if="showLatest"
+      class="secondary latest-message"
+      type="button"
+      @click="returnToLatest"
+    >
       回到最新消息
     </button>
     <div class="task-composer">

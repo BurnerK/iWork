@@ -26,6 +26,7 @@ const version = publishedVersion.extend({
 })
 const task = id.extend({
   requestId: text,
+  outputMode: text.optional(),
   status: text,
   executionState: text,
   agentName: nullableText.optional(),

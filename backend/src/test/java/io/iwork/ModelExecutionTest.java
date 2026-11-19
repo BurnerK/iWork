@@ -176,7 +176,10 @@ class ModelExecutionTest {
                     String end =
                             "{\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}";
                     if (current.contains("storage"))
-                        return reactor.core.publisher.Flux.just(content)
+                        return reactor.core.publisher.Flux.just(
+                                        content.replace(
+                                                "\"content\":",
+                                                "\"reasoning_content\":\"private-reasoning-fixture\",\"content\":"))
                                 .concatWith(storageStream.asFlux());
                     if (current.contains("zero-usage"))
                         return reactor.core.publisher.Flux.just(
@@ -300,7 +303,35 @@ class ModelExecutionTest {
         assertThat(json.readTree(budget.body()).get("reserved").asString()).isEqualTo("0.000000");
         var stored = submit(admin, cid, modelId, "storage");
         awaitOpenCall(admin, stored);
+        var replyPath = "/api/tasks/" + stored + "/reply-stream";
+        assertThat(new Browser().request("GET", replyPath, null, false).statusCode())
+                .isEqualTo(401);
         try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var streamRequest =
+                    HttpRequest.newBuilder(URI.create("http://localhost:" + port + replyPath))
+                            .header("Accept", "text/event-stream")
+                            .GET()
+                            .build();
+            for (int connection = 0; connection < 2; connection++) {
+                var snapshot =
+                        pool.submit(
+                                () -> {
+                                    var response =
+                                            admin.client.send(
+                                                    streamRequest,
+                                                    HttpResponse.BodyHandlers.ofLines());
+                                    assertThat(response.statusCode()).isEqualTo(200);
+                                    try (var lines = response.body()) {
+                                        return lines.filter(line -> line.contains("模型完成"))
+                                                .findFirst()
+                                                .orElseThrow();
+                                    }
+                                });
+                assertThat(snapshot.get(5, java.util.concurrent.TimeUnit.SECONDS))
+                        .doesNotContain("private-reasoning-fixture");
+            }
+            assertThat(admin.request("GET", "/api/tasks/" + stored, null, false).body())
+                    .contains("RUNNING");
             try (var pause = MYSQL.getDockerClient().pauseContainerCmd(MYSQL.getContainerId())) {
                 pause.exec();
             }
@@ -325,6 +356,27 @@ class ModelExecutionTest {
         storageStream.tryEmitNext("[DONE]");
         storageStream.tryEmitComplete();
         awaitStatus(admin, stored, "COMPLETED");
+        var savedMessages =
+                json.readTree(
+                                admin.request(
+                                                "GET",
+                                                "/api/conversations/" + cid + "/messages",
+                                                null,
+                                                false)
+                                        .body())
+                        .get("items");
+        var savedReplyCount = 0;
+        for (var message : savedMessages) {
+            if (message.path("taskId").asString().equals(stored)
+                    && message.path("role").asString().equals("assistant")) {
+                assertThat(message.path("content").asString()).isEqualTo("模型完成");
+                savedReplyCount++;
+            }
+        }
+        assertThat(savedReplyCount).isEqualTo(1);
+        assertThat(admin.request("GET", replyPath, null, false).body())
+                .contains("event:done")
+                .doesNotContain("模型完成");
         var storedCall =
                 json.readTree(
                                 admin.request("GET", "/api/tasks/" + stored + "/calls", null, false)

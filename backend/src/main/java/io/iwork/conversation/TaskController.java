@@ -2,12 +2,16 @@ package io.iwork.conversation;
 
 import io.iwork.identity.ApiFailure;
 import io.iwork.identity.Caller;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 
 @RestController
 class TaskController {
@@ -69,6 +73,25 @@ class TaskController {
     @GetMapping("/api/tasks/{id}")
     TaskService.Task get(@AuthenticationPrincipal Caller caller, @PathVariable String id) {
         return tasks.get(caller, id);
+    }
+
+    @GetMapping(
+            value = "/api/tasks/{id}/reply-stream",
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    Flux<ServerSentEvent<TaskService.ReplySnapshot>> replyStream(
+            @AuthenticationPrincipal Caller caller,
+            @PathVariable String id,
+            HttpServletResponse response) {
+        var snapshots = tasks.replyStream(caller, id);
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("X-Accel-Buffering", "no");
+        return snapshots
+                .map(snapshot -> ServerSentEvent.builder(snapshot).event("reply").build())
+                .concatWithValues(
+                        ServerSentEvent.<TaskService.ReplySnapshot>builder()
+                                .event("done")
+                                .data(new TaskService.ReplySnapshot(0, ""))
+                                .build());
     }
 
     @PostMapping("/api/tasks/{id}/cancel")

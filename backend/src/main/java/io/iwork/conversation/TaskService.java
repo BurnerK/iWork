@@ -7,6 +7,7 @@ import io.iwork.model.ModelAuthorization;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
@@ -17,10 +18,15 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 
 @Service
 @org.springframework.core.annotation.Order(0)
 public class TaskService implements ApplicationRunner {
+    private static final int MAX_REPLY_LENGTH = 200000;
+
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final IdentityService identity;
@@ -32,7 +38,64 @@ public class TaskService implements ApplicationRunner {
     private final ProjectService projects;
     private final Semaphore capacity;
     private final ConcurrentMap<String, Thread> workers = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, LiveReply> liveReplies = new ConcurrentHashMap<>();
     private volatile boolean stopping;
+
+    record ReplySnapshot(int version, String content) {}
+
+    private static final class LiveReply {
+        private final Sinks.Many<ReplySnapshot> updates = Sinks.many().replay().latest();
+        private final StringBuilder content = new StringBuilder();
+        private String replyId;
+        private int version;
+        private boolean finished;
+
+        LiveReply() {
+            updates.tryEmitNext(new ReplySnapshot(0, ""));
+        }
+
+        synchronized void append(String id, String delta) {
+            if (finished || delta.isEmpty()) return;
+            if (!Objects.equals(id, replyId)) {
+                replyId = id;
+                content.setLength(0);
+            }
+            int length = Math.min(delta.length(), MAX_REPLY_LENGTH - content.length());
+            if (length == 0) return;
+            content.append(delta, 0, length);
+            updates.tryEmitNext(new ReplySnapshot(++version, content.toString()));
+        }
+
+        synchronized void finish() {
+            finished = true;
+            updates.tryEmitComplete();
+        }
+    }
+
+    Flux<ReplySnapshot> replyStream(Caller caller, String id) {
+        var task = get(caller, id);
+        var live = liveReplies.get(id);
+        if (!task.status().equals("RUNNING") || !task.outputMode().equals("TEXT") || live == null)
+            return Flux.empty();
+        return live.updates
+                .asFlux()
+                .sample(Duration.ofMillis(50))
+                .onBackpressureLatest()
+                .publishOn(Schedulers.boundedElastic(), 1)
+                .takeWhile(
+                        snapshot -> {
+                            try {
+                                return !identity.verify(caller, false).mustChangePassword();
+                            } catch (ApiFailure revoked) {
+                                return false;
+                            }
+                        });
+    }
+
+    private void finishReply(String id) {
+        var live = liveReplies.remove(id);
+        if (live != null) live.finish();
+    }
 
     public TaskService(
             JdbcTemplate db,
@@ -300,6 +363,8 @@ public class TaskService implements ApplicationRunner {
         }
         boolean[] acquired = {false};
         String[] initializedInstructions = {""};
+        String id = UUID.randomUUID().toString();
+        var replyBuffer = new LiveReply();
         Task accepted;
         try {
             accepted =
@@ -325,7 +390,8 @@ public class TaskService implements ApplicationRunner {
                                         throw new ApiFailure(409, "idempotency_conflict");
                                     return old;
                                 }
-                                materialIds.forEach(id -> materials.get(caller, id));
+                                materialIds.forEach(
+                                        materialId -> materials.get(caller, materialId));
                                 if (baseVersionId != null) documents.version(caller, baseVersionId);
                                 if (runners.getIfAvailable() == null || stopping)
                                     throw new ApiFailure(503, "execution_unavailable");
@@ -354,7 +420,6 @@ public class TaskService implements ApplicationRunner {
                                 if (!capacity.tryAcquire())
                                     throw new ApiFailure(429, "task_capacity_exceeded");
                                 acquired[0] = true;
-                                String id = UUID.randomUUID().toString();
                                 db.update(
                                         "INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,status,execution_state,output_mode,base_version_id,agent_id,agent_name,agent_instructions,project_id,project_name,project_instructions) VALUES(?,?,?,?,?,?,'RUNNING','RUNNING',?,?,?,?,?,?,?,?)",
                                         id,
@@ -385,9 +450,12 @@ public class TaskService implements ApplicationRunner {
                                 db.update(
                                         "UPDATE conversations SET updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",
                                         conversationId);
-                                return get(caller, id);
+                                var task = get(caller, id);
+                                liveReplies.put(id, replyBuffer);
+                                return task;
                             });
         } catch (RuntimeException failure) {
+            finishReply(id);
             if (acquired[0]) capacity.release();
             throw failure;
         }
@@ -400,7 +468,8 @@ public class TaskService implements ApplicationRunner {
                             accepted.modelId(),
                             message,
                             outputMode,
-                            initializedInstructions[0]);
+                            initializedInstructions[0],
+                            replyBuffer::append);
             Thread worker = Thread.ofVirtual().unstarted(() -> execute(input));
             workers.put(accepted.id(), worker);
             worker.start();
@@ -425,6 +494,7 @@ public class TaskService implements ApplicationRunner {
                                     input.taskId()));
         } finally {
             Thread.interrupted();
+            finishReply(input.taskId());
             try {
                 persist(
                         () ->
@@ -443,7 +513,7 @@ public class TaskService implements ApplicationRunner {
     }
 
     void acceptResult(TaskRunner.Input input, String reply) {
-        if (reply == null || reply.isBlank() || reply.length() > 200000)
+        if (reply == null || reply.isBlank() || reply.length() > MAX_REPLY_LENGTH)
             throw new IllegalStateException("Invalid execution result");
         var draft = input.outputMode().equals("DOCUMENT") ? documents.prepareFinal(input) : null;
         tx.executeWithoutResult(
@@ -515,6 +585,7 @@ public class TaskService implements ApplicationRunner {
                             return get(caller, id);
                         });
         if (cancelled.status().equals("CANCELLED")) {
+            finishReply(id);
             var worker = workers.get(id);
             if (worker != null) worker.interrupt();
         }

@@ -1,6 +1,9 @@
 package io.iwork.agent;
 
 import io.agentscope.core.agent.RuntimeContext;
+import io.agentscope.core.event.AgentEvent;
+import io.agentscope.core.event.AgentResultEvent;
+import io.agentscope.core.event.TextBlockDeltaEvent;
 import io.agentscope.core.message.*;
 import io.agentscope.core.state.InMemoryAgentStateStore;
 import io.agentscope.core.tool.Toolkit;
@@ -123,14 +126,29 @@ public class HarnessTaskRunner implements TaskRunner {
                             .userId(input.caller().id())
                             .sessionId(input.conversationId())
                             .build();
+            var message =
+                    Msg.builder()
+                            .name("user")
+                            .role(MsgRole.USER)
+                            .textContent(input.message())
+                            .build();
             var reply =
-                    agent.call(
-                                    Msg.builder()
-                                            .name("user")
-                                            .role(MsgRole.USER)
-                                            .textContent(input.message())
-                                            .build(),
-                                    context)
+                    agent.streamEvents(message, context)
+                            .doOnNext(
+                                    event -> {
+                                        if (input.outputMode().equals("TEXT")
+                                                && event instanceof TextBlockDeltaEvent text
+                                                && (text.getMetadata() == null
+                                                        || !text.getMetadata()
+                                                                .containsKey(
+                                                                        AgentEvent
+                                                                                .METADATA_GENERATE_REASON)))
+                                            input.replyDelta()
+                                                    .accept(text.getReplyId(), text.getDelta());
+                                    })
+                            .ofType(AgentResultEvent.class)
+                            .map(AgentResultEvent::getResult)
+                            .singleOrEmpty()
                             .block(Duration.ofMinutes(9));
             if (reply == null) throw new IllegalStateException("Missing model result");
             // The task completion transaction controls when this snapshot becomes usable.
