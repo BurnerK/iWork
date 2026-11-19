@@ -14,6 +14,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 @org.springframework.core.annotation.Order(1)
 public class ModelCallLedger implements ApplicationRunner {
     public static final int MAX_OUTPUT = 2048;
+
+    public static int inputByteLimit(int window) {
+        return window - 512 - MAX_OUTPUT;
+    }
+
     private volatile boolean stopping;
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
@@ -67,7 +72,7 @@ public class ModelCallLedger implements ApplicationRunner {
                     var model = db.queryForMap("SELECT * FROM models WHERE id=?", input.modelId());
                     var window = (Number) model.get("context_window");
                     if (window == null) throw new ApiFailure(409, "context_window_not_configured");
-                    if (inputBytes + 512 + MAX_OUTPUT > window.intValue())
+                    if (inputBytes > inputByteLimit(window.intValue()))
                         throw new ApiFailure(413, "model_context_limit");
                     var reservation =
                             cost(

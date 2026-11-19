@@ -47,6 +47,13 @@ public class GovernedModel {
         }
     }
 
+    public static int inputBytes(List<Msg> messages, List<ToolSchema> tools) {
+        return JsonUtils.getJsonCodec()
+                .toJson(Map.of("messages", messages, "tools", tools == null ? List.of() : tools))
+                .getBytes(StandardCharsets.UTF_8)
+                .length;
+    }
+
     public Model forTask(TaskRunner.Input input, String purpose) {
         return new Model() {
             public String getModelName() {
@@ -79,16 +86,7 @@ public class GovernedModel {
                                                                                             "DOCUMENT")))
                                 return Flux.error(
                                         new ApiFailure(403, "model_tools_not_authorized"));
-                            int bytes =
-                                    JsonUtils.getJsonCodec()
-                                            .toJson(
-                                                    Map.of(
-                                                            "messages",
-                                                            messages,
-                                                            "tools",
-                                                            tools == null ? List.of() : tools))
-                                            .getBytes(StandardCharsets.UTF_8)
-                                            .length;
+                            int bytes = inputBytes(messages, tools);
                             var call = ledger.begin(input, purpose, bytes);
                             try {
                                 var key = environment.getProperty(call.credentialRef());

@@ -8,11 +8,14 @@ import io.agentscope.harness.agent.memory.compaction.*;
 import io.iwork.conversation.TaskAttempts;
 import io.iwork.conversation.TaskRunner;
 import io.iwork.identity.ApiFailure;
+import io.iwork.model.GovernedModel;
+import io.iwork.model.ModelCallLedger;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 @Service
 public class ConversationContext {
@@ -117,6 +120,37 @@ public class ConversationContext {
         return new Prepared(state, through[0], hex(digest.digest()));
     }
 
+    private static final String SUMMARY_INSTRUCTION =
+            "Context Extraction Assistant: 将以下历史对话压缩成不超过160个汉字的事实摘要，保留项目、结论、数字和未完成事项。只输出摘要。\n";
+
+    private Flux<ChatResponse> summarize(Model model, String history, int limit) {
+        var messages =
+                List.of(
+                        Msg.builder()
+                                .role(MsgRole.USER)
+                                .textContent(SUMMARY_INSTRUCTION + history)
+                                .build());
+        if (GovernedModel.inputBytes(messages, null) <= limit)
+            return model.stream(messages, null, null)
+                    .skipUntil(
+                            response ->
+                                    response.getContent() != null
+                                            && response.getContent().stream()
+                                                    .anyMatch(
+                                                            block ->
+                                                                    block instanceof TextBlock text
+                                                                            && text.getText()
+                                                                                    != null
+                                                                            && !text.getText()
+                                                                                    .isBlank()))
+                    .switchIfEmpty(Flux.error(new ApiFailure(502, "context_compaction_failed")));
+        // Split only the summary input; every part still uses the task's governed model.
+        int middle = history.offsetByCodePoints(0, history.codePointCount(0, history.length()) / 2);
+        if (middle == 0) return Flux.error(new ApiFailure(413, "context_limit"));
+        return summarize(model, history.substring(0, middle), limit)
+                .concatWith(Flux.defer(() -> summarize(model, history.substring(middle), limit)));
+    }
+
     private void compact(TaskRunner.Input input, AgentState state) {
         var window =
                 db.queryForObject(
@@ -146,7 +180,10 @@ public class ConversationContext {
 
                     public reactor.core.publisher.Flux<ChatResponse> stream(
                             List<Msg> messages, List<ToolSchema> tools, GenerateOptions options) {
-                        return governed.stream(messages, tools, options)
+                        return summarize(
+                                        governed,
+                                        messages.getFirst().getTextContent(),
+                                        ModelCallLedger.inputByteLimit(window))
                                 .doOnNext(
                                         response -> {
                                             if (response.getContent() != null)
@@ -165,10 +202,12 @@ public class ConversationContext {
                 };
         var config =
                 CompactionConfig.builder()
+                        .summaryPrompt("{messages}")
                         .triggerMessages(1)
                         .triggerTokens(1)
                         .keepTokens(0)
-                        .keepMessages(2)
+                        // An oversized last turn must be eligible for summarization too.
+                        .keepMessages(original > budget ? 0 : 2)
                         .flushBeforeCompact(false)
                         .offloadBeforeCompact(false)
                         .truncateArgs(null)

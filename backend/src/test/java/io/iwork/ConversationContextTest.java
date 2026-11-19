@@ -137,6 +137,7 @@ class ConversationContextTest {
                                                     ? "蓝鲸项目，周五交付"
                                                     : "没有历史")
                                             : "已记录";
+                    if (!summarizing && last.contains("生成长周报")) reply = "蓝鲸项目，周五交付。".repeat(200);
                     if (summarizing && summaryMode.equals("large")) reply = "概述".repeat(1000);
                     String chunk =
                             new ObjectMapper()
@@ -342,6 +343,30 @@ class ConversationContextTest {
                     .doesNotContain("synthetic-summary-failure", "蓝鲸项目");
             summaryMode = "normal";
         }
+        String report = conversation(admin);
+        task(admin, report, modelId, "生成长周报");
+        String followUp = task(admin, report, modelId, "请回忆交付时间");
+        assertThat(
+                        admin.request("GET", "/api/tasks/" + followUp + "/diagnostics", null, false)
+                                .body())
+                .contains("COMPACTED");
+        assertThat(admin.request("GET", "/api/tasks/" + followUp + "/calls", null, false).body())
+                .containsOnlyOnce("MAIN");
+        assertThat(
+                        json.readTree(
+                                        admin.request(
+                                                        "GET",
+                                                        "/api/conversations/"
+                                                                + report
+                                                                + "/messages",
+                                                        null,
+                                                        false)
+                                                .body())
+                                .path("items")
+                                .get(3)
+                                .path("content")
+                                .asString())
+                .isEqualTo("蓝鲸项目，周五交付");
         String over = seed(admin, modelId);
         summaryMode = "error";
         String oversized = start(admin, over, modelId, "x".repeat(4000));
