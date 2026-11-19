@@ -871,6 +871,23 @@ summary {
   align-items: center;
   gap: 8px;
 }
+.composer-selection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+.composer-selection li {
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: var(--radius-control);
+  background: var(--snow);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
 .composer-toolbar select,
 .composer-toolbar .composer-material-toggle {
   min-height: 40px;
@@ -879,9 +896,11 @@ summary {
 }
 .composer-toolbar select {
   width: auto;
+  min-width: 0;
   max-width: 100%;
   margin: 0 0 0 auto;
   padding: 6px 8px;
+  text-overflow: ellipsis;
 }
 .composer-toolbar .composer-material-toggle {
   flex: none;

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 const emptyPage = { items: [], hasMore: false }
 const user = { id: 'alice', displayName: 'Alice', role: 'USER', mustChangePassword: false }
@@ -9,6 +9,25 @@ const conversation = {
   projectId: null,
 }
 const envelope = (data: unknown) => ({ success: true, data, error: null })
+
+async function expectComposerLayout(page: Page) {
+  const [card, message, tools, target, send] = await Promise.all(
+    [
+      '.task-composer',
+      '#task-message',
+      '.composer-material-toggle',
+      '#task-model',
+      '.composer-send',
+    ].map(async (selector) => (await page.locator(selector).boundingBox())!)
+  )
+  expect(message.y + message.height).toBeLessThanOrEqual(tools.y)
+  expect(send.y).toBe(tools.y)
+  expect(tools.x + tools.width).toBeLessThanOrEqual(target.x)
+  expect(target.x + target.width).toBeLessThanOrEqual(send.x)
+  expect(send.x + send.width).toBeLessThanOrEqual(card.x + card.width)
+  expect(send.x + send.width).toBeLessThanOrEqual(page.viewportSize()!.width)
+  expect(send.width).toBe(send.height)
+}
 
 test('keeps the composer appearance stable while a reply is running', async ({ page }) => {
   let running = false
@@ -55,17 +74,25 @@ for (const confirmByPolling of [false, true]) {
     page,
   }) => {
     let created = 0
-    const submissions: { requestId: string; materialIds: string[]; outputMode: string }[] = []
+    const submissions: {
+      requestId: string
+      materialIds: string[]
+      outputMode: string
+      message: string
+      modelId: string
+    }[] = []
     const accepted: { id: string; status: string; executionState: string; requestId: string }[] = []
+    let showAccepted = confirmByPolling
+    const replies = [{ id: 1, taskId: 'task-1', role: 'assistant', content: '资料已整理。' }]
     await page.route('**/api/**', async (route) => {
       const request = route.request()
-      const path = new URL(request.url()).pathname
+      const { pathname: path, searchParams } = new URL(request.url())
       let data: unknown = emptyPage
       let status = 200
       if (path === '/api/auth/me') data = user
       if (path === '/api/auth/csrf') data = { token: 'test-token' }
       if (path === '/api/models') data = [{ id: 'model', name: '测试模型' }]
-      if (path === '/api/materials')
+      if (path === '/api/materials' && submissions.length === 0)
         data = { items: [{ id: 'source', name: 'source.md', byteSize: 12 }], hasMore: false }
       if (path === '/api/conversations/first') data = conversation
       if (path === '/api/conversations' && request.method() === 'POST') {
@@ -74,21 +101,27 @@ for (const confirmByPolling of [false, true]) {
         status = 201
       }
       if (path === '/api/conversations/first/tasks' && request.method() === 'GET')
-        data = { items: accepted, hasMore: false }
+        data = { items: showAccepted ? accepted : [], hasMore: false }
+      if (path === '/api/conversations/first/messages')
+        data = {
+          items: showAccepted && searchParams.get('after') === '0' ? replies : [],
+          hasMore: false,
+        }
       if (path === '/api/conversations/first/tasks' && request.method() === 'POST') {
         const submitted = request.postDataJSON()
         submissions.push(submitted)
-        const task = {
+        const existing = accepted.find((task) => task.requestId === submitted.requestId)
+        const task = existing ?? {
           id: `task-${submissions.length}`,
           status: 'COMPLETED',
           executionState: 'STOPPED',
           requestId: submitted.requestId,
         }
+        if (!existing) accepted.push(task)
         if (submissions.length === 1) {
-          if (confirmByPolling) accepted.push(task)
           return route.abort()
         }
-        accepted.push(task)
+        showAccepted = true
         data = task
         status = 202
       }
@@ -96,7 +129,8 @@ for (const confirmByPolling of [false, true]) {
     })
     await page.goto('/#/conversations')
     await page.locator('#task-model').selectOption('model')
-    const tools = page.getByRole('button', { name: '资料' })
+    await expectComposerLayout(page)
+    const tools = page.getByRole('button', { name: /^资料/ })
     const output = page.locator('#task-output')
     await expect(output).toBeHidden()
     await tools.press('Enter')
@@ -112,6 +146,7 @@ for (const confirmByPolling of [false, true]) {
     await page.keyboard.press('Escape')
     await expect(tools).toBeFocused()
     await expect(output).toBeHidden()
+    await expect(page.getByRole('list', { name: '已选资料' }).getByText('source.md')).toBeVisible()
     const message = page.locator('#task-message')
     await message.hover()
     const placeholderStyle = () =>
@@ -155,14 +190,22 @@ for (const confirmByPolling of [false, true]) {
       await page.reload()
       await expect(page).toHaveURL(/#\/conversations\/first$/)
       await expect(page.locator('#task-message')).toHaveValue('整理资料')
+      await expect(
+        page.getByRole('list', { name: '已选资料' }).getByText('source.md')
+      ).toBeVisible()
       await page.getByRole('button', { name: '重试确认' }).click()
       await expect.poll(() => submissions.length).toBe(2)
       expect(submissions[1]).toEqual(submissions[0])
     }
 
     await expect(page).toHaveURL(/#\/conversations\/first$/)
+    await expect(page.getByText('资料已整理。')).toBeVisible()
+    expect(accepted).toHaveLength(1)
     await expect(page.locator('#task-message')).toHaveValue('')
     await page.locator('#task-model').selectOption('model')
+    await tools.click()
+    await output.selectOption('TEXT')
+    await tools.press('Escape')
     await message.fill('单独处理')
     await message.press('Shift+Enter')
     await page.keyboard.insertText('后续要求')
@@ -188,10 +231,104 @@ for (const confirmByPolling of [false, true]) {
     expect(created).toBe(1)
     expect(submissions[0]?.materialIds).toEqual(['source'])
     expect(submissions[0]?.outputMode).toBe('DOCUMENT')
+    expect(submissions[0]).toMatchObject({ message: '整理资料', modelId: 'model' })
+    expect(submissions.at(-1)).toMatchObject({
+      message: '单独处理\n后续要求',
+      modelId: 'model',
+      outputMode: 'TEXT',
+    })
     expect(submissions.at(-1)?.materialIds).toEqual([])
     expect(submissions.at(-1)?.requestId).not.toBe(submissions[0]?.requestId)
   })
 }
+
+test.describe('touch composer', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+  test('reviews selected files and sends a multiline draft with the button', async ({ page }) => {
+    const projectConversation = { ...conversation, projectId: 'project' }
+    const submissions: unknown[] = []
+    const upload = { id: 'upload', name: 'upload.md', byteSize: 12 }
+    const projectMaterial = { id: 'reference', name: 'project.md', byteSize: 12 }
+    const version = {
+      id: 'document',
+      taskId: 'earlier',
+      versionId: 'source-version',
+      versionNumber: 2,
+      title: '原始方案',
+      byteSize: 12,
+      markdown: '# 原始方案',
+    }
+    await page.route('**/api/**', async (route) => {
+      const request = route.request()
+      const path = new URL(request.url()).pathname
+      let data: unknown = emptyPage
+      if (path === '/api/auth/me') data = user
+      if (path === '/api/auth/csrf') data = { token: 'test-token' }
+      if (path === '/api/models') data = [{ id: 'model', name: '很长的模型名称'.repeat(20) }]
+      if (path === '/api/conversations/first') data = projectConversation
+      if (path === '/api/document-versions/source-version') data = version
+      if (path === '/api/projects/project/materials')
+        data = { items: [projectMaterial], hasMore: false }
+      if (path === '/api/materials')
+        data = request.method() === 'POST' ? upload : { items: [upload], hasMore: false }
+      if (path === '/api/conversations/first/tasks' && request.method() === 'POST') {
+        submissions.push(request.postDataJSON())
+        data = { id: 'sent' }
+      }
+      await route.fulfill({ json: envelope(data) })
+    })
+    await page.goto('/#/conversations/first?version=source-version')
+    const composer = page.locator('.task-composer')
+    const message = page.getByRole('textbox', { name: '工作要求（必填）' })
+    const tools = page.getByRole('button', { name: /^资料/ })
+    const target = page.getByRole('combobox', { name: '模型或智能体（必选）' })
+    const send = page.getByRole('button', { name: '提交任务' })
+    await target.selectOption('model')
+    await expectComposerLayout(page)
+    const initialHeight = (await message.boundingBox())!.height
+
+    await tools.tap()
+    await page.getByLabel(/project\.md/).check()
+    await page.getByLabel('选择文件（必填）').setInputFiles({
+      name: upload.name,
+      mimeType: 'text/markdown',
+      buffer: Buffer.from('# 新资料'),
+    })
+    await page.getByRole('button', { name: '上传并保存原文' }).tap()
+    await expect(page.getByText('已保存：upload.md')).toBeVisible()
+    await tools.tap()
+    const selected = page.getByRole('list', { name: '已选资料' })
+    await expect(selected.getByText('project.md')).toBeVisible()
+    await expect(selected.getByText('upload.md')).toBeVisible()
+    await expect(composer.getByText('基于《原始方案》版本 2 修改。')).toBeVisible()
+    await tools.tap()
+    await page.getByLabel(/project\.md/).uncheck()
+    await tools.tap()
+    await expect(selected.getByText('project.md')).toHaveCount(0)
+
+    await message.fill('多行工作要求\n'.repeat(12))
+    expect((await message.boundingBox())!.height).toBeGreaterThan(initialHeight)
+    await message.fill('第一行')
+    expect((await message.boundingBox())!.height).toBe(initialHeight)
+    await message.press('End')
+    await message.press('Enter')
+    await page.keyboard.insertText('第二行')
+    await expect(message).toHaveValue('第一行\n第二行')
+    expect(submissions).toHaveLength(0)
+    await send.tap()
+    await expect(message).toHaveValue('')
+    expect(submissions).toEqual([
+      expect.objectContaining({
+        message: '第一行\n第二行',
+        modelId: 'model',
+        materialIds: ['upload'],
+        outputMode: 'DOCUMENT',
+        baseVersionId: 'source-version',
+      }),
+    ])
+  })
+})
 
 for (const width of [390, 1280]) {
   test(`renders the model form and management titles at ${width}px`, async ({ page }) => {

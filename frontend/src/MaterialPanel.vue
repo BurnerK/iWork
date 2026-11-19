@@ -4,6 +4,7 @@ import { ApiError, errorMessage, request } from './api'
 const props = defineProps<{ modelValue: string[]; disabled: boolean; projectId?: string }>()
 const emit = defineEmits<{
   'update:modelValue': [ids: string[]]
+  'material-names': [items: Material[]]
   failure: [cause: unknown]
   uploading: [value: boolean]
 }>()
@@ -31,6 +32,10 @@ async function load(delta = 0) {
         : `/api/materials?page=${page.value + delta}`
     )
     items.value = result.items
+    emit(
+      'material-names',
+      result.items.filter(({ id }) => props.modelValue.includes(id))
+    )
     more.value = result.hasMore
     page.value += delta
   } catch (cause) {
@@ -39,10 +44,11 @@ async function load(delta = 0) {
     busy.value = false
   }
 }
-function select(id: string, checked: boolean) {
+function select(item: Material, checked: boolean) {
+  if (checked) emit('material-names', [item])
   emit(
     'update:modelValue',
-    checked ? [...props.modelValue, id] : props.modelValue.filter((value) => value !== id)
+    checked ? [...props.modelValue, item.id] : props.modelValue.filter((id) => id !== item.id)
   )
 }
 async function upload() {
@@ -56,6 +62,7 @@ async function upload() {
     if (file.value.size > 2 * 1024 * 1024) throw new ApiError(413, 'material_too_large')
     if (!/^.+\.(txt|md)$/i.test(file.value.name)) throw new ApiError(415, 'unsupported_material')
     const saved = await request<Material>('/api/materials', 'POST', file.value)
+    emit('material-names', [saved])
     notice.value = `已保存：${saved.name}`
     if (props.modelValue.length < 5) emit('update:modelValue', [...props.modelValue, saved.id])
     file.value = undefined
@@ -108,7 +115,7 @@ onMounted(() => load())
             :disabled="
               disabled || busy || (modelValue.length >= 5 && !modelValue.includes(item.id))
             "
-            @change="select(item.id, ($event.target as HTMLInputElement).checked)"
+            @change="select(item, ($event.target as HTMLInputElement).checked)"
           />
           <label :for="`${projectId ? 'project-' : ''}material-${item.id}`"
             >{{ item.name }}<small>{{ item.byteSize }} 字节</small></label

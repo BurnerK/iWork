@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import MarkdownContent from './MarkdownContent.vue'
 import DiagnosticsPanel from './DiagnosticsPanel.vue'
 import DocumentPanel from './DocumentPanel.vue'
@@ -80,6 +80,15 @@ const tasks = ref<Task[]>([]),
   error = ref('')
 const materialIds = ref<string[]>([]),
   materialBusy = ref(false)
+const materialNames = reactive(new Map<string, string>())
+const selectedMaterials = computed(() =>
+  materialIds.value.map((id) => ({ id, name: materialNames.get(id) }))
+)
+function rememberMaterialNames(items: { id: string; name?: string }[]) {
+  for (const { id, name } of items) {
+    if (name !== undefined) materialNames.set(id, name)
+  }
+}
 const baseVersion = ref<{ versionId: string; title: string; versionNumber: number }>()
 function selectVersion(version: { versionId: string; title: string; versionNumber: number }) {
   if (busy.value || pending.value || active.value) return
@@ -249,6 +258,7 @@ async function poll() {
 }
 function sendOnEnter(event: KeyboardEvent) {
   if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
+  if (window.matchMedia('(pointer: coarse)').matches) return
   // Safari can report the IME confirmation after compositionend.
   if (event.isComposing || event.keyCode === 229) return
   event.preventDefault()
@@ -292,7 +302,10 @@ async function submit() {
       baseVersionId: baseVersion.value?.versionId,
       materialIds: [...materialIds.value],
     }
-    localStorage.setItem(storageKey.value, JSON.stringify(pending.value))
+    localStorage.setItem(
+      storageKey.value,
+      JSON.stringify({ ...pending.value, selectedMaterials: selectedMaterials.value })
+    )
     if (!props.conversationId) sessionStorage.setItem(draftKey.value, conversationId.value)
     await request(`/api/conversations/${conversationId.value}/tasks`, 'POST', pending.value)
     acceptPending()
@@ -350,7 +363,7 @@ onMounted(async () => {
   try {
     const stored = conversationId.value && localStorage.getItem(storageKey.value)
     if (stored) {
-      const restored = JSON.parse(stored)
+      const { selectedMaterials: storedMaterials, ...restored } = JSON.parse(stored)
       if (
         typeof restored.requestId === 'string' &&
         (typeof restored.modelId === 'string' || typeof restored.agentId === 'string') &&
@@ -362,6 +375,7 @@ onMounted(async () => {
         agentId.value = restored.agentId || ''
         message.value = restored.message
         materialIds.value = Array.isArray(restored.materialIds) ? restored.materialIds : []
+        if (Array.isArray(storedMaterials)) rememberMaterialNames(storedMaterials)
         if (typeof restored.baseVersionId === 'string')
           baseVersion.value = await request(`/api/document-versions/${restored.baseVersionId}`)
       } else localStorage.removeItem(storageKey.value)
@@ -584,12 +598,14 @@ onUnmounted(() => {
           :project-id="projectId"
           v-model="materialIds"
           :disabled="busy || !!pending || active"
+          @material-names="rememberMaterialNames"
           @failure="failure"
           @uploading="materialBusy = $event"
         />
         <MaterialPanel
           v-model="materialIds"
           :disabled="busy || !!pending || active"
+          @material-names="rememberMaterialNames"
           @failure="failure"
           @uploading="materialBusy = $event"
         />
@@ -609,9 +625,20 @@ onUnmounted(() => {
           required
           maxlength="20000"
           rows="2"
+          enterkeyhint="enter"
           :disabled="busy || !!pending || active"
           @keydown.enter="sendOnEnter"
         ></textarea>
+        <ul
+          v-if="selectedMaterials.length"
+          class="composer-selection"
+          role="list"
+          aria-label="已选资料"
+        >
+          <li v-for="item in selectedMaterials" :key="item.id">
+            {{ item.name ?? '文件名暂不可用' }}
+          </li>
+        </ul>
         <p v-if="baseVersion" class="hint" role="status">
           基于《{{ baseVersion.title }}》版本 {{ baseVersion.versionNumber }} 修改。<button
             type="button"
