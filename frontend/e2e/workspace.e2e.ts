@@ -37,6 +37,7 @@ test('queues consecutive follow-ups and switches between pause and send', async 
     allowQueue: boolean
     materialIds: string[]
   }[] = []
+  let queuedItems: { id: string; summary: string }[] = []
   let running = true
   await page.route('**/api/**', async (route) => {
     const request = route.request()
@@ -51,8 +52,10 @@ test('queues consecutive follow-ups and switches between pause and send', async 
     if (path === '/api/conversations/first/tasks') {
       if (request.method() === 'POST') {
         submissions.push(request.postDataJSON())
+        const id = `queued-${submissions.length}`
+        queuedItems.push({ id, summary: submissions.at(-1)!.message })
         if (submissions.length === 1) return route.abort()
-        data = { id: `queued-${submissions.length}`, status: 'QUEUED' }
+        data = { id, status: 'QUEUED' }
       } else {
         data = {
           items: [
@@ -64,13 +67,19 @@ test('queues consecutive follow-ups and switches between pause and send', async 
             },
           ],
           hasMore: false,
-          queuedCount: submissions.length,
+          queuedCount: queuedItems.length,
+          queuedItems,
           queuePaused: !running,
           confirmedRequestId:
             submissions.find(({ requestId }) => requestId === searchParams.get('requestId'))
               ?.requestId ?? null,
         }
       }
+    }
+    if (path === '/api/conversations/first/tasks/queue/queued-2') {
+      expect(request.method()).toBe('DELETE')
+      queuedItems = queuedItems.filter(({ id }) => id !== 'queued-2')
+      return route.fulfill({ status: 204 })
     }
     if (path === '/api/tasks/running/cancel') {
       expect(request.method()).toBe('POST')
@@ -104,6 +113,9 @@ test('queues consecutive follow-ups and switches between pause and send', async 
   await send.click()
   await expect(message).toBeEmpty()
   await expect(pause).toBeEnabled()
+  const queue = composer.locator('.composer-queue')
+  const summary = queue.locator('summary')
+  await expect(summary).toHaveText('第一条追问')
   await message.fill('第二条追问')
   await message.press('Enter')
   await expect(message).toBeEmpty()
@@ -113,10 +125,27 @@ test('queues consecutive follow-ups and switches between pause and send', async 
     { message: '第二条追问', outputMode: 'DOCUMENT', allowQueue: true, materialIds: [] },
   ])
   expect(submissions[0]!.requestId).not.toBe(submissions[1]!.requestId)
+  await message.fill('第三条追问')
+  await send.click()
+  await expect(message).toBeEmpty()
   await pause.click()
-  await expect(page.getByText('队列已暂停')).toBeVisible()
+  await expect(composer.getByText('队列已暂停')).toBeVisible()
+  await expect(summary).toContainText('3 条待发送')
+  await expect(summary).toContainText('第一条追问')
+  await expect(queue.getByRole('listitem')).toHaveCount(0)
+  await summary.press('Enter')
+  await expect(queue.getByRole('listitem')).toHaveText(['第一条追问', '第二条追问', '第三条追问'])
+
+  const draft = '  草稿保留\n下一行  '
+  await message.fill(draft)
+  await queue.getByRole('button', { name: '移除第 2 条待发送消息：第二条追问' }).click()
+  await expect(queue.getByRole('listitem')).toHaveText(['第一条追问', '第三条追问'])
+  await expect(message).toHaveValue(draft)
   await page.reload()
-  await expect(page.getByText('队列已暂停')).toBeVisible()
+  await expect(composer.getByText('队列已暂停')).toBeVisible()
+  await expect(summary).toContainText('2 条待发送')
+  await summary.click()
+  await expect(queue.getByRole('listitem')).toHaveText(['第一条追问', '第三条追问'])
 })
 
 for (const confirmByPolling of [false, true]) {

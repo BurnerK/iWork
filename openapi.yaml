@@ -1335,7 +1335,8 @@ paths:
     get:
       tags:
       - 会话任务
-      summary: "GET /api/conversations/{id}/tasks"
+      summary: 查看会话任务与待发送队列
+      description: queuedItems 按发送顺序排列，每项提供消息摘要。已移除的项不会出现在任务历史或队列中。
       operationId: get_api_conversations_id_tasks
       parameters:
       - name: id
@@ -1456,6 +1457,32 @@ paths:
                     type: boolean
                     enum:
                     - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/conversations/{id}/tasks/queue/{taskId}:
+    delete:
+      tags:
+      - 会话任务
+      summary: 移除待发送消息
+      description: 消息已被派发时返回 409。重复移除同一项返回 204。
+      operationId: delete_api_conversations_id_tasks_queue_taskId
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: No Content
         default:
           $ref: "#/components/responses/ApiError"
       security:
@@ -2966,6 +2993,13 @@ components:
             type: object
             additionalProperties:
               type: object
+    io.iwork.conversation.TaskService.QueuedItem:
+      type: object
+      properties:
+        id:
+          type: string
+        summary:
+          type: string
     io.iwork.conversation.TaskService.Task:
       type: object
       properties:
@@ -3019,6 +3053,10 @@ components:
         queuedCount:
           type: integer
           format: int32
+        queuedItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/io.iwork.conversation.TaskService.QueuedItem"
     io.iwork.identity.AuthController.PasswordChange:
       type: object
       properties:

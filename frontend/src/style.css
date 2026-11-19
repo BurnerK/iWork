@@ -870,6 +870,51 @@ button[aria-disabled='true'] {
   align-items: center;
   gap: 8px;
 }
+.composer-queue {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  background: var(--snow);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.composer-queue p {
+  margin: 0;
+}
+.composer-queue summary {
+  padding: 6px 8px;
+  border-radius: var(--radius-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-queue ol {
+  max-block-size: calc(3 * 40px);
+  overflow: auto;
+  margin: 0;
+  padding: 0 8px;
+}
+.composer-queue li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.composer-queue button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px;
+}
+.queue-remove-icon {
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  mask: url('/assets/icons/trash.svg') center / contain no-repeat;
+}
 .composer-selection {
   display: flex;
   flex-wrap: wrap;

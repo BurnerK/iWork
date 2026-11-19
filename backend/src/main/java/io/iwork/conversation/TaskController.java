@@ -118,6 +118,15 @@ class TaskController {
         return tasks.list(caller, id, page, requestId);
     }
 
+    @DeleteMapping("/api/conversations/{id}/tasks/queue/{taskId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void removeQueued(
+            @AuthenticationPrincipal Caller caller,
+            @PathVariable String id,
+            @PathVariable String taskId) {
+        tasks.removeQueued(caller, id, taskId);
+    }
+
     @GetMapping("/api/conversations/{id}/messages")
     TaskService.Page<TaskService.Message> messages(
             @AuthenticationPrincipal Caller caller,

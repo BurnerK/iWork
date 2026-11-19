@@ -110,7 +110,8 @@ class TaskLifecycleTest {
                     if (input.message().equals("queue failure"))
                         throw new IllegalStateException("Fixture failure");
                 }
-                if (Set.of("second", "third").contains(input.message()))
+                if (Set.of("second", "remove this", "third")
+                        .contains(input.message().stripLeading()))
                     queuedExecutions.add(input.message());
                 if (input.message().equals("hold")) Thread.sleep(30000);
                 if (input.message().equals("fail"))
@@ -498,7 +499,10 @@ class TaskLifecycleTest {
         var retry =
                 submitFollowUp(
                         browser, path, modelId, "queue-second", "second", List.of(materialId));
-        var third = submitFollowUp(browser, path, modelId, "queue-third", "third", List.of());
+        var removed =
+                submitFollowUp(browser, path, modelId, "queue-removed", "remove this", List.of());
+        String thirdMessage = "\n ".repeat(100) + "third";
+        var third = submitFollowUp(browser, path, modelId, "queue-third", thirdMessage, List.of());
         assertThat(retry.get("status").asString()).isEqualTo("QUEUED");
         assertThat(third.get("status").asString()).isEqualTo("QUEUED");
         String secondId = retry.get("id").asString();
@@ -507,17 +511,55 @@ class TaskLifecycleTest {
                         browser, otherPath, modelId, "queue-other", "independent", List.of());
         assertThat(other.get("status").asString()).isEqualTo("RUNNING");
 
+        String removePath = "/queue/" + removed.get("id").asString();
+        assertThat(browser.request("DELETE", otherPath + removePath, null, true).statusCode())
+                .isEqualTo(404);
+        assertThat(browser.request("DELETE", path + removePath, null, false).statusCode())
+                .isEqualTo(403);
+        assertThat(browser.request("DELETE", path + removePath, null, true).statusCode())
+                .isEqualTo(204);
+        assertThat(browser.request("DELETE", path + removePath, null, true).statusCode())
+                .isEqualTo(204);
+        assertThat(
+                        submitFollowUp(
+                                        browser,
+                                        path,
+                                        modelId,
+                                        "queue-removed",
+                                        "remove this",
+                                        List.of())
+                                .get("id")
+                                .asString())
+                .isEqualTo(removed.get("id").asString());
+        var remaining = json.readTree(browser.request("GET", path, null, false).body());
+        assertThat(remaining.get("queuedCount").asInt()).isEqualTo(2);
+        assertThat(
+                        remaining
+                                .get("queuedItems")
+                                .valueStream()
+                                .map(item -> item.get("summary").asString()))
+                .containsExactly("second", "third");
+        assertThat(
+                        remaining
+                                .get("items")
+                                .valueStream()
+                                .map(item -> item.get("requestId").asString()))
+                .doesNotContain("queue-removed");
+
         browser.client.close();
         releaseQueueGate.release();
         assertThat(queuedExecutions.poll(5, java.util.concurrent.TimeUnit.SECONDS))
                 .isEqualTo("second");
         assertThat(queuedExecutions.poll(5, java.util.concurrent.TimeUnit.SECONDS))
-                .isEqualTo("third");
+                .isEqualTo(thirdMessage);
         var reopened = new Browser();
         reopened.login("admin", "Changed-task-password");
         reopened.csrf();
         awaitTask(reopened, third.get("id").asString(), "executionState", "STOPPED");
         awaitTask(reopened, third.get("id").asString(), "status", "COMPLETED");
+        assertThat(queuedExecutions).isEmpty();
+        assertThat(reopened.request("DELETE", path + "/queue/" + secondId, null, true).statusCode())
+                .isEqualTo(409);
         awaitTask(reopened, other.get("id").asString(), "executionState", "STOPPED");
         var messages =
                 json.readTree(
@@ -533,7 +575,7 @@ class TaskLifecycleTest {
                                 .filter(message -> message.get("role").asString().equals("user"))
                                 .map(message -> message.get("content").asString())
                                 .toList())
-                .endsWith("queue gate", "second", "third");
+                .endsWith("queue gate", "second", thirdMessage);
         assertThat(
                         messages.valueStream()
                                 .filter(

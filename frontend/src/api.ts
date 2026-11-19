@@ -94,6 +94,7 @@ export function errorMessage(error: unknown): string {
     model_output_limit: '模型输出超过接收上限，任务已停止。',
     model_timeout: '模型调用超时，已请求停止；供应商用量可能仍待核实。',
     task_not_running: '任务已经结束，不能再执行处理或模型调用。',
+    task_not_queued: '这条消息已离开待发送队列。',
     invalid_file_name: '文件名无效，请移除路径或控制字符，长度不超过 200 字符。',
     unsupported_material: '仅支持 .txt 和 .md 文件。',
     material_too_large: '每份资料不能超过 2 MiB。',

@@ -37,6 +37,7 @@ type Message = {
   publishedVersion?: PublishedVersion | null
 }
 type Page<T> = { items: T[]; hasMore: boolean }
+type QueuedItem = { id: string; summary: string }
 const models = ref<{ id: string; name: string }[]>([]),
   modelId = ref(''),
   message = ref(''),
@@ -198,7 +199,13 @@ const taskPage = ref(0),
   moreMessages = ref(false)
 const runningTask = computed(() => tasks.value.find((task) => task.status === 'RUNNING'))
 const showPause = computed(() => !!runningTask.value && !pending.value && !message.value.trim())
-const queueStatus = ref('')
+const queuedItems = ref<QueuedItem[]>([]),
+  queuePaused = ref(false),
+  removingQueued = ref(false),
+  queueError = ref(''),
+  queueSummary = ref<HTMLElement>(),
+  messageInput = ref<HTMLTextAreaElement>()
+let queueRevision = 0
 const labels: Record<string, string> = {
   RUNNING: '运行中',
   COMPLETED: '已完成',
@@ -235,6 +242,7 @@ async function failure(cause: unknown) {
 async function load() {
   if (!conversationId.value || loading.value || disposed) return
   loading.value = true
+  const revision = queueRevision
   try {
     const pendingQuery = pending.value
       ? `?requestId=${encodeURIComponent(pending.value.requestId)}`
@@ -242,7 +250,7 @@ async function load() {
     const [recent, incoming] = await Promise.all([
       request<
         Page<Task> & {
-          queuedCount: number
+          queuedItems: QueuedItem[]
           queuePaused: boolean
           confirmedRequestId: string | null
         }
@@ -258,11 +266,10 @@ async function load() {
         (task) => task.status !== 'RUNNING' && !recent.items.some((item) => item.id === task.id)
       ),
     ]
-    queueStatus.value = recent.queuedCount
-      ? recent.queuePaused
-        ? '队列已暂停'
-        : '有待发送消息'
-      : ''
+    if (revision === queueRevision) {
+      queuedItems.value = recent.queuedItems
+      queuePaused.value = recent.queuePaused
+    }
     if (taskPage.value === 0) moreTasks.value = recent.hasMore
     const follow = !showLatest.value
     messages.value.push(...incoming.items)
@@ -281,6 +288,30 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+async function removeQueued(item: QueuedItem, event: MouseEvent) {
+  if (removingQueued.value) return
+  const button = event.currentTarget
+  removingQueued.value = true
+  queueError.value = ''
+  try {
+    await request(`/api/conversations/${conversationId.value}/tasks/queue/${item.id}`, 'DELETE')
+    if (disposed) return
+    // A poll started before the removal can still contain the old queue.
+    queueRevision++
+    queuedItems.value = queuedItems.value.filter(({ id }) => id !== item.id)
+    if (document.activeElement === button) {
+      if (queuedItems.value.length) queueSummary.value?.focus()
+      else messageInput.value?.focus()
+    }
+  } catch (cause) {
+    if (disposed) return
+    if (cause instanceof ApiError && cause.status === 401) await failure(cause)
+    else queueError.value = errorMessage(cause)
+  } finally {
+    removingQueued.value = false
+  }
+  await load()
 }
 async function poll() {
   if (disposed) return
@@ -611,7 +642,30 @@ onUnmounted(() => {
       回到最新消息
     </button>
     <div class="task-composer" @keydown.esc="closeMaterials">
-      <p v-if="queueStatus" class="hint" role="status">{{ queueStatus }}</p>
+      <div v-if="queuedItems.length" class="composer-queue">
+        <p v-if="queuePaused" class="hint" role="status">队列已暂停</p>
+        <details>
+          <summary ref="queueSummary">
+            <span v-if="queuedItems.length > 1">{{ queuedItems.length }} 条待发送 · </span>
+            {{ queuedItems[0]?.summary }}
+          </summary>
+          <ol role="list" aria-label="待发送消息">
+            <li v-for="(item, index) in queuedItems" :key="item.id">
+              <span>{{ item.summary }}</span>
+              <button
+                type="button"
+                class="secondary"
+                :aria-disabled="removingQueued"
+                :aria-label="`移除第 ${index + 1} 条待发送消息：${item.summary}`"
+                @click="removeQueued(item, $event)"
+              >
+                <span class="queue-remove-icon" aria-hidden="true"></span>
+              </button>
+            </li>
+          </ol>
+        </details>
+      </div>
+      <p v-if="queueError" class="error hint" role="alert">{{ queueError }}</p>
       <div
         v-show="materialsOpen"
         id="composer-materials"
@@ -657,6 +711,7 @@ onUnmounted(() => {
         <label for="task-message">工作要求（必填）</label
         ><textarea
           id="task-message"
+          ref="messageInput"
           v-model="message"
           name="message"
           placeholder="描述你的任务，或继续追问…"

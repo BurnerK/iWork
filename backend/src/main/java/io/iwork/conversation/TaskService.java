@@ -28,6 +28,8 @@ import reactor.core.scheduler.Schedulers;
 public class TaskService implements ApplicationRunner {
     private static final int MAX_REPLY_LENGTH = 200000;
 
+    private static final int QUEUE_SUMMARY_LENGTH = 160;
+
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final IdentityService identity;
@@ -154,11 +156,14 @@ public class TaskService implements ApplicationRunner {
 
     public record Page<T>(List<T> items, boolean hasMore) {}
 
+    public record QueuedItem(String id, String summary) {}
+
     public record TaskPage(
             List<Task> items,
             boolean hasMore,
             int queuedCount,
             boolean queuePaused,
+            List<QueuedItem> queuedItems,
             String confirmedRequestId) {}
 
     private record QueueHead(String taskId, String conversationId, Caller caller) {}
@@ -246,11 +251,29 @@ public class TaskService implements ApplicationRunner {
                     var rows =
                             query(
                                     true,
-                                    "tasks.owner_id=? AND tasks.conversation_id=? AND tasks.status<>'QUEUED' ORDER BY tasks.created_at DESC,tasks.id DESC LIMIT 21 OFFSET ?",
+                                    "tasks.owner_id=? AND tasks.conversation_id=? AND tasks.status NOT IN ('QUEUED','REMOVED') ORDER BY tasks.created_at DESC,tasks.id DESC LIMIT 21 OFFSET ?",
                                     caller.id(),
                                     conversationId,
                                     page * 20);
-                    int count = queuedCount(conversationId);
+                    var queuedItems =
+                            db.query(
+                                    """
+                                    SELECT id, CASE WHEN CHAR_LENGTH(preview)>?
+                                        THEN CONCAT(LEFT(preview,?),'…')
+                                        ELSE preview END AS summary
+                                    FROM (
+                                        SELECT id,queue_order,
+                                            REGEXP_REPLACE(queued_message,'^[[:space:]]+','') AS preview
+                                        FROM tasks WHERE conversation_id=? AND status='QUEUED'
+                                    ) queued
+                                    ORDER BY queue_order
+                                    """,
+                                    (row, index) ->
+                                            new QueuedItem(
+                                                    row.getString("id"), row.getString("summary")),
+                                    QUEUE_SUMMARY_LENGTH,
+                                    QUEUE_SUMMARY_LENGTH,
+                                    conversationId);
                     String confirmed = null;
                     if (requestId != null && requestId.matches("[A-Za-z0-9_-]{1,100}")) {
                         confirmed =
@@ -270,9 +293,36 @@ public class TaskService implements ApplicationRunner {
                     return new TaskPage(
                             rows.stream().limit(20).toList(),
                             rows.size() > 20,
-                            count,
-                            count > 0 && queuePaused(conversationId),
+                            queuedItems.size(),
+                            !queuedItems.isEmpty() && queuePaused(conversationId),
+                            queuedItems,
                             confirmed);
+                });
+    }
+
+    public void removeQueued(Caller caller, String conversationId, String taskId) {
+        tx.executeWithoutResult(
+                status -> {
+                    verifyExecutionCaller(caller);
+                    conversation(caller, conversationId, true);
+                    var task = get(caller, taskId);
+                    if (!task.conversationId().equals(conversationId))
+                        throw new ApiFailure(404, "not_found");
+                    if (task.status().equals("REMOVED")) return;
+                    if (!task.status().equals("QUEUED"))
+                        throw new ApiFailure(409, "task_not_queued");
+                    // Keep the request identity so a retry cannot recreate the removed item.
+                    db.update(
+                            """
+                            UPDATE tasks SET status='REMOVED',execution_state='STOPPED',queued_message=NULL,
+                                queued_auth_version=NULL,base_version_id=NULL,updated_at=CURRENT_TIMESTAMP(6)
+                            WHERE id=?
+                            """,
+                            taskId);
+                    if (queuedCount(conversationId) == 0)
+                        db.update(
+                                "UPDATE conversations SET queue_paused=FALSE WHERE id=?",
+                                conversationId);
                 });
     }
 

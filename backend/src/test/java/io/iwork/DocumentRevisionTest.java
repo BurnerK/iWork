@@ -440,6 +440,7 @@ class DocumentRevisionTest {
                                         "target/document-revision-files/document-workspaces",
                                         revised)))
                 .isFalse();
+        verifyRemovedRevisionDoesNotLinkSource(admin, model, id);
         admin.request(
                 "PUT",
                 "/api/admin/models/" + model,
@@ -732,6 +733,58 @@ class DocumentRevisionTest {
         } finally {
             java.nio.file.Files.deleteIfExists(file);
         }
+    }
+
+    private void verifyRemovedRevisionDoesNotLinkSource(
+            Browser browser, String model, String source) throws Exception {
+        String conversation = conversation(browser);
+        String path = "/api/conversations/" + conversation;
+        preparedGate = new java.util.concurrent.CountDownLatch(1);
+        finishGate = reactor.core.publisher.Sinks.empty();
+        String active = start(browser, conversation, model, null, "gated new document");
+        try {
+            assertThat(preparedGate.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var response =
+                    browser.request(
+                            "POST",
+                            path + "/tasks",
+                            json.writeValueAsString(
+                                    Map.of(
+                                            "requestId",
+                                            "remove-queued-revision",
+                                            "modelId",
+                                            model,
+                                            "message",
+                                            "补充项目计划",
+                                            "outputMode",
+                                            "DOCUMENT",
+                                            "baseVersionId",
+                                            source,
+                                            "allowQueue",
+                                            true)),
+                            true);
+            assertThat(response.statusCode()).isEqualTo(202);
+            var queued = json.readTree(response.body());
+            assertThat(queued.path("status").asString()).isEqualTo("QUEUED");
+            assertThat(browser.request("GET", path + "/documents", null, false).body())
+                    .contains(source);
+            assertThat(
+                            browser.request(
+                                            "DELETE",
+                                            path + "/tasks/queue/" + queued.path("id").asString(),
+                                            null,
+                                            true)
+                                    .statusCode())
+                    .isEqualTo(204);
+            var documents = browser.request("GET", path + "/documents", null, false);
+            assertThat(documents.statusCode()).isEqualTo(200);
+            var items = json.readTree(documents.body()).path("items");
+            assertThat(items.isArray()).isTrue();
+            assertThat(items.size()).isZero();
+        } finally {
+            finishGate.tryEmitEmpty();
+        }
+        await(browser, active);
     }
 
     String conversation(Browser browser) throws Exception {

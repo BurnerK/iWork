@@ -68,6 +68,9 @@ paths:
                 title: {type: string, maxLength: 200, default: 新会话}
                 projectId: {type: string, nullable: true}
   /api/conversations/{id}/tasks:
+    get:
+      summary: 查看会话任务与待发送队列
+      description: queuedItems 按发送顺序排列，每项提供消息摘要。已移除的项不会出现在任务历史或队列中。
     post:
       summary: 提交会话任务
       requestBody:
@@ -87,6 +90,10 @@ paths:
                 materialIds: {type: array, items: {type: string}, maxItems: 5, uniqueItems: true}
                 outputMode: {type: string, enum: [TEXT, DOCUMENT], default: TEXT}
                 allowQueue: {type: boolean, default: false}
+  /api/conversations/{id}/tasks/queue/{taskId}:
+    delete:
+      summary: 移除待发送消息
+      description: 消息已被派发时返回 409。重复移除同一项返回 204。
   /api/tasks/{id}/cancel:
     post:
       summary: 取消任务
