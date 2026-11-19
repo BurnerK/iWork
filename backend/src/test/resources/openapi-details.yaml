@@ -1,0 +1,532 @@
+# Request and response details Spring MVC cannot infer from raw streams, form parameters or Maps.
+paths:
+  /api/auth/csrf:
+    get:
+      summary: 获取 CSRF 令牌
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token]
+                properties:
+                  token: {type: string}
+  /api/auth/login:
+    post:
+      summary: 登录
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: {type: string}
+                password: {type: string, format: password}
+  /api/auth/logout:
+    post:
+      summary: 退出登录
+      responses:
+        '204':
+          description: No Content
+  /api/materials:
+    post:
+      summary: 上传原始资料
+      description: 请求体为文件原始字节，X-File-Name 为 UTF-8 URL 编码后的文件名。
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: {type: string, format: binary}
+  /api/materials/{id}/content:
+    get:
+      summary: 下载原始资料
+      responses: &download
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+  /api/document-versions/{id}/content:
+    get:
+      summary: 下载 Markdown 成果
+      responses: *download
+  /api/conversations:
+    post:
+      summary: 创建会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title: {type: string, maxLength: 200, default: 新会话}
+                projectId: {type: string, nullable: true}
+  /api/conversations/{id}/tasks:
+    post:
+      summary: 提交会话任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requestId, message]
+              properties:
+                requestId: {type: string, pattern: '^[A-Za-z0-9_-]{1,100}$'}
+                message: {type: string, maxLength: 20000}
+                modelId: {type: string, nullable: true, description: 与 agentId 二选一}
+                agentId: {type: string, nullable: true, description: 与 modelId 二选一}
+                baseVersionId: {type: string, nullable: true, description: 仅用于 DOCUMENT 模式}
+                materialIds: {type: array, items: {type: string}, maxItems: 5, uniqueItems: true}
+                outputMode: {type: string, enum: [TEXT, DOCUMENT], default: TEXT}
+                allowQueue: {type: boolean, default: false}
+  /api/tasks/{id}/cancel:
+    post:
+      summary: 取消任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                pauseQueue: {type: boolean, default: false}
+  /api/tasks/{id}/reply-stream:
+    get:
+      summary: 订阅回复事件
+      responses:
+        '200':
+          description: SSE 流。reply 事件的 data 包含 version 和 content，done 事件表示流结束。
+          content:
+            text/event-stream:
+              schema: {type: string}
+  /api/projects:
+    post:
+      summary: 创建项目
+      requestBody: &project
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: {type: string, maxLength: 120}
+                instructions: {type: string, maxLength: 4000, default: ''}
+  /api/projects/{id}:
+    put:
+      summary: 更新项目
+      requestBody: *project
+  /api/conversations/{id}/project:
+    put:
+      summary: 移动会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [projectId]
+              properties:
+                projectId: {type: string, nullable: true, description: 传 null 移出项目}
+  /api/projects/{id}/materials:
+    get:
+      summary: 查询项目资料
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/ProjectMaterial'}}
+                  hasMore: {type: boolean}
+    post:
+      summary: 关联资料
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [materialId]
+              properties:
+                materialId: {type: string}
+  /api/projects/{id}/documents:
+    get:
+      summary: 查询项目成果版本
+      responses: &versionPage
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/DocumentVersionListItem'}}
+                  hasMore: {type: boolean}
+    post:
+      summary: 关联成果
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [versionId]
+              properties:
+                versionId: {type: string}
+  /api/agents:
+    post:
+      summary: 创建个人智能体
+      requestBody: &agent
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, instructions, modelId]
+              properties:
+                name: {type: string, maxLength: 120}
+                instructions: {type: string, maxLength: 4000}
+                modelId: {type: string}
+  /api/agents/{id}:
+    put:
+      summary: 更新个人智能体
+      requestBody: *agent
+  /api/admin/users:
+    post:
+      summary: 创建用户
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [username, displayName]
+              properties:
+                username: {type: string}
+                displayName: {type: string}
+  /api/admin/users/{id}/status:
+    patch:
+      summary: 更新用户状态
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled: {type: boolean}
+  /api/admin/models:
+    post:
+      summary: 新增模型
+      requestBody: &model
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, baseUrl, modelName, credentialRef, inputPrice, outputPrice, enabled]
+              properties:
+                name: {type: string, maxLength: 100}
+                baseUrl: {type: string, format: uri, maxLength: 1000}
+                modelName: {type: string, maxLength: 200}
+                credentialRef: {type: string, pattern: '^IWORK_MODEL_KEY_[A-Z0-9_]{1,80}$'}
+                inputPrice: {type: string, description: 十进制金额字符串}
+                outputPrice: {type: string, description: 十进制金额字符串}
+                enabled: {type: boolean}
+                contextWindow: {type: integer, minimum: 8192, maximum: 131072, nullable: true}
+  /api/admin/models/{id}:
+    put:
+      summary: 更新模型
+      requestBody: *model
+  /api/admin/model-settings:
+    put:
+      summary: 设置计价货币
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [currency]
+              properties:
+                currency: {type: string, description: ISO 4217 货币代码}
+  /api/admin/users/{id}/model-access:
+    put:
+      summary: 设置用户模型权限
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [modelIds]
+              properties:
+                modelIds: {type: array, items: {type: string}, maxItems: 100, uniqueItems: true}
+  /api/admin/users/{id}/budget:
+    put:
+      summary: 设置用户预算
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [limit]
+              properties:
+                limit: {type: string, description: 十进制金额字符串}
+  /api/projects/{id}/conversations:
+    get:
+      summary: 查询项目会话
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/ProjectConversation'}}
+                  hasMore: {type: boolean}
+  /api/conversations/{id}/documents:
+    get:
+      summary: 查询会话成果版本
+      responses: *versionPage
+  /api/document-versions:
+    get:
+      summary: 查询个人成果版本
+      responses: *versionPage
+  /api/document-versions/{id}:
+    get:
+      summary: 预览成果版本
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DocumentVersion'
+                  - type: object
+                    properties:
+                      markdown: {type: string}
+  /api/tasks/{id}/calls:
+    get:
+      summary: 查询任务模型调用记录
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/ModelCall'}}
+  /api/tasks/{task}/parses:
+    get:
+      summary: 查询任务资料解析记录
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/MaterialParse'}}
+  /api/tasks/{task}/parses/{id}:
+    get:
+      summary: 分段读取解析文本
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text: {type: string}
+                  nextOffset: {type: integer, description: 下一段的 UTF-16 偏移量}
+                  hasMore: {type: boolean}
+  /api/admin/tasks:
+    get:
+      summary: 查询近期任务诊断摘要
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/DiagnosticTask'}}
+                  hasMore: {type: boolean}
+  /api/admin/tasks/{id}/diagnostics:
+    get:
+      summary: 查看任意任务诊断
+      responses: &taskDiagnostics
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TaskDiagnostics'}
+  /api/tasks/{id}/diagnostics:
+    get:
+      summary: 查看个人任务诊断
+      responses: *taskDiagnostics
+components:
+  responses:
+    ApiError:
+      description: 请求失败。error 是供客户端处理的错误码。
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data, error]
+            properties:
+              success: {type: boolean, enum: [false]}
+              data: {type: object, nullable: true, enum: [null]}
+              error: {type: string}
+  schemas:
+    ProjectConversation:
+      type: object
+      properties:
+        id: {type: string}
+        title: {type: string}
+        updatedAt: {type: string, format: date-time}
+        projectId: {type: string}
+    ProjectMaterial:
+      type: object
+      properties:
+        id: {type: string}
+        name: {type: string}
+        format: {type: string}
+        byteSize: {type: integer, format: int64}
+    DocumentVersion:
+      type: object
+      properties:
+        id: {type: string, description: 成果 ID}
+        title: {type: string}
+        versionId: {type: string}
+        versionNumber: {type: integer}
+        taskId: {type: string}
+        byteSize: {type: integer, format: int64}
+        baseVersionId: {type: string, nullable: true}
+    DocumentVersionListItem:
+      allOf:
+        - $ref: '#/components/schemas/DocumentVersion'
+        - type: object
+          properties:
+            createdAt: {type: string, format: date-time}
+    ModelCall:
+      type: object
+      properties:
+        <<: &callProperties
+          id: {type: string}
+          purpose: {type: string}
+          status: {type: string}
+          source: {type: string}
+          inputTokens: {type: integer, format: int64, nullable: true}
+          outputTokens: {type: integer, format: int64, nullable: true}
+          inputEstimate: {type: integer, format: int64}
+          observedOutputBytes: {type: integer, format: int64}
+          charged: {type: string}
+          reservation: {type: string}
+          currency: {type: string}
+          startedAt: {type: string, format: date-time}
+          endedAt: {type: string, format: date-time, nullable: true}
+          usageAt: {type: string, format: date-time, nullable: true}
+        providerResponseId: {type: string, nullable: true}
+        adjustments:
+          type: array
+          items:
+            type: object
+            properties:
+              previous_amount: {type: number}
+              new_amount: {type: number}
+              source: {type: string}
+              provider_input: {type: integer, format: int64, nullable: true}
+              provider_output: {type: integer, format: int64, nullable: true}
+              created_at: {type: string, format: date-time}
+    MaterialParse:
+      type: object
+      properties:
+        id: {type: string}
+        materialId: {type: string}
+        name: {type: string}
+        status: {type: string}
+        cleanup: {type: string}
+        errorCode: {type: string, nullable: true}
+        characters: {type: integer, nullable: true}
+    DiagnosticTask:
+      type: object
+      properties:
+        id: {type: string}
+        ownerId: {type: string}
+        conversationId: {type: string}
+        modelId: {type: string}
+        status: {type: string}
+        executionState: {type: string}
+        errorCode: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        contextState: {type: string}
+        contextAt: {type: string, format: date-time, nullable: true}
+        summaryState: {type: string}
+        summaryAt: {type: string, format: date-time, nullable: true}
+    TaskDiagnostics:
+      type: object
+      properties:
+        task: {$ref: '#/components/schemas/DiagnosticTask'}
+        calls:
+          type: array
+          items:
+            type: object
+            properties:
+              <<: *callProperties
+              modelId: {type: string}
+              errorCode: {type: string, nullable: true}
+              sentAt: {type: string, format: date-time, nullable: true}
+              providerState: {type: string, enum: [NOT_SENT, COMPLETED, UNKNOWN]}
+        parses:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              sandboxJobId: {type: string}
+              materialId: {type: string}
+              status: {type: string}
+              cleanup: {type: string}
+              errorCode: {type: string, nullable: true}
+              createdAt: {type: string, format: date-time}
+              updatedAt: {type: string, format: date-time}
+              cleanupAttempts: {type: integer}
+              cleanupAttemptedAt: {type: string, format: date-time, nullable: true}
+              cleanupConfirmedAt: {type: string, format: date-time, nullable: true}
+        versions:
+          type: array
+          items:
+            type: object
+            properties:
+              versionId: {type: string}
+              documentId: {type: string}
+              versionNumber: {type: integer}
+              createdAt: {type: string, format: date-time}

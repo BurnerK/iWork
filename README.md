@@ -74,6 +74,16 @@ backend/mvnw -B -f backend/pom.xml -Pdistribution -DskipTests package
 代码格式由固定版本的 Prettier 和 Spotless / google-java-format 统一，CI 分别检查前端和后端。修改前端格式使用 `npm --prefix frontend run format`；修改 Java 格式使用 `backend/mvnw -B -f backend/pom.xml spotless:apply`。检查命令只报告问题，不修改文件；格式化命令会改写对应源码。
 当前 Prettier 对部分紧凑的 Vue 模板第一次格式化后仍可能产生差异，因此前端格式化命令执行两遍；升级工具时应重新验证这一限制。
 
+## 更新 OpenAPI
+
+启动 Docker 后，在仓库根目录运行以下命令。测试以临时 MySQL 和 Redis 启动后端，从 Spring MVC 读取 `/api/**`，补充登录表单、原始文件上传和 JSON 响应外层结构，并校验生成的 [openapi.yaml](openapi.yaml)。
+
+```sh
+backend/mvnw -B -f backend/pom.xml -Dtest=ApplicationTest#openApiMatches -Diwork.openapi.update=true test
+```
+
+去掉 `-Diwork.openapi.update=true` 可只校验并检查文件是否过期。现有后端 CI 也会执行此检查。更新后将文件与相关接口改动一起提交，或在 Apifox 的 iWork Specs 工作区选择此文件导入。文档接口仅用于测试生成。
+
 ## 完整应用 Compose 启动（打包联调）
 
 ```sh

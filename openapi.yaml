@@ -1,0 +1,3177 @@
+openapi: 3.0.1
+info:
+  title: iWork API
+  description: 写请求先调用 GET /api/auth/csrf，保留会话 Cookie，并在请求头传入返回的令牌。
+  version: 0.1.0
+servers:
+- url: http://127.0.0.1:8080
+  description: 本地开发
+paths:
+  /api/admin/model-settings:
+    get:
+      tags:
+      - 模型与预算
+      summary: GET /api/admin/model-settings
+      operationId: get_api_admin_model_settings
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.model.ModelService.Settings"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    put:
+      tags:
+      - 模型与预算
+      summary: 设置计价货币
+      operationId: put_api_admin_model_settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - currency
+              type: object
+              properties:
+                currency:
+                  type: string
+                  description: ISO 4217 货币代码
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.model.ModelService.Settings"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/admin/models:
+    get:
+      tags:
+      - 模型与预算
+      summary: GET /api/admin/models
+      operationId: get_api_admin_models
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/io.iwork.model.ModelService.Model"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    post:
+      tags:
+      - 模型与预算
+      summary: 新增模型
+      operationId: post_api_admin_models
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - baseUrl
+              - credentialRef
+              - enabled
+              - inputPrice
+              - modelName
+              - name
+              - outputPrice
+              type: object
+              properties:
+                baseUrl:
+                  maxLength: 1000
+                  type: string
+                  format: uri
+                contextWindow:
+                  maximum: 131072
+                  minimum: 8192
+                  type: integer
+                  nullable: true
+                credentialRef:
+                  pattern: "^IWORK_MODEL_KEY_[A-Z0-9_]{1,80}$"
+                  type: string
+                enabled:
+                  type: boolean
+                inputPrice:
+                  type: string
+                  description: 十进制金额字符串
+                modelName:
+                  maxLength: 200
+                  type: string
+                name:
+                  maxLength: 100
+                  type: string
+                outputPrice:
+                  type: string
+                  description: 十进制金额字符串
+              additionalProperties: false
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.model.ModelService.Model"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/admin/models/{id}:
+    put:
+      tags:
+      - 模型与预算
+      summary: 更新模型
+      operationId: put_api_admin_models_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - baseUrl
+              - credentialRef
+              - enabled
+              - inputPrice
+              - modelName
+              - name
+              - outputPrice
+              type: object
+              properties:
+                baseUrl:
+                  maxLength: 1000
+                  type: string
+                  format: uri
+                contextWindow:
+                  maximum: 131072
+                  minimum: 8192
+                  type: integer
+                  nullable: true
+                credentialRef:
+                  pattern: "^IWORK_MODEL_KEY_[A-Z0-9_]{1,80}$"
+                  type: string
+                enabled:
+                  type: boolean
+                inputPrice:
+                  type: string
+                  description: 十进制金额字符串
+                modelName:
+                  maxLength: 200
+                  type: string
+                name:
+                  maxLength: 100
+                  type: string
+                outputPrice:
+                  type: string
+                  description: 十进制金额字符串
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.model.ModelService.Model"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/admin/tasks:
+    get:
+      tags:
+      - 任务诊断
+      summary: 查询近期任务诊断摘要
+      operationId: get_api_admin_tasks
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      hasMore:
+                        type: boolean
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DiagnosticTask"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/admin/tasks/{id}/diagnostics:
+    get:
+      tags:
+      - 任务诊断
+      summary: 查看任意任务诊断
+      operationId: get_api_admin_tasks_id_diagnostics
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TaskDiagnostics"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/admin/users:
+    get:
+      tags:
+      - 用户管理
+      summary: GET /api/admin/users
+      operationId: get_api_admin_users
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.identity.IdentityService.UserPage"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    post:
+      tags:
+      - 用户管理
+      summary: 创建用户
+      operationId: post_api_admin_users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - displayName
+              - username
+              type: object
+              properties:
+                displayName:
+                  type: string
+                username:
+                  type: string
+              additionalProperties: false
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.identity.IdentityService.IssuedPassword"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/admin/users/{id}/budget:
+    get:
+      tags:
+      - 模型与预算
+      summary: "GET /api/admin/users/{id}/budget"
+      operationId: get_api_admin_users_id_budget
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.model.ModelService.Budget"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    put:
+      tags:
+      - 模型与预算
+      summary: 设置用户预算
+      operationId: put_api_admin_users_id_budget
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - limit
+              type: object
+              properties:
+                limit:
+                  type: string
+                  description: 十进制金额字符串
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.model.ModelService.Budget"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/admin/users/{id}/model-access:
+    get:
+      tags:
+      - 模型与预算
+      summary: "GET /api/admin/users/{id}/model-access"
+      operationId: get_api_admin_users_id_model_access
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    put:
+      tags:
+      - 模型与预算
+      summary: 设置用户模型权限
+      operationId: put_api_admin_users_id_model_access
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - modelIds
+              type: object
+              properties:
+                modelIds:
+                  maxItems: 100
+                  uniqueItems: true
+                  type: array
+                  items:
+                    type: string
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/admin/users/{id}/reset-password:
+    post:
+      tags:
+      - 用户管理
+      summary: "POST /api/admin/users/{id}/reset-password"
+      operationId: post_api_admin_users_id_reset_password
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.identity.IdentityService.IssuedPassword"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/admin/users/{id}/status:
+    patch:
+      tags:
+      - 用户管理
+      summary: 更新用户状态
+      operationId: patch_api_admin_users_id_status
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - enabled
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.identity.IdentityService.User"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/agents:
+    get:
+      tags:
+      - 个人智能体
+      summary: GET /api/agents
+      operationId: get_api_agents
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.agent.PersonalAgentService.Page"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    post:
+      tags:
+      - 个人智能体
+      summary: 创建个人智能体
+      operationId: post_api_agents
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - instructions
+              - modelId
+              - name
+              type: object
+              properties:
+                instructions:
+                  maxLength: 4000
+                  type: string
+                modelId:
+                  type: string
+                name:
+                  maxLength: 120
+                  type: string
+              additionalProperties: false
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.agent.PersonalAgentService.Agent"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/agents/{id}:
+    get:
+      tags:
+      - 个人智能体
+      summary: "GET /api/agents/{id}"
+      operationId: get_api_agents_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.agent.PersonalAgentService.Agent"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    put:
+      tags:
+      - 个人智能体
+      summary: 更新个人智能体
+      operationId: put_api_agents_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - instructions
+              - modelId
+              - name
+              type: object
+              properties:
+                instructions:
+                  maxLength: 4000
+                  type: string
+                modelId:
+                  type: string
+                name:
+                  maxLength: 120
+                  type: string
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.agent.PersonalAgentService.Agent"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/auth/csrf:
+    get:
+      tags:
+      - 身份认证
+      summary: 获取 CSRF 令牌
+      operationId: get_api_auth_csrf
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    required:
+                    - token
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+  /api/auth/login:
+    post:
+      tags:
+      - 身份认证
+      summary: 登录
+      operationId: post_api_auth_login
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+              - password
+              - username
+              type: object
+              properties:
+                password:
+                  type: string
+                  format: password
+                username:
+                  type: string
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.identity.Caller"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/auth/logout:
+    post:
+      tags:
+      - 身份认证
+      summary: 退出登录
+      operationId: post_api_auth_logout
+      responses:
+        "204":
+          description: No Content
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/auth/me:
+    get:
+      tags:
+      - 身份认证
+      summary: GET /api/auth/me
+      operationId: get_api_auth_me
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.identity.Caller"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/auth/password:
+    post:
+      tags:
+      - 身份认证
+      summary: POST /api/auth/password
+      operationId: post_api_auth_password
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/io.iwork.identity.AuthController.PasswordChange"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/budget:
+    get:
+      tags:
+      - 模型与预算
+      summary: GET /api/budget
+      operationId: get_api_budget
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.model.ModelService.Budget"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/conversations:
+    get:
+      tags:
+      - 会话
+      summary: GET /api/conversations
+      operationId: get_api_conversations
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.ConversationService.Page"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    post:
+      tags:
+      - 会话
+      summary: 创建会话
+      operationId: post_api_conversations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectId:
+                  type: string
+                  nullable: true
+                title:
+                  maxLength: 200
+                  type: string
+                  default: 新会话
+              additionalProperties: false
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.ConversationService.Conversation"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/conversations/{id}:
+    get:
+      tags:
+      - 会话
+      summary: "GET /api/conversations/{id}"
+      operationId: get_api_conversations_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.ConversationService.Conversation"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/conversations/{id}/documents:
+    get:
+      tags:
+      - 文档成果
+      summary: 查询会话成果版本
+      operationId: get_api_conversations_id_documents
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      hasMore:
+                        type: boolean
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DocumentVersionListItem"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/conversations/{id}/messages:
+    get:
+      tags:
+      - 会话任务
+      summary: "GET /api/conversations/{id}/messages"
+      operationId: get_api_conversations_id_messages
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.TaskService.PageIo.iwork.conversation.TaskService.Message"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/conversations/{id}/project:
+    put:
+      tags:
+      - 项目空间
+      summary: 移动会话
+      operationId: put_api_conversations_id_project
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - projectId
+              type: object
+              properties:
+                projectId:
+                  type: string
+                  description: 传 null 移出项目
+                  nullable: true
+              additionalProperties: false
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/conversations/{id}/tasks:
+    get:
+      tags:
+      - 会话任务
+      summary: "GET /api/conversations/{id}/tasks"
+      operationId: get_api_conversations_id_tasks
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: requestId
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.TaskService.TaskPage"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    post:
+      tags:
+      - 会话任务
+      summary: 提交会话任务
+      operationId: post_api_conversations_id_tasks
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - message
+              - requestId
+              type: object
+              properties:
+                agentId:
+                  type: string
+                  description: 与 modelId 二选一
+                  nullable: true
+                allowQueue:
+                  type: boolean
+                  default: false
+                baseVersionId:
+                  type: string
+                  description: 仅用于 DOCUMENT 模式
+                  nullable: true
+                materialIds:
+                  maxItems: 5
+                  uniqueItems: true
+                  type: array
+                  items:
+                    type: string
+                message:
+                  maxLength: 20000
+                  type: string
+                modelId:
+                  type: string
+                  description: 与 agentId 二选一
+                  nullable: true
+                outputMode:
+                  type: string
+                  default: TEXT
+                  enum:
+                  - TEXT
+                  - DOCUMENT
+                requestId:
+                  pattern: "^[A-Za-z0-9_-]{1,100}$"
+                  type: string
+              additionalProperties: false
+        required: true
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.TaskService.Task"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/document-versions:
+    get:
+      tags:
+      - 文档成果
+      summary: 查询个人成果版本
+      operationId: get_api_document_versions
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      hasMore:
+                        type: boolean
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DocumentVersionListItem"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/document-versions/{id}:
+    get:
+      tags:
+      - 文档成果
+      summary: 预览成果版本
+      operationId: get_api_document_versions_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    allOf:
+                    - $ref: "#/components/schemas/DocumentVersion"
+                    - type: object
+                      properties:
+                        markdown:
+                          type: string
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/document-versions/{id}/content:
+    get:
+      tags:
+      - 文档成果
+      summary: 下载 Markdown 成果
+      operationId: get_api_document_versions_id_content
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/materials:
+    get:
+      tags:
+      - 资料
+      summary: GET /api/materials
+      operationId: get_api_materials
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.artifacts.MaterialService.Page"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    post:
+      tags:
+      - 资料
+      summary: 上传原始资料
+      description: 请求体为文件原始字节，X-File-Name 为 UTF-8 URL 编码后的文件名。
+      operationId: post_api_materials
+      parameters:
+      - name: X-File-Name
+        in: header
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.artifacts.MaterialService.Material"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/materials/{id}:
+    get:
+      tags:
+      - 资料
+      summary: "GET /api/materials/{id}"
+      operationId: get_api_materials_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.artifacts.MaterialService.Material"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/materials/{id}/content:
+    get:
+      tags:
+      - 资料
+      summary: 下载原始资料
+      operationId: get_api_materials_id_content
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/models:
+    get:
+      tags:
+      - 模型与预算
+      summary: GET /api/models
+      operationId: get_api_models
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/io.iwork.model.ModelService.AvailableModel"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/projects:
+    get:
+      tags:
+      - 项目空间
+      summary: GET /api/projects
+      operationId: get_api_projects
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.TaskService.PageIo.iwork.conversation.ProjectService.Project"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    post:
+      tags:
+      - 项目空间
+      summary: 创建项目
+      operationId: post_api_projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - name
+              type: object
+              properties:
+                instructions:
+                  maxLength: 4000
+                  type: string
+                  default: ""
+                name:
+                  maxLength: 120
+                  type: string
+              additionalProperties: false
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.ProjectService.Project"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/projects/{id}:
+    get:
+      tags:
+      - 项目空间
+      summary: "GET /api/projects/{id}"
+      operationId: get_api_projects_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.ProjectService.Project"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    put:
+      tags:
+      - 项目空间
+      summary: 更新项目
+      operationId: put_api_projects_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - name
+              type: object
+              properties:
+                instructions:
+                  maxLength: 4000
+                  type: string
+                  default: ""
+                name:
+                  maxLength: 120
+                  type: string
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.ProjectService.Project"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+    delete:
+      tags:
+      - 项目空间
+      summary: "DELETE /api/projects/{id}"
+      operationId: delete_api_projects_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/projects/{id}/conversations:
+    get:
+      tags:
+      - 项目空间
+      summary: 查询项目会话
+      operationId: get_api_projects_id_conversations
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      hasMore:
+                        type: boolean
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ProjectConversation"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/projects/{id}/documents:
+    get:
+      tags:
+      - 项目空间
+      summary: 查询项目成果版本
+      operationId: get_api_projects_id_documents
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      hasMore:
+                        type: boolean
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DocumentVersionListItem"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    post:
+      tags:
+      - 项目空间
+      summary: 关联成果
+      operationId: post_api_projects_id_documents
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - versionId
+              type: object
+              properties:
+                versionId:
+                  type: string
+              additionalProperties: false
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/projects/{id}/documents/{document}:
+    delete:
+      tags:
+      - 项目空间
+      summary: "DELETE /api/projects/{id}/documents/{document}"
+      operationId: delete_api_projects_id_documents_document
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: document
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/projects/{id}/materials:
+    get:
+      tags:
+      - 项目空间
+      summary: 查询项目资料
+      operationId: get_api_projects_id_materials
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      hasMore:
+                        type: boolean
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ProjectMaterial"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+    post:
+      tags:
+      - 项目空间
+      summary: 关联资料
+      operationId: post_api_projects_id_materials
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - materialId
+              type: object
+              properties:
+                materialId:
+                  type: string
+              additionalProperties: false
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/projects/{id}/materials/{material}:
+    delete:
+      tags:
+      - 项目空间
+      summary: "DELETE /api/projects/{id}/materials/{material}"
+      operationId: delete_api_projects_id_materials_material
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: material
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/tasks/{id}:
+    get:
+      tags:
+      - 会话任务
+      summary: "GET /api/tasks/{id}"
+      operationId: get_api_tasks_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.TaskService.Task"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/tasks/{id}/calls:
+    get:
+      tags:
+      - 模型调用记录
+      summary: 查询任务模型调用记录
+      operationId: get_api_tasks_id_calls
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ModelCall"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/tasks/{id}/cancel:
+    post:
+      tags:
+      - 会话任务
+      summary: 取消任务
+      operationId: post_api_tasks_id_cancel
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pauseQueue:
+                  type: boolean
+                  default: false
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/io.iwork.conversation.TaskService.Task"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/tasks/{id}/diagnostics:
+    get:
+      tags:
+      - 任务诊断
+      summary: 查看个人任务诊断
+      operationId: get_api_tasks_id_diagnostics
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TaskDiagnostics"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/tasks/{id}/materials:
+    get:
+      tags:
+      - 会话任务
+      summary: "GET /api/tasks/{id}/materials"
+      operationId: get_api_tasks_id_materials
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/io.iwork.artifacts.MaterialService.Material"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/tasks/{id}/reply-stream:
+    get:
+      tags:
+      - 会话任务
+      summary: 订阅回复事件
+      operationId: get_api_tasks_id_reply_stream
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: SSE 流。reply 事件的 data 包含 version 和 content，done 事件表示流结束。
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/tasks/{task}/parses:
+    get:
+      tags:
+      - 资料解析
+      summary: 查询任务资料解析记录
+      operationId: get_api_tasks_task_parses
+      parameters:
+      - name: task
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MaterialParse"
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+  /api/tasks/{task}/parses/{id}:
+    get:
+      tags:
+      - 资料解析
+      summary: 分段读取解析文本
+      operationId: get_api_tasks_task_parses_id
+      parameters:
+      - name: task
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                required:
+                - data
+                - error
+                - success
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      hasMore:
+                        type: boolean
+                      nextOffset:
+                        type: integer
+                        description: 下一段的 UTF-16 偏移量
+                      text:
+                        type: string
+                  error:
+                    type: string
+                    nullable: true
+                  success:
+                    type: boolean
+                    enum:
+                    - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - session: []
+components:
+  schemas:
+    DiagnosticTask:
+      type: object
+      properties:
+        contextAt:
+          type: string
+          format: date-time
+          nullable: true
+        contextState:
+          type: string
+        conversationId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        errorCode:
+          type: string
+          nullable: true
+        executionState:
+          type: string
+        id:
+          type: string
+        modelId:
+          type: string
+        ownerId:
+          type: string
+        status:
+          type: string
+        summaryAt:
+          type: string
+          format: date-time
+          nullable: true
+        summaryState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    DocumentVersion:
+      type: object
+      properties:
+        baseVersionId:
+          type: string
+          nullable: true
+        byteSize:
+          type: integer
+          format: int64
+        id:
+          type: string
+          description: 成果 ID
+        taskId:
+          type: string
+        title:
+          type: string
+        versionId:
+          type: string
+        versionNumber:
+          type: integer
+    DocumentVersionListItem:
+      allOf:
+      - $ref: "#/components/schemas/DocumentVersion"
+      - type: object
+        properties:
+          createdAt:
+            type: string
+            format: date-time
+    MaterialParse:
+      type: object
+      properties:
+        characters:
+          type: integer
+          nullable: true
+        cleanup:
+          type: string
+        errorCode:
+          type: string
+          nullable: true
+        id:
+          type: string
+        materialId:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+    ModelCall:
+      type: object
+      properties:
+        adjustments:
+          type: array
+          items:
+            type: object
+            properties:
+              created_at:
+                type: string
+                format: date-time
+              new_amount:
+                type: number
+              previous_amount:
+                type: number
+              provider_input:
+                type: integer
+                format: int64
+                nullable: true
+              provider_output:
+                type: integer
+                format: int64
+                nullable: true
+              source:
+                type: string
+        charged:
+          type: string
+        currency:
+          type: string
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        id:
+          type: string
+        inputEstimate:
+          type: integer
+          format: int64
+        inputTokens:
+          type: integer
+          format: int64
+          nullable: true
+        observedOutputBytes:
+          type: integer
+          format: int64
+        outputTokens:
+          type: integer
+          format: int64
+          nullable: true
+        providerResponseId:
+          type: string
+          nullable: true
+        purpose:
+          type: string
+        reservation:
+          type: string
+        source:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+        usageAt:
+          type: string
+          format: date-time
+          nullable: true
+    ProjectConversation:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        title:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    ProjectMaterial:
+      type: object
+      properties:
+        byteSize:
+          type: integer
+          format: int64
+        format:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+    TaskDiagnostics:
+      type: object
+      properties:
+        calls:
+          type: array
+          items:
+            type: object
+            properties:
+              charged:
+                type: string
+              currency:
+                type: string
+              endedAt:
+                type: string
+                format: date-time
+                nullable: true
+              errorCode:
+                type: string
+                nullable: true
+              id:
+                type: string
+              inputEstimate:
+                type: integer
+                format: int64
+              inputTokens:
+                type: integer
+                format: int64
+                nullable: true
+              modelId:
+                type: string
+              observedOutputBytes:
+                type: integer
+                format: int64
+              outputTokens:
+                type: integer
+                format: int64
+                nullable: true
+              providerState:
+                type: string
+                enum:
+                - NOT_SENT
+                - COMPLETED
+                - UNKNOWN
+              purpose:
+                type: string
+              reservation:
+                type: string
+              sentAt:
+                type: string
+                format: date-time
+                nullable: true
+              source:
+                type: string
+              startedAt:
+                type: string
+                format: date-time
+              status:
+                type: string
+              usageAt:
+                type: string
+                format: date-time
+                nullable: true
+        parses:
+          type: array
+          items:
+            type: object
+            properties:
+              cleanup:
+                type: string
+              cleanupAttemptedAt:
+                type: string
+                format: date-time
+                nullable: true
+              cleanupAttempts:
+                type: integer
+              cleanupConfirmedAt:
+                type: string
+                format: date-time
+                nullable: true
+              createdAt:
+                type: string
+                format: date-time
+              errorCode:
+                type: string
+                nullable: true
+              id:
+                type: string
+              materialId:
+                type: string
+              sandboxJobId:
+                type: string
+              status:
+                type: string
+              updatedAt:
+                type: string
+                format: date-time
+        task:
+          $ref: "#/components/schemas/DiagnosticTask"
+        versions:
+          type: array
+          items:
+            type: object
+            properties:
+              createdAt:
+                type: string
+                format: date-time
+              documentId:
+                type: string
+              versionId:
+                type: string
+              versionNumber:
+                type: integer
+    io.iwork.agent.PersonalAgentService.Agent:
+      type: object
+      properties:
+        id:
+          type: string
+        instructions:
+          type: string
+        modelId:
+          type: string
+        name:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    io.iwork.agent.PersonalAgentService.Page:
+      type: object
+      properties:
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/io.iwork.agent.PersonalAgentService.Agent"
+    io.iwork.artifacts.DocumentService.PublishedVersion:
+      type: object
+      properties:
+        title:
+          type: string
+        versionId:
+          type: string
+        versionNumber:
+          type: integer
+          format: int32
+    io.iwork.artifacts.MaterialService.Material:
+      type: object
+      properties:
+        byteSize:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        format:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+    io.iwork.artifacts.MaterialService.Page:
+      type: object
+      properties:
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/io.iwork.artifacts.MaterialService.Material"
+    io.iwork.conversation.ConversationService.Conversation:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+        projectId:
+          type: string
+        title:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    io.iwork.conversation.ConversationService.Page:
+      type: object
+      properties:
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/io.iwork.conversation.ConversationService.Conversation"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+    io.iwork.conversation.ProjectService.Project:
+      type: object
+      properties:
+        id:
+          type: string
+        instructions:
+          type: string
+        name:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    io.iwork.conversation.TaskService.Message:
+      type: object
+      properties:
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        id:
+          type: integer
+          format: int64
+        publishedVersion:
+          $ref: "#/components/schemas/io.iwork.artifacts.DocumentService.PublishedVersion"
+        role:
+          type: string
+        taskId:
+          type: string
+    io.iwork.conversation.TaskService.PageIo.iwork.conversation.ProjectService.Project:
+      type: object
+      properties:
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/io.iwork.conversation.ProjectService.Project"
+    io.iwork.conversation.TaskService.PageIo.iwork.conversation.TaskService.Message:
+      type: object
+      properties:
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/io.iwork.conversation.TaskService.Message"
+    io.iwork.conversation.TaskService.PageJava.util.MapJava.lang.StringJava.lang.Object:
+      type: object
+      properties:
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: object
+    io.iwork.conversation.TaskService.Task:
+      type: object
+      properties:
+        agentId:
+          type: string
+        agentName:
+          type: string
+        baseVersionId:
+          type: string
+        conversationId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        errorCode:
+          type: string
+        executionState:
+          type: string
+        id:
+          type: string
+        modelId:
+          type: string
+        outputMode:
+          type: string
+        projectId:
+          type: string
+        projectName:
+          type: string
+        publishedVersion:
+          $ref: "#/components/schemas/io.iwork.artifacts.DocumentService.PublishedVersion"
+        requestId:
+          type: string
+        status:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    io.iwork.conversation.TaskService.TaskPage:
+      type: object
+      properties:
+        confirmedRequestId:
+          type: string
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/io.iwork.conversation.TaskService.Task"
+        queuePaused:
+          type: boolean
+        queuedCount:
+          type: integer
+          format: int32
+    io.iwork.identity.AuthController.PasswordChange:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+    io.iwork.identity.Caller:
+      type: object
+      properties:
+        authVersion:
+          type: integer
+          format: int64
+        displayName:
+          type: string
+        id:
+          type: string
+        mustChangePassword:
+          type: boolean
+        role:
+          type: string
+        username:
+          type: string
+    io.iwork.identity.IdentityService.IssuedPassword:
+      type: object
+      properties:
+        temporaryPassword:
+          type: string
+        user:
+          $ref: "#/components/schemas/io.iwork.identity.IdentityService.User"
+    io.iwork.identity.IdentityService.User:
+      type: object
+      properties:
+        displayName:
+          type: string
+        enabled:
+          type: boolean
+        id:
+          type: string
+        mustChangePassword:
+          type: boolean
+        role:
+          type: string
+        username:
+          type: string
+    io.iwork.identity.IdentityService.UserPage:
+      type: object
+      properties:
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/io.iwork.identity.IdentityService.User"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+    io.iwork.model.ModelService.AvailableModel:
+      type: object
+      properties:
+        id:
+          type: string
+        inputPrice:
+          type: string
+        name:
+          type: string
+        outputPrice:
+          type: string
+    io.iwork.model.ModelService.Budget:
+      type: object
+      properties:
+        available:
+          type: string
+        currency:
+          type: string
+        limit:
+          type: string
+        reserved:
+          type: string
+        spent:
+          type: string
+    io.iwork.model.ModelService.Model:
+      type: object
+      properties:
+        baseUrl:
+          type: string
+        contextWindow:
+          type: integer
+          format: int32
+        credentialRef:
+          type: string
+        enabled:
+          type: boolean
+        id:
+          type: string
+        inputPrice:
+          type: string
+        modelName:
+          type: string
+        name:
+          type: string
+        outputPrice:
+          type: string
+    io.iwork.model.ModelService.Settings:
+      type: object
+      properties:
+        currency:
+          type: string
+        locked:
+          type: boolean
+    org.springframework.http.codec.ServerSentEventIo.iwork.conversation.TaskService.ReplySnapshot:
+      type: object
+    org.springframework.security.web.csrf.CsrfToken:
+      type: object
+      properties:
+        headerName:
+          type: string
+        parameterName:
+          type: string
+        token:
+          type: string
+  responses:
+    ApiError:
+      description: 请求失败。error 是供客户端处理的错误码。
+      content:
+        application/json:
+          schema:
+            required:
+            - data
+            - error
+            - success
+            type: object
+            properties:
+              data:
+                type: object
+                nullable: true
+                enum:
+                - null
+              error:
+                type: string
+              success:
+                type: boolean
+                enum:
+                - false
+  securitySchemes:
+    csrf:
+      type: apiKey
+      name: X-CSRF-TOKEN
+      in: header
+    session:
+      type: apiKey
+      name: IWORK_SESSION
+      in: cookie

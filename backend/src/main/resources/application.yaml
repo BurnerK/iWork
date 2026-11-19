@@ -34,6 +34,9 @@ server:
     include-stacktrace: never
     whitelabel:
       enabled: false
+springdoc:
+  api-docs:
+    enabled: false
 management:
   endpoints:
     web:

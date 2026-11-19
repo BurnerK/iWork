@@ -10,6 +10,7 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.web.context.WebApplicationContext;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
@@ -20,7 +21,12 @@ import org.testcontainers.mysql.MySQLContainer;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
             "iwork.files-directory=target/test-files",
-            "iwork.bootstrap.password=Test-bootstrap-password"
+            "iwork.bootstrap.password=Test-bootstrap-password",
+            "springdoc.api-docs.enabled=true",
+            "springdoc.api-docs.version=openapi_3_0",
+            "springdoc.paths-to-match=/api/**",
+            "springdoc.override-with-generic-response=false",
+            "springdoc.use-fqn=true"
         })
 class ApplicationTest {
     @Container @ServiceConnection
@@ -41,6 +47,14 @@ class ApplicationTest {
     }
 
     @Autowired TestRestTemplate http;
+    @Autowired WebApplicationContext web;
+
+    @Test
+    void openApiMatches() throws Exception {
+        assertThat(http.getForEntity("/v3/api-docs.yaml", String.class).getStatusCode().value())
+                .isEqualTo(403);
+        OpenApiContract.verify(web);
+    }
 
     @Test
     @org.junit.jupiter.api.DisplayName("Readiness is public but only reports status")
