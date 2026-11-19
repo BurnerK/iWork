@@ -121,3 +121,7 @@ python3 scripts/verify-compose.py
 GitHub Actions 使用上述相同的前端检查、Maven 验证与 Compose 脚本。完整 Linux 部署、升级和数据库/文件协调恢复属于 [#25](https://github.com/BurnerK/iWork/issues/25)，本票验证不替代上线验收。
 
 更多本地开发、配置和排错说明见 [docs/development.md](docs/development.md)。
+
+## 许可证
+
+iWork 的原创代码采用 [Apache License 2.0](LICENSE)。随仓库分发的第三方图标适用其[随附许可证](frontend/public/assets/icons/LICENSE)。
