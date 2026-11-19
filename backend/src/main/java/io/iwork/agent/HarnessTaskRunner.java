@@ -7,8 +7,11 @@ import io.agentscope.core.tool.Toolkit;
 import io.agentscope.harness.agent.HarnessAgent;
 import io.iwork.conversation.TaskRunner;
 import io.iwork.model.*;
+import io.opentelemetry.api.trace.Tracer;
 import java.nio.file.Path;
 import java.time.Duration;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +23,7 @@ public class HarnessTaskRunner implements TaskRunner {
     private final io.iwork.sandbox.MaterialParsing parsing;
     private final io.iwork.artifacts.DocumentService documents;
     private final ConversationContext conversations;
+    private final ObjectProvider<Tracer> tracing;
 
     public HarnessTaskRunner(
             GovernedModel models,
@@ -27,12 +31,14 @@ public class HarnessTaskRunner implements TaskRunner {
             io.iwork.sandbox.MaterialParsing parsing,
             io.iwork.artifacts.DocumentService documents,
             ConversationContext conversations,
+            @Qualifier("studioTracer") ObjectProvider<Tracer> tracing,
             @Value("${iwork.files-directory}") Path root) {
         this.conversations = conversations;
         this.documents = documents;
         this.parsing = parsing;
         this.models = models;
         this.ledger = ledger;
+        this.tracing = tracing;
         this.workspace = root.resolve("harness").toAbsolutePath();
     }
 
@@ -63,7 +69,7 @@ public class HarnessTaskRunner implements TaskRunner {
                 input.conversationId(),
                 "agent_state",
                 io.agentscope.core.state.AgentState.fromJsonString(prepared.state().toJson()));
-        try (var agent =
+        var builder =
                 HarnessAgent.builder()
                         .name("iWork")
                         .agentId(input.taskId())
@@ -102,8 +108,10 @@ public class HarnessTaskRunner implements TaskRunner {
                         .enableAgentTracingLog(false)
                         .disableCompaction()
                         .disableToolResultEviction()
-                        .enablePendingToolRecovery(false)
-                        .build()) {
+                        .enablePendingToolRecovery(false);
+        tracing.ifAvailable(
+                tracer -> builder.middleware(new StudioTracing.Middleware(tracer, input.taskId())));
+        try (var agent = builder.build()) {
             // Harness 2.0.4 registers this bus tool even when subagents are disabled.
             agent.getToolkit().removeTool("wait_async_results");
             if (!agent.getSkillRepositories().isEmpty())

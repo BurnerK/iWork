@@ -75,6 +75,21 @@ IDEA 调试时先执行 `npm run dev:infra`，将 `.env.development` 作为后�
 
 开发进程前台运行，Ctrl+C 清理本次应用进程，Compose 依赖保留；`npm run dev:down` 停止依赖且保留数据。脚本没有清库或重置密码入口。修改依赖端口后再次运行 `dev:infra`；修改数据库密码必须同步修改数据库账号，不能仅修改配置文件。
 
+### AgentScope Studio 链路调试
+
+```bash
+docker compose -f compose.studio.yaml up -d
+IWORK_STUDIO_ENABLED=true npm run dev
+```
+
+Studio 只在本机的 [13000 端口](http://127.0.0.1:13000/home)提供页面。前端和开发依赖已启动时，可在停止原后端后使用 `IWORK_STUDIO_ENABLED=true npm run dev:backend`。IDEA 调试则在后端运行配置的环境变量中添加 `IWORK_STUDIO_ENABLED=true`。
+
+在 iWork 提交一条任务，完成后打开 Studio 的 Trace 页面。选择 `invoke_agent iWork` 链路可查看 Harness 执行、模型调用和工具调用，`gen_ai.agent.id` 对应 iWork 任务 ID。模型调用上报供应商返回且 SDK 能提取的输入与输出 token 用量。上下文摘要、沙箱清理和成果发布状态继续在 iWork 任务诊断中查询。
+
+接入默认关闭。开启时通过 OTLP/HTTP 异步发送到本机 Studio，记录调用元数据和状态码。会话、模型及工具正文和异常详情留在 iWork 的原有处理链路。Studio 数据保存在独立 Docker 卷中，`docker compose -f compose.studio.yaml down` 停止服务并保留历史。
+
+Java v2 文档中的 `StudioMessageHook` 会通过 HTTP 和 WebSocket 同步完整消息，并支持在 Studio 中等待人工输入。本项目通过 Harness 的中间件接口和独立的 OpenTelemetry tracer 向 Studio 提供 Trace。上游已停止维护独立 Studio，本地容器固定使用 1.0.9。 [Java v2 Studio](https://github.com/agentscope-ai/agentscope-java/blob/v2.0.4/docs/v2/zh/integration/ecosystem/studio.md) · [Studio OTLP 接入](https://agentscope-ai.github.io/agentscope-studio/develop/tracing.html) · [上游维护公告](https://github.com/agentscope-ai/agentscope-studio#archive-notice)
+
 ## 基础排错
 
 - `docker compose ps` 检查服务状态；`docker compose logs --tail=100 app mysql` 查看启动或迁移失败。不要复制包含私密数据的日志到公开位置。

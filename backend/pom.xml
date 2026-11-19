@@ -25,6 +25,8 @@
     <dependencies>
       <!-- Keep all MCP modules aligned; the AgentScope HTTP client is covered by a loopback test. -->
       <dependency><groupId>io.modelcontextprotocol.sdk</groupId><artifactId>mcp-bom</artifactId><version>1.1.5</version><type>pom</type><scope>import</scope></dependency>
+      <!-- AgentScope's Reactor instrumentation uses the incubating API alongside the stable OTel BOM. -->
+      <dependency><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-api-incubator</artifactId><version>${opentelemetry.version}-alpha</version></dependency>
     </dependencies>
   </dependencyManagement>
   <dependencies>
@@ -39,6 +41,8 @@
     <dependency><groupId>io.agentscope</groupId><artifactId>agentscope-core</artifactId><version>${agentscope.version}</version></dependency>
     <dependency><groupId>io.agentscope</groupId><artifactId>agentscope-harness</artifactId><version>${agentscope.version}</version></dependency>
     <dependency><groupId>io.agentscope</groupId><artifactId>agentscope-extensions-model-openai</artifactId><version>${agentscope.version}</version></dependency>
+    <dependency><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-sdk-trace</artifactId></dependency>
+    <dependency><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-exporter-otlp</artifactId></dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-webmvc-test</artifactId><scope>test</scope>
       <!-- Tests use AssertJ; unused JSONAssert brings the unmaintained android-json parser. -->
