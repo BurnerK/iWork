@@ -70,7 +70,7 @@ paths:
   /api/conversations/{id}/tasks:
     get:
       summary: 查看会话任务与待发送队列
-      description: queuedItems 按发送顺序排列，每项提供消息摘要。已移除的项不会出现在任务历史或队列中。
+      description: queuedItems 按发送顺序排列，每项提供消息摘要。已移除的项不会出现在任务历史或队列中。恢复暂停的队列时使用 queuePauseVersion。
     post:
       summary: 提交会话任务
       requestBody:
@@ -94,6 +94,10 @@ paths:
     delete:
       summary: 移除待发送消息
       description: 消息已被派发时返回 409。重复移除同一项返回 204。
+  /api/conversations/{id}/tasks/queue/resume:
+    post:
+      summary: 继续发送队列
+      description: 暂停的当前回答标为已中断。正在生成时，队首等待当前回答结束。重复请求或过期的暂停编号返回 204，且不改变当前队列状态。
   /api/tasks/{id}/cancel:
     post:
       summary: 取消任务

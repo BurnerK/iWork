@@ -218,3 +218,131 @@ test('pauses, continues and retries within one reply', async ({ page }) => {
   await expect(reply).toHaveCount(1)
   await expect(page.getByText('请写三段', { exact: true })).toHaveCount(1)
 })
+
+for (const action of ['answer', 'queue', 'both'] as const) {
+  test(`continues ${action} independently after pausing a report`, async ({ page }) => {
+    let report = { id: 'report', requestId: 'report', status: 'PAUSED', executionState: 'STOPPED' }
+    let queuePaused = true
+    let pauseVersion = 4
+    let mailStarted = false
+    const tasks = '/api/conversations/first/tasks'
+    const finishReport = () => {
+      report = { ...report, status: 'COMPLETED', executionState: 'STOPPED' }
+      if (!queuePaused) mailStarted = true
+    }
+    await page.route('**/api/**', async (route) => {
+      const { pathname, searchParams } = new URL(route.request().url())
+      let data: unknown = { items: [], hasMore: false, queuedItems: [] }
+      if (pathname === '/api/auth/me')
+        data = { id: 'alice', displayName: 'Alice', role: 'USER', mustChangePassword: false }
+      if (pathname === '/api/auth/csrf') data = { token: 'test-token' }
+      if (pathname === '/api/models') data = []
+      if (['/api/conversations/first', '/api/conversations/other'].includes(pathname))
+        data = {
+          id: pathname.split('/').at(-1),
+          title: '工作会话',
+          updatedAt: '2026-11-19T00:00:00Z',
+        }
+      if (pathname === tasks)
+        data = {
+          items: mailStarted
+            ? [
+                { id: 'mail', requestId: 'mail', status: 'RUNNING', executionState: 'RUNNING' },
+                report,
+              ]
+            : [report],
+          hasMore: false,
+          queuedItems: mailStarted ? [] : [{ id: 'mail', summary: '写封邮件' }],
+          queuePaused,
+          queuePauseVersion: pauseVersion,
+        }
+      if (pathname === '/api/conversations/first/messages')
+        data = {
+          items: [
+            { id: 1, taskId: 'report', role: 'user', content: '写份周报' },
+            { id: 2, taskId: 'report', role: 'assistant', content: '周报已写一半。' },
+            ...(report.status === 'COMPLETED'
+              ? [{ id: 3, taskId: 'report', role: 'assistant', content: '周报已写完。' }]
+              : []),
+            ...(mailStarted ? [{ id: 4, taskId: 'mail', role: 'user', content: '写封邮件' }] : []),
+          ].filter((item) => item.id > Number(searchParams.get('after'))),
+          hasMore: false,
+        }
+      if (pathname === '/api/tasks/report/continue') {
+        expect(route.request().method()).toBe('POST')
+        report = { ...report, status: 'RUNNING', executionState: 'RUNNING' }
+        data = report
+      }
+      if (pathname === `${tasks}/queue/resume`) {
+        expect(route.request().method()).toBe('POST')
+        if (action === 'queue' && pauseVersion === 4) {
+          expect(searchParams.get('pauseVersion')).toBe('4')
+          pauseVersion = 5
+        } else {
+          expect(searchParams.get('pauseVersion')).toBe(String(pauseVersion))
+          queuePaused = false
+          if (report.status === 'PAUSED') report = { ...report, status: 'INTERRUPTED' }
+          if (report.status !== 'RUNNING') mailStarted = true
+        }
+        await route.fulfill({ status: 204 })
+        return
+      }
+      if (pathname.endsWith('/reply-stream')) {
+        await route.fulfill({ contentType: 'text/event-stream', body: '' })
+        return
+      }
+      await route.fulfill({ json: { success: true, data, error: null } })
+    })
+
+    await page.goto('/#/conversations/first')
+    const answer = page.getByRole('button', { name: '继续回答', exact: true })
+    const queue = page.getByRole('button', { name: '继续发送队列', exact: true })
+    const paused = page.getByText('队列已暂停', { exact: true })
+    const mailPrompt = page.locator('.task-thread').getByText('写封邮件', { exact: true })
+    await expect(answer).toHaveAttribute('title', '继续回答')
+    await expect(answer).toHaveText('')
+    await expect(queue).toHaveAttribute('title', '继续发送队列')
+    await expect(queue).toHaveText('')
+    if (action !== 'queue') {
+      await answer.press('Enter')
+      await expect(page.getByRole('button', { name: '暂停回答', exact: true })).toBeEnabled()
+      await expect(paused).toBeVisible()
+    }
+    if (action === 'answer') {
+      finishReport()
+      await expect(page.getByText('周报已写完。')).toBeVisible()
+      await page.reload()
+      await expect(paused).toBeVisible()
+      await page.goto('/#/conversations/other')
+      await expect(paused).toBeHidden()
+      await page.goto('/#/conversations/first')
+      await expect(paused).toBeVisible()
+      await expect(mailPrompt).toBeHidden()
+      return
+    }
+
+    await queue.focus()
+    await expect(queue).toBeFocused()
+    if (action === 'queue') {
+      const stale = page.waitForResponse((response) => response.url().includes('/queue/resume'))
+      await page.keyboard.press('Space')
+      await stale
+      await expect(queue).toBeEnabled()
+      await expect(queue).toBeFocused()
+      await expect(paused).toBeVisible()
+    }
+    await page.keyboard.press('Space')
+    await expect(paused).toBeHidden()
+    await expect(page.getByRole('button', { name: '资料', exact: true })).toBeFocused()
+    if (action === 'both') {
+      await expect(page.getByRole('button', { name: '暂停回答', exact: true })).toBeEnabled()
+      await expect(mailPrompt).toBeHidden()
+      finishReport()
+      await expect(page.getByText('周报已写完。')).toBeVisible()
+    } else {
+      await expect(page.getByText('已中断', { exact: true })).toBeVisible()
+      await expect(page.getByText('周报已写一半。')).toBeVisible()
+    }
+    await expect(mailPrompt).toBeVisible()
+  })
+}

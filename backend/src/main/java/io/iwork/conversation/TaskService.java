@@ -181,6 +181,7 @@ public class TaskService implements ApplicationRunner {
             boolean hasMore,
             int queuedCount,
             boolean queuePaused,
+            long queuePauseVersion,
             List<QueuedItem> queuedItems,
             String confirmedRequestId) {}
 
@@ -232,8 +233,9 @@ public class TaskService implements ApplicationRunner {
                 status -> {
                     db.update(
                             """
-                    UPDATE conversations c SET queue_paused=TRUE
-                    WHERE EXISTS (SELECT 1 FROM tasks t WHERE t.conversation_id=c.id AND t.status='RUNNING')
+                    UPDATE conversations c SET queue_paused=TRUE,queue_pause_version=queue_pause_version+1
+                    WHERE NOT c.queue_paused
+                      AND EXISTS (SELECT 1 FROM tasks t WHERE t.conversation_id=c.id AND t.status='RUNNING')
                       AND EXISTS (SELECT 1 FROM tasks t WHERE t.conversation_id=c.id AND t.status='QUEUED')
                     """);
                     db.update(
@@ -328,9 +330,49 @@ public class TaskService implements ApplicationRunner {
                             rows.size() > 20,
                             queuedItems.size(),
                             !queuedItems.isEmpty() && queuePaused(conversationId),
+                            db.queryForObject(
+                                    "SELECT queue_pause_version FROM conversations WHERE id=?",
+                                    Long.class,
+                                    conversationId),
                             queuedItems,
                             confirmed);
                 });
+    }
+
+    public void resumeQueue(Caller caller, String conversationId, long pauseVersion) {
+        if (pauseVersion < 0) throw new ApiFailure(400, "invalid_input");
+        String interrupted =
+                tx.execute(
+                        status -> {
+                            verifyExecutionCaller(caller);
+                            conversation(caller, conversationId, true);
+                            int resumed =
+                                    db.update(
+                                            "UPDATE conversations SET queue_paused=FALSE WHERE id=? AND queue_paused AND queue_pause_version=?",
+                                            conversationId,
+                                            pauseVersion);
+                            if (resumed == 0) return null;
+                            var paused =
+                                    db.queryForList(
+                                            """
+                            SELECT t.id FROM tasks t
+                            WHERE t.conversation_id=? AND t.status='PAUSED'
+                              AND COALESCE(t.reply_task_id,t.id)=(
+                                  SELECT m.task_id FROM messages m WHERE m.conversation_id=? AND m.role='user'
+                                  ORDER BY m.id DESC LIMIT 1)
+                              AND NOT EXISTS (SELECT 1 FROM tasks successor WHERE successor.continued_from_id=t.id)
+                            """,
+                                            String.class,
+                                            conversationId,
+                                            conversationId);
+                            if (paused.isEmpty()) return null;
+                            String taskId = paused.getFirst();
+                            db.update(
+                                    "UPDATE tasks SET status='INTERRUPTED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",
+                                    taskId);
+                            return taskId;
+                        });
+        if (interrupted != null) documents.discardReplyDrafts(interrupted);
     }
 
     public void removeQueued(Caller caller, String conversationId, String taskId) {
@@ -374,7 +416,8 @@ public class TaskService implements ApplicationRunner {
     private void pauseQueue(String conversationId) {
         db.update(
                 """
-                UPDATE conversations SET queue_paused=TRUE WHERE id=?
+                UPDATE conversations SET queue_paused=TRUE,queue_pause_version=queue_pause_version+1
+                WHERE id=? AND NOT queue_paused
                 AND EXISTS (SELECT 1 FROM tasks WHERE conversation_id=? AND status='QUEUED')
                 """,
                 conversationId,

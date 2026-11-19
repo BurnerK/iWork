@@ -881,6 +881,18 @@ button[aria-disabled='true'] {
 .composer-queue p {
   margin: 0;
 }
+.queue-paused {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-inline-start: 8px;
+}
+.queue-paused button[aria-disabled='true'] {
+  color: var(--muted);
+  background: var(--border-subtle);
+  cursor: not-allowed;
+}
 .composer-queue summary {
   padding: 6px 8px;
   border-radius: var(--radius-small);

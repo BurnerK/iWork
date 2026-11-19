@@ -200,8 +200,10 @@ const taskPage = ref(0),
 const showPause = computed(() => !!runningTask.value && !pending.value && !message.value.trim())
 const queuedItems = ref<QueuedItem[]>([]),
   queuePaused = ref(false),
+  queuePauseVersion = ref(0),
   removingQueued = ref(false),
   queueError = ref(''),
+  queueResumeButton = ref<HTMLButtonElement>(),
   queueSummary = ref<HTMLElement>(),
   messageInput = ref<HTMLTextAreaElement>()
 let queueRevision = 0
@@ -211,7 +213,7 @@ const labels: Record<string, string> = {
   FAILED: '失败',
   CANCELLED: '已取消',
   PAUSED: '已暂停',
-  INTERRUPTED: '重启中断',
+  INTERRUPTED: '已中断',
 }
 const replyId = (task: Task) => task.replyTaskId ?? task.id
 const latestPrompt = computed(() => messages.value.filter((item) => item.role === 'user').at(-1))
@@ -272,6 +274,7 @@ async function load() {
       Page<Task> & {
         queuedItems: QueuedItem[]
         queuePaused: boolean
+        queuePauseVersion: number
         confirmedRequestId: string | null
       }
     >(`/api/conversations/${conversationId.value}/tasks${pendingQuery}`)
@@ -290,8 +293,15 @@ async function load() {
       ]
     }
     if (revision === queueRevision) {
+      if (
+        document.activeElement === queueResumeButton.value &&
+        (!recent.queuePaused || !recent.queuedItems.length)
+      ) {
+        materialsToggle.value?.focus()
+      }
       queuedItems.value = recent.queuedItems
       queuePaused.value = recent.queuePaused
+      queuePauseVersion.value = recent.queuePauseVersion
     }
     if (taskPage.value === 0) moreTasks.value = recent.hasMore
     const follow = !showLatest.value
@@ -343,6 +353,24 @@ async function removeQueued(item: QueuedItem, event: MouseEvent) {
     removingQueued.value = false
   }
   await load()
+}
+async function resumeQueue() {
+  if (busy.value || !queuePaused.value) return
+  busy.value = true
+  queueError.value = ''
+  try {
+    await request(
+      `/api/conversations/${conversationId.value}/tasks/queue/resume?pauseVersion=${queuePauseVersion.value}`,
+      'POST'
+    )
+    await load()
+  } catch (cause) {
+    if (disposed) return
+    if (cause instanceof ApiError && cause.status === 401) await failure(cause)
+    else queueError.value = errorMessage(cause)
+  } finally {
+    busy.value = false
+  }
 }
 async function poll() {
   if (disposed) return
@@ -616,8 +644,11 @@ onUnmounted(() => {
               <span
                 v-if="!['RUNNING', 'PAUSED', 'FAILED'].includes(turn.task.status)"
                 role="status"
-                >{{ labels[turn.task.status] || turn.task.status }}</span><small
-                v-if="turn.task.agentName"
+                >{{
+                  turn.task.errorCode === 'process_restarted'
+                    ? '重启中断'
+                    : labels[turn.task.status] || turn.task.status
+                }}</span><small v-if="turn.task.agentName"
                 >智能体：{{ turn.task.agentName }}（提交时配置）</small
               ><small v-if="turn.task.executionState === 'STOP_REQUESTED'"
                 >已请求停止，执行结束尚待确认。</small
@@ -709,7 +740,29 @@ onUnmounted(() => {
     </button>
     <div class="task-composer" @keydown.esc="closeMaterials">
       <div v-if="queuedItems.length" class="composer-queue">
-        <p v-if="queuePaused" class="hint" role="status">队列已暂停</p>
+        <div v-if="queuePaused" class="queue-paused">
+          <p class="hint" role="status">队列已暂停</p>
+          <button
+            ref="queueResumeButton"
+            type="button"
+            class="secondary"
+            aria-label="继续发送队列"
+            title="继续发送队列"
+            :aria-disabled="busy"
+            @click="resumeQueue"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4 6h9M4 12h7M4 18h9m3-10 5 4-5 4z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
         <details>
           <summary ref="queueSummary">
             <span v-if="queuedItems.length > 1">{{ queuedItems.length }} 条待发送 · </span>

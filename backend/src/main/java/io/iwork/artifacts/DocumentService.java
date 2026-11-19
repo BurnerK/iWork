@@ -298,6 +298,10 @@ public class DocumentService {
         }
     }
 
+    public void discardReplyDrafts(String taskId) {
+        attempts.through(taskId).forEach(this::cleanup);
+    }
+
     public void cleanup(String task) {
         var directory = workspaces.resolve(task);
         if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) return;

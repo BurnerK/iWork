@@ -139,6 +139,15 @@ class TaskController {
         tasks.removeQueued(caller, id, taskId);
     }
 
+    @PostMapping("/api/conversations/{id}/tasks/queue/resume")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void resumeQueue(
+            @AuthenticationPrincipal Caller caller,
+            @PathVariable String id,
+            @RequestParam long pauseVersion) {
+        tasks.resumeQueue(caller, id, pauseVersion);
+    }
+
     @GetMapping("/api/conversations/{id}/messages")
     TaskService.Page<TaskService.Message> messages(
             @AuthenticationPrincipal Caller caller,

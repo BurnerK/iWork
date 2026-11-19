@@ -98,6 +98,8 @@ public class CancellationClosureTest {
 
     static final java.util.concurrent.ConcurrentMap<String, Waiting> waiting =
             new java.util.concurrent.ConcurrentHashMap<>();
+    static final java.util.concurrent.ConcurrentMap<String, Integer> preparedRuns =
+            new java.util.concurrent.ConcurrentHashMap<>();
     static final java.util.concurrent.atomic.AtomicInteger stopped =
             new java.util.concurrent.atomic.AtomicInteger();
 
@@ -137,8 +139,11 @@ public class CancellationClosureTest {
                             .blockLast();
                     return "unreachable";
                 }
+                boolean controlled =
+                        input.message().equals("prepared") || input.message().equals("race");
+                if (controlled) preparedRuns.merge(input.taskId(), 1, Integer::sum);
                 String reply = runner.execute(input);
-                if (input.message().equals("prepared") || input.message().equals("race")) {
+                if (controlled) {
                     var pending =
                             new Waiting(input, reply, new java.util.concurrent.CountDownLatch(1));
                     waiting.put(input.taskId(), pending);
@@ -551,8 +556,10 @@ public class CancellationClosureTest {
                 .isEqualTo(bytes);
 
         String continuedConversation = conversation(admin);
+        String conversationPath = "/api/conversations/" + continuedConversation;
         String first = start(admin, continuedConversation, model, null, "prepared");
         awaitPrepared(admin, first);
+        String followUp = start(admin, continuedConversation, model, null, "prepared", true);
         assertThat(admin.request("POST", "/api/tasks/" + first + "/pause", null, true).statusCode())
                 .isEqualTo(200);
         await(admin, first, "PAUSED");
@@ -572,7 +579,6 @@ public class CancellationClosureTest {
         awaitPrepared(admin, successor);
         assertThat(admin.request("POST", "/api/test/deliver/" + first, "{}", true).statusCode())
                 .isEqualTo(409);
-        String conversationPath = "/api/conversations/" + continuedConversation;
         assertThat(
                         json.readTree(
                                         admin.request(
@@ -604,6 +610,130 @@ public class CancellationClosureTest {
                         .path("items");
         assertThat(continuedMessages).hasSize(2);
         assertThat(continuedMessages.get(1).path("content").asString()).isEqualTo("文档已准备已记录");
+        assertThat(taskStatus(admin, followUp)).isEqualTo("QUEUED");
+        String previousPause = queueResumePath(admin, conversationPath);
+        resumeQueueTwice(admin, previousPause);
+        awaitPrepared(admin, followUp);
+        String next = start(admin, continuedConversation, model, null, "prepared", true);
+        assertThat(
+                        admin.request("POST", "/api/tasks/" + followUp + "/pause", null, true)
+                                .statusCode())
+                .isEqualTo(200);
+        await(admin, followUp, "PAUSED");
+        String currentPause = queueResumePath(admin, conversationPath);
+        assertThat(currentPause).isNotEqualTo(previousPause);
+        assertThat(admin.request("POST", previousPause, null, true).statusCode()).isEqualTo(204);
+        assertThat(queueResumePath(admin, conversationPath)).isEqualTo(currentPause);
+        assertThat(taskStatus(admin, followUp)).isEqualTo("PAUSED");
+        assertThat(taskStatus(admin, next)).isEqualTo("QUEUED");
+        resumeQueueTwice(admin, currentPause);
+        awaitPrepared(admin, next);
+        admin.request("POST", "/api/test/release/" + next, "{}", true);
+        await(admin, next, "COMPLETED");
+        assertThat(preparedRuns)
+                .containsEntry(successor, 1)
+                .containsEntry(followUp, 1)
+                .containsEntry(next, 1);
+
+        verifyQueueResume(admin, model);
+    }
+
+    void verifyQueueResume(Browser admin, String model) throws Exception {
+        for (boolean continueFirst : List.of(false, true)) {
+            String cid = conversation(admin);
+            String cidPath = "/api/conversations/" + cid;
+            String original = start(admin, cid, model, null, "prepared");
+            awaitPrepared(admin, original);
+            String head = start(admin, cid, model, null, "prepared", true);
+            String tail = start(admin, cid, model, null, "prepared", true);
+            assertThat(
+                            admin.request("POST", "/api/tasks/" + original + "/pause", null, true)
+                                    .statusCode())
+                    .isEqualTo(200);
+            await(admin, original, "PAUSED");
+            String queuePath = queueResumePath(admin, cidPath);
+            String resumed = null;
+            if (continueFirst) {
+                var response =
+                        admin.request("POST", "/api/tasks/" + original + "/continue", null, true);
+                assertThat(response.statusCode()).isEqualTo(202);
+                resumed = json.readTree(response.body()).path("id").asString();
+                awaitPrepared(admin, resumed);
+            }
+            resumeQueueTwice(admin, queuePath);
+            if (continueFirst) {
+                assertThat(taskStatus(admin, resumed)).isEqualTo("RUNNING");
+                assertThat(taskStatus(admin, head)).isEqualTo("QUEUED");
+                admin.request("POST", "/api/test/release/" + resumed, "{}", true);
+                await(admin, resumed, "COMPLETED");
+            } else {
+                assertThat(taskStatus(admin, original)).isEqualTo("INTERRUPTED");
+                assertThat(
+                                admin.request(
+                                                "POST",
+                                                "/api/tasks/" + original + "/continue",
+                                                null,
+                                                true)
+                                        .statusCode())
+                        .isEqualTo(409);
+            }
+            awaitPrepared(admin, head);
+            assertThat(taskStatus(admin, tail)).isEqualTo("QUEUED");
+            assertThat(
+                            admin.request("POST", "/api/test/deliver/" + original, "{}", true)
+                                    .statusCode())
+                    .isEqualTo(409);
+            admin.request("POST", "/api/test/release/" + head, "{}", true);
+            await(admin, head, "COMPLETED");
+            awaitPrepared(admin, tail);
+            admin.request("POST", "/api/test/release/" + tail, "{}", true);
+            await(admin, tail, "COMPLETED");
+            assertThat(preparedRuns).containsEntry(head, 1).containsEntry(tail, 1);
+            if (continueFirst) assertThat(preparedRuns).containsEntry(resumed, 1);
+            var messages =
+                    json.readTree(admin.request("GET", cidPath + "/messages", null, false).body())
+                            .path("items");
+            assertThat(messages).hasSize(6);
+            assertThat(messages.get(1).path("content").asString())
+                    .isEqualTo(continueFirst ? "文档已准备已记录" : "文档已准备");
+            assertThat(messages.get(2).path("taskId").asString()).isEqualTo(head);
+            assertThat(messages.get(4).path("taskId").asString()).isEqualTo(tail);
+            assertThat(
+                            json.readTree(
+                                            admin.request(
+                                                            "GET",
+                                                            cidPath + "/documents",
+                                                            null,
+                                                            false)
+                                                    .body())
+                                    .path("items"))
+                    .hasSize(continueFirst ? 3 : 2);
+        }
+    }
+
+    String taskStatus(Browser browser, String id) throws Exception {
+        return json.readTree(browser.request("GET", "/api/tasks/" + id, null, false).body())
+                .path("status")
+                .asString();
+    }
+
+    String queueResumePath(Browser browser, String conversationPath) throws Exception {
+        var tasks =
+                json.readTree(
+                        browser.request("GET", conversationPath + "/tasks", null, false).body());
+        assertThat(tasks.path("queuePaused").asBoolean()).isTrue();
+        return conversationPath
+                + "/tasks/queue/resume?pauseVersion="
+                + tasks.path("queuePauseVersion").asLong();
+    }
+
+    void resumeQueueTwice(Browser browser, String path) throws Exception {
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var one = pool.submit(() -> browser.request("POST", path, null, true));
+            var two = pool.submit(() -> browser.request("POST", path, null, true));
+            assertThat(one.get().statusCode()).isEqualTo(204);
+            assertThat(two.get().statusCode()).isEqualTo(204);
+        }
     }
 
     String conversation(Browser browser) throws Exception {
@@ -614,6 +744,17 @@ public class CancellationClosureTest {
 
     String start(Browser browser, String cid, String model, String base, String message)
             throws Exception {
+        return start(browser, cid, model, base, message, false);
+    }
+
+    String start(
+            Browser browser,
+            String cid,
+            String model,
+            String base,
+            String message,
+            boolean allowQueue)
+            throws Exception {
         var input =
                 new HashMap<String, Object>(
                         Map.of(
@@ -623,6 +764,8 @@ public class CancellationClosureTest {
                                 model,
                                 "message",
                                 message,
+                                "allowQueue",
+                                allowQueue,
                                 "outputMode",
                                 "DOCUMENT"));
         if (base != null) input.put("baseVersionId", base);

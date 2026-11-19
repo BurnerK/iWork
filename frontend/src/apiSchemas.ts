@@ -127,6 +127,7 @@ const page = <T extends z.ZodType>(item: T) => z.object({ items: z.array(item), 
 const taskPage = page(task).extend({
   queuedCount: number.int().nonnegative().default(0),
   queuePaused: flag.default(false),
+  queuePauseVersion: number.int().nonnegative().default(0),
   queuedItems: z.array(id.extend({ summary: text })).default([]),
   confirmedRequestId: nullableText.default(null),
 })

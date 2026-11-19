@@ -1336,7 +1336,7 @@ paths:
       tags:
       - 会话任务
       summary: 查看会话任务与待发送队列
-      description: queuedItems 按发送顺序排列，每项提供消息摘要。已移除的项不会出现在任务历史或队列中。
+      description: queuedItems 按发送顺序排列，每项提供消息摘要。已移除的项不会出现在任务历史或队列中。恢复暂停的队列时使用 queuePauseVersion。
       operationId: get_api_conversations_id_tasks
       parameters:
       - name: id
@@ -1457,6 +1457,33 @@ paths:
                     type: boolean
                     enum:
                     - true
+        default:
+          $ref: "#/components/responses/ApiError"
+      security:
+      - csrf: []
+        session: []
+  /api/conversations/{id}/tasks/queue/resume:
+    post:
+      tags:
+      - 会话任务
+      summary: 继续发送队列
+      description: 暂停的当前回答标为已中断。正在生成时，队首等待当前回答结束。重复请求或过期的暂停编号返回 204，且不改变当前队列状态。
+      operationId: post_api_conversations_id_tasks_queue_resume
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: pauseVersion
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "204":
+          description: No Content
         default:
           $ref: "#/components/responses/ApiError"
       security:
@@ -3126,6 +3153,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/io.iwork.conversation.TaskService.Task"
+        queuePauseVersion:
+          type: integer
+          format: int64
         queuePaused:
           type: boolean
         queuedCount:
