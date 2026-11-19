@@ -1,0 +1,14 @@
+services:
+  app:
+    build: !reset null
+    image: ${IWORK_APP_IMAGE:?Set the approved app image}
+  sandbox-manager:
+    build: !reset null
+    image: ${IWORK_MANAGER_IMAGE:?Set the approved sandbox manager image}
+    environment:
+      IWORK_SANDBOX_IMAGE: ${IWORK_PARSER_IMAGE:?Set the approved text parser image}
+  sandbox-watchdog:
+    image: ${IWORK_MANAGER_IMAGE:?Set the approved sandbox manager image}
+  text-parser-image:
+    build: !reset null
+    image: ${IWORK_PARSER_IMAGE:?Set the approved text parser image}

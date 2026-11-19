@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise a disposable Compose project; never stop an existing iWork instance."""
+import base64
 import http.cookiejar
 import json
 import os
@@ -12,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 import urllib.parse
+import uuid
 
 root = Path(__file__).resolve().parents[1]
 scratch = Path(tempfile.gettempdir()) / "codex"
@@ -34,9 +36,24 @@ command = ["docker", "compose", "--env-file", str(env_file), "-f", str(root / "c
            "-p", work.name]
 
 
-def compose(*args, capture=False, input=None):
-    return subprocess.run(command + list(args), env=env, cwd=root, check=True,
+def compose(*args, capture=False, input=None, release_images=None):
+    overrides = ["-f", str(root / "compose.release.yaml")] if release_images else []
+    return subprocess.run(command + overrides + list(args), env=env | (release_images or {}), cwd=root, check=True,
                           text=True, input=input, stdout=subprocess.PIPE if capture else None).stdout
+
+
+def verify_release_config():
+    images = {
+        "IWORK_APP_IMAGE": "example.invalid/iwork/app@sha256:" + "a" * 64,
+        "IWORK_MANAGER_IMAGE": "example.invalid/iwork/manager@sha256:" + "b" * 64,
+        "IWORK_PARSER_IMAGE": "example.invalid/iwork/parser@sha256:" + "c" * 64,
+    }
+    services = json.loads(compose("config", "--format", "json", capture=True, release_images=images))["services"]
+    for service, setting in {"app": "IWORK_APP_IMAGE", "sandbox-manager": "IWORK_MANAGER_IMAGE",
+                             "sandbox-watchdog": "IWORK_MANAGER_IMAGE", "text-parser-image": "IWORK_PARSER_IMAGE"}.items():
+        assert services[service]["image"] == images[setting]
+        assert "build" not in services[service]
+    assert services["sandbox-manager"]["environment"]["IWORK_SANDBOX_IMAGE"] == images["IWORK_PARSER_IMAGE"]
 
 
 def request(path):
@@ -75,6 +92,33 @@ def sandbox_health():
             pass
         time.sleep(1)
     raise AssertionError("Sandbox manager and watchdog did not become ready")
+
+
+def verify_release_parser():
+    token = secrets.token_hex(32)
+    job_id = str(uuid.uuid4())
+    endpoint = "http://127.0.0.1:8090/tasks"
+
+    def sandbox_request(*args, body=None):
+        return json.loads(compose(
+            "exec", "-T", "sandbox-manager", "sh", "-c",
+            'token="$1"; shift; exec curl -fsS -H "Authorization: Bearer $(cat /run/secrets/sandbox_key)" '
+            '-H "X-Task-Token: $token" -H "Content-Type: application/json" "$@"',
+            "sh", token, *args, capture=True, input=body))
+
+    body = {"id": job_id, "taskId": str(uuid.uuid4()), "materialId": str(uuid.uuid4()),
+            "operation": "parse_text", "content": base64.b64encode(b"release parser\r\n").decode()}
+    sandbox_request("--data-binary", "@-", endpoint, body=json.dumps(body))
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        result = sandbox_request(f"{endpoint}/{job_id}")
+        if result["status"] == "COMPLETED" and result["cleanup"] == "CONFIRMED":
+            assert result["text"] == "release parser\n"
+            return
+        if result["status"] not in ("RUNNING", "COMPLETED"):
+            break
+        time.sleep(0.2)
+    raise AssertionError("Release parser did not produce the expected text and confirm cleanup")
 
 
 class Browser:
@@ -120,6 +164,7 @@ def migration_count():
 
 
 print(f"Isolated project: {work.name}; evidence directory: {work}", flush=True)
+verify_release_config()
 try:
     compose("build")
     compose("run", "--rm", "--no-deps", "--user", "0", "--cap-add", "CHOWN", "--entrypoint", "chown",
@@ -154,9 +199,23 @@ try:
     assert code == 201
     conversation_path = "/api/conversations/" + conversation["id"]
     compose("exec", "-T", "app", "sh", "-c", 'printf retained > /data/files/smoke-marker')
-    compose("up", "-d", "--force-recreate")
+    parser_init = compose("ps", "-a", "-q", "text-parser-image", capture=True).strip()
+    parser_image = subprocess.check_output(
+        ["docker", "inspect", "--format", "{{.Config.Image}}", parser_init], text=True).strip()
+    parser_digests = json.loads(subprocess.check_output(
+        ["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", parser_image], text=True))
+    parser_ref = parser_digests[0] if parser_digests else parser_image
+    if "/" not in parser_ref:
+        parser_ref = f"docker.io/library/{parser_ref}"
+    compose("up", "-d", "--force-recreate", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "180",
+            release_images={
+        "IWORK_APP_IMAGE": app_info["Config"]["Image"],
+        "IWORK_MANAGER_IMAGE": manager_info["Config"]["Image"],
+        "IWORK_PARSER_IMAGE": parser_ref,
+    })
     health("/actuator/health/readiness", 200, "UP")
     sandbox_health()
+    verify_release_parser()
     assert migration_count() == "1"
     assert compose("exec", "-T", "app", "cat", "/data/files/smoke-marker", capture=True) == "retained"
     assert browser.request("/api/auth/me")[0] == 200

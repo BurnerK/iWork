@@ -23,7 +23,7 @@ public final class SandboxControl {
                     .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                     .build();
     static final int LIMIT = 2 * 1024 * 1024, TTL = 60;
-    static final String INSTANCE = required("IWORK_SANDBOX_INSTANCE"),
+    static final String INSTANCE = required("IWORK_SANDBOX_INSTANCE", "[a-zA-Z0-9_.:-]{1,160}"),
             LABEL = "iwork.sandbox=" + INSTANCE;
     static final Path HEALTH = Path.of("/watchdog/health.json"), REGISTRY = Path.of("/registry");
     static final Map<String, Job> jobs = new ConcurrentHashMap<>();
@@ -31,9 +31,9 @@ public final class SandboxControl {
     static String key;
     static volatile boolean ready;
 
-    static String required(String name) {
+    static String required(String name, String pattern) {
         var value = System.getenv(name);
-        if (value == null || !value.matches("[a-zA-Z0-9_.:-]{1,160}"))
+        if (value == null || !value.matches(pattern))
             throw new IllegalStateException("Missing or invalid " + name);
         return value;
     }
@@ -357,7 +357,9 @@ public final class SandboxControl {
                                     "--log-driver",
                                     "none",
                                     "-i",
-                                    required("IWORK_SANDBOX_IMAGE"));
+                                    required(
+                                            "IWORK_SANDBOX_IMAGE",
+                                            "[a-zA-Z0-9][a-zA-Z0-9_.:/@-]{0,511}"));
                     job.save();
                     Thread.ofVirtual().start(() -> job.execute(source));
                     return job;

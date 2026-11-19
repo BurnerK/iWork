@@ -14,12 +14,39 @@
 
 根 `compose.yaml` 运行 app、MySQL、登录 Redis、管理服务、看门狗和构建解析器镜像的初始化任务。仅 app 绑定回环HTTP端口；生产保持Secure Cookie并在前置HTTPS代理发布。管理服务不发布宿主端口，主应用无Docker socket；管理器和看门狗有高权限，须独立保护。
 
-1. 在授权路径准备 `.env`（0600）和沙箱 key。先 `docker compose --env-file .env config --quiet` 校验，禁止把含展开凭据的完整 config 贴入日志。为 app 写单独的私有 override/env_file 传入实际模型键；不把模型凭据传给管理器、看门狗或前端。
-2. 构建或加载明确摘要的发布镜像。核对实际 core/harness/model-openai 都为 2.0.4，默认工具仍关闭、生产JAR没有测试Fixture。初始化文件目录为UID/GID10001可读写；仅初始化步骤临时授予CHOWN，应用保持非root/read_only/cap_drop。
+1. 参考 [`.env.example`](../.env.example) 在授权路径准备发布环境文件（0600），配置数据库密码、专用数据目录及沙箱实例名。首次启动空数据库前设置 `IWORK_BOOTSTRAP_PASSWORD`，管理员登录并改密后移除。在同一文件将 `IWORK_APP_IMAGE`、`IWORK_MANAGER_IMAGE`、`IWORK_PARSER_IMAGE` 分别设为已批准的 `仓库/镜像@sha256:摘要`。使用 `compose.release.yaml` 禁用源码构建，管理服务与看门狗共用同一管理镜像，管理服务按同一解析器引用启动工作容器。首次部署用 `node scripts/sandbox-key.mjs /secure/iwork-secrets/sandbox.key` 在 0700 目录生成只读 key，并设置 `IWORK_SANDBOX_KEY_FILE=/secure/iwork-secrets/sandbox.key`。常规升级沿用该实例的 key。确保 app 的 UID 10001 与管理服务可读。所有 Compose 命令使用同一组配置文件、环境文件和项目名。
+2. 在目标机器预拉取已确认的发布镜像，再核对镜像清单和实际构建产物。确认 core、harness、model-openai 都为 2.0.4、默认工具关闭、生产 JAR 无测试 Fixture。首次启动前在宿主上创建 `IWORK_DATA_DIR/files`，给 UID/GID 10001 读写权限。应用保持非 root、只读根文件系统和无额外 capabilities。
 3. 升级前阻止外部新请求并停止 app，停止其他本地/定时写入进程。保留看门狗与管理服务直至本实例处理容器实际不存在；核对诊断与Docker标签。维护期运行任务按中断处理，不能自动恢复执行。
 4. 按下节做协调备份，保留旧镜像摘要及备份校验和，再部署新镜像。不能仅凭同路径覆盖JAR宣称升级完成。
-5. 启动后查看readiness、迁移与受限诊断；真实登录查回用户、任务、历史、原文与成果，下载对比。显式新任务才继续工作，旧requestId不得产生新调用。Redis不兼容时重新登录，不恢复旧Session作为业务恢复依据。
-6. 迁移失败保持停止并定位；不得修改已应用迁移、自动clean、忽略校验或对未知数据库baseline。若新版本已写数据，不直接回退旧JAR：在独立恢复环境恢复整套旧备份并核对，再由部署者决定切换。
+5. 启动后查看 readiness、迁移与受限诊断。真实登录查回用户、任务、历史、原文与成果，下载对比。运行中的旧任务应显示中断，旧 requestId 不得产生新调用。通过新请求验证会话上下文仍可使用。Redis 不兼容时重新登录，业务数据由 MySQL 和文件备份恢复。
+6. 若启动时迁移失败，执行 `iwork_release stop app`，保持应用停止并定位。不得修改已应用迁移、自动 clean、忽略校验或对未知数据库 baseline。若新版本已写数据，在独立恢复环境恢复整套旧备份并核对，再由部署者决定是否切换。
+
+用私有 Compose 文件 `/secure/iwork-model.compose.yaml` 将模型密钥仅传给 app。对应的 `/secure/iwork-model.env` 权限设为 0600，由部署者按模型配置所引用的 `IWORK_MODEL_KEY_*` 变量名填充。
+
+```yaml
+services:
+  app:
+    env_file: /secure/iwork-model.env
+```
+
+从发布版仓库根目录执行。Compose 优先使用当前 shell 已导出的变量，请在没有导出其他实例 `IWORK_*` 变量的部署 shell 操作。可在维护窗口前预拉取镜像。
+
+```sh
+iwork_release() {
+  docker compose --env-file /secure/iwork.env -p iwork \
+    -f compose.yaml -f compose.release.yaml -f /secure/iwork-model.compose.yaml "$@"
+}
+iwork_release config --quiet
+# 只记录镜像引用，避免输出包含已展开凭据的完整配置。
+iwork_release config --images
+iwork_release pull
+```
+
+升级时在反向代理拦截新请求，执行 `iwork_release stop app` 并按下节完成协调备份。首装或升级备份完成后启动。
+
+```sh
+iwork_release up -d --no-build --pull never --wait --wait-timeout 180
+```
 
 ## 可执行协调备份与恢复
 
@@ -27,25 +54,54 @@
 
 ```sh
 # 示例路径必须替换为授权实例；勿复制测试凭据。
-python3 scripts/backup.py backup --compose compose.yaml --env-file /secure/iwork.env \
+python3 scripts/backup.py backup --compose compose.yaml --compose compose.release.yaml \
+  --compose /secure/iwork-model.compose.yaml --env-file /secure/iwork.env \
   --project iwork --files /srv/iwork/files --backup /secure/backups/iwork-RELEASE \
   --writers-stopped
 ```
 
 备份包含MySQL完整业务schema（含上下文/摘要/调用账本/项目引用）、文件目录和校验manifest；先检查全部原文/正式版本的DB索引、大小与SHA256，写入单次逻辑数据库快照和tar，再核对。目录已存在则拒绝覆盖。失败目录没有完成manifest，不作为可用备份。备份默认0700/0600，不含模型密钥或登录Redis；凭据与发布配置由部署者另行受控备份。
 
-只在**独立且空**的恢复项目中先启动 mysql，保持 app 停止。配置独立数据库卷、Redis、文件目录、沙箱实例标签/注册卷和服务key，避免接触源实例。新目标MySQL账号密码独立配置，恢复SQL只含业务库，不覆盖服务器账号。
+只在**独立且空**的恢复项目中先启动 mysql，保持 app 停止。恢复环境文件单独设置 `IWORK_DATA_DIR=/srv/iwork-restore`、HTTP 端口、沙箱实例名和实际 key 路径，使用独立项目及其 Redis 和沙箱卷。先用来自备份版本的镜像验证恢复。新目标 MySQL 密码独立配置，恢复 SQL 只含业务库。启动前核对 Compose 实际解析的 MySQL 和文件挂载，确认路径与源实例分离。以下命令只输出挂载、沙箱实例名和 key 路径。
 
 ```sh
-python3 scripts/backup.py restore --compose compose.restore.yaml --env-file /secure/restore.env \
+iwork_restore() {
+  docker compose --env-file /secure/restore.env -p iwork-restore \
+    -f compose.yaml -f compose.release.yaml "$@"
+}
+iwork_restore config --format json | python3 -c '
+import json, sys
+from pathlib import Path
+config = json.load(sys.stdin)
+services = config["services"]
+for service, target in [("mysql", "/var/lib/mysql"), ("app", "/data/files")]:
+    source = next(mount["source"] for mount in services[service]["volumes"]
+                  if mount["type"] == "bind" and mount["target"] == target)
+    print(service, Path(source).resolve())
+print("sandbox instance", services["sandbox-manager"]["environment"]["IWORK_SANDBOX_INSTANCE"])
+print("sandbox key path", Path(config["secrets"]["sandbox_key"]["file"]).resolve())
+'
+# 核对 /srv/iwork-restore/mysql、/srv/iwork-restore/files、专用实例名和 key 路径后再启动。
+iwork_restore up -d --wait mysql
+# 先创建空的 /srv/iwork-restore/files，并确保执行者可读写。
+python3 scripts/backup.py restore --compose compose.yaml --compose compose.release.yaml \
+  --env-file /secure/restore.env \
   --project iwork-restore --files /srv/iwork-restore/files --backup /secure/backups/iwork-RELEASE \
   --writers-stopped
-python3 scripts/backup.py verify --compose compose.restore.yaml --env-file /secure/restore.env \
+python3 scripts/backup.py verify --compose compose.yaml --compose compose.release.yaml \
+  --env-file /secure/restore.env \
   --project iwork-restore --files /srv/iwork-restore/files --backup /secure/backups/iwork-RELEASE \
   --writers-stopped
 ```
 
-脚本校验SQL/tar哈希，拒绝原项目、非空数据库/文件目录、符号链接/特殊文件/路径逃逸；不执行自动删除。恢复失败保留目标离线和部分状态，重新演练须另选空目标。备份是部署者控制的可信SQL，不从不可信上传附件恢复。恢复文件由执行者拥有；启动应用前按目标Linux身份把文件目录设为10001:10001，保留仅必要权限。行数与所有正式文件SHA核对通过后仍须做登录、页面、下载和显式续改业务验收；verify不能替代这些步骤。
+脚本校验 SQL/tar 哈希，拒绝原项目、非空数据库/文件目录、符号链接、特殊文件和路径逃逸。恢复失败时目标保持离线并保留现场，重新演练须另选空目标。恢复文件由执行者拥有。核对通过后递归将恢复文件目录的属主设为 10001:10001，再用恢复实例自己的模型配置启动全栈。
+
+```sh
+iwork_restore -f /secure/iwork-restore-model.compose.yaml pull
+iwork_restore -f /secure/iwork-restore-model.compose.yaml up -d --no-build --pull never --wait --wait-timeout 180
+```
+
+通过页面登录、找回并下载原文和旧版本、显式提交续改，核对快照、用量和正式版本。
 
 ## 仍需目标环境记录
 
