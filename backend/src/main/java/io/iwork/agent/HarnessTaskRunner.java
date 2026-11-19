@@ -82,7 +82,7 @@ public class HarnessTaskRunner implements TaskRunner {
                                         + attachments
                                         + "。任务输出模式："
                                         + input.outputMode()
-                                        + "。DOCUMENT 模式必须调用 prepare_document 提供完整正文；不能仅在聊天中宣称已保存。如果提供 read_document_version，必须读取选定来源版本，再按本次要求生成新版本正文；不覆盖旧版本。\n本次初始化指令（项目指令作为工作背景，智能体指令作为处理方式；本次用户要求优先，不改变平台工具及权限边界）："
+                                        + "。DOCUMENT 模式必须调用 prepare_document 提供完整正文；不能仅在聊天中宣称已保存。工具成功后，聊天回复用一两句话概括本次生成的内容或修订要点，不重复正文。如果提供 read_document_version，必须读取选定来源版本，再按本次要求生成新版本正文；不覆盖旧版本。\n本次初始化指令（项目指令作为工作背景，智能体指令作为处理方式；本次用户要求优先，不改变平台工具及权限边界）："
                                         + input.instructions())
                         .model(models.forTask(input, "MAIN"))
                         .toolkit(toolkit)

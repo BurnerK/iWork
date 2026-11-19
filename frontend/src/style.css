@@ -414,7 +414,7 @@ dialog::backdrop {
 .workspace-rail > a:is(.router-link-active, .workspace-link-current) {
   background: var(--border-light);
 }
-button:hover:enabled,
+button:hover:enabled:not([aria-disabled='true']),
 select:hover:enabled,
 input:enabled::file-selector-button:hover,
 summary:hover,
@@ -800,15 +800,30 @@ summary {
   .task-composer {
     max-height: 65%;
   }
+  .document-drawer {
+    width: 100%;
+    border: 0;
+  }
 }
 .artifact-card {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-top: 12px;
+  padding: 12px 16px;
   border: 1px solid var(--hairline);
-  text-decoration: none;
+  border-radius: var(--radius-card);
+  color: var(--ink);
+  background: var(--canvas);
+  text-align: left;
+}
+button[aria-disabled='true'] {
+  color: var(--ink);
+  background: var(--snow);
+  cursor: default;
 }
 .artifact-card img {
+  flex: none;
   width: 24px;
   height: 24px;
 }
@@ -820,11 +835,6 @@ summary {
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px 16px;
-}
-.task-status .artifact-card {
-  flex-basis: 100%;
-  justify-content: start;
-  text-align: left;
 }
 #task-message {
   min-height: 56px;
@@ -855,17 +865,6 @@ summary {
   overflow: hidden;
   clip-path: inset(50%);
 }
-.task-status .artifact-card {
-  color: var(--ink);
-  background: var(--canvas);
-  border-radius: var(--radius-card);
-  padding: 12px 16px;
-}
-.task-status .artifact-card:disabled {
-  color: var(--ink);
-  background: var(--border-subtle);
-}
-
 .composer-toolbar {
   display: flex;
   align-items: center;

@@ -11,6 +11,7 @@ import java.security.*;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -45,6 +46,32 @@ public class DocumentService {
             String title,
             long byteSize,
             String sha256) {}
+
+    public record PublishedVersion(String versionId, String title, int versionNumber) {}
+
+    public Map<String, PublishedVersion> publishedVersions(Caller caller, List<String> taskIds) {
+        if (taskIds.isEmpty()) return Map.of();
+        return new NamedParameterJdbcTemplate(db)
+                .query(
+                        """
+                        SELECT v.task_id, v.id, v.title, v.version_number
+                        FROM document_versions v JOIN documents d ON d.id=v.document_id
+                        WHERE d.owner_id=:owner AND v.task_id IN (:tasks)
+                        """,
+                        Map.of("owner", caller.id(), "tasks", taskIds),
+                        rows -> {
+                            var versions = new HashMap<String, PublishedVersion>();
+                            while (rows.next()) {
+                                versions.put(
+                                        rows.getString("task_id"),
+                                        new PublishedVersion(
+                                                rows.getString("id"),
+                                                rows.getString("title"),
+                                                rows.getInt("version_number")));
+                            }
+                            return versions;
+                        });
+    }
 
     private List<Draft> drafts(String task) {
         return db.query(

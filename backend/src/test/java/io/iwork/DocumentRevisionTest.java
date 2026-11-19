@@ -628,6 +628,21 @@ class DocumentRevisionTest {
                                         .body())
                         .path("items");
         assertThat(oldTasks.toString()).contains(id, "publishedVersion");
+        var originalMessages =
+                json.readTree(
+                                admin.request(
+                                                "GET",
+                                                "/api/conversations/" + first + "/messages",
+                                                null,
+                                                false)
+                                        .body())
+                        .path("items");
+        assertThat(originalMessages.get(0).path("publishedVersion").isNull()).isTrue();
+        var replyVersion = originalMessages.get(1).path("publishedVersion");
+        assertThat(replyVersion.path("versionId").asString()).isEqualTo(id);
+        assertThat(replyVersion.path("title").asString())
+                .isEqualTo(version.path("title").asString());
+        assertThat(replyVersion.path("versionNumber").asInt()).isEqualTo(1);
 
         String workerId = created.path("user").path("id").asString();
         admin.request(

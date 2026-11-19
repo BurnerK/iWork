@@ -29,7 +29,13 @@ type Task = {
   errorCode: string | null
 }
 type PublishedVersion = { versionId: string; title: string; versionNumber: number }
-type Message = { id: number; taskId: string; role: string; content: string }
+type Message = {
+  id: number
+  taskId: string
+  role: string
+  content: string
+  publishedVersion?: PublishedVersion | null
+}
 type Page<T> = { items: T[]; hasMore: boolean }
 const models = ref<{ id: string; name: string }[]>([]),
   modelId = ref(''),
@@ -198,15 +204,20 @@ const labels: Record<string, string> = {
   INTERRUPTED: '重启中断',
 }
 const turns = computed(() => {
-  const groups = new Map<string, { messages: Message[]; task?: Task }>()
+  const groups = new Map<
+    string,
+    { messages: Message[]; task?: Task; publishedVersion?: PublishedVersion | null }
+  >()
   for (const message of messages.value) {
     const group = groups.get(message.taskId) ?? { messages: [] }
     group.messages.push(message)
+    group.publishedVersion ??= message.publishedVersion
     groups.set(message.taskId, group)
   }
   for (const task of [...tasks.value].reverse()) {
     const group = groups.get(task.id) ?? { messages: [] }
     group.task = task
+    group.publishedVersion ??= task.publishedVersion
     groups.set(task.id, group)
   }
   return groups
@@ -430,7 +441,7 @@ onUnmounted(() => {
         :disabled="busy || !!pending || active"
         @select-version="selectVersion"
         :revision="tasks.map((task) => task.id + task.status).join(',')"
-        v-slot="{ preview, previewing }"
+        v-slot="{ preview, previewing, previewError }"
       >
         <div v-for="[taskId, turn] in turns" :key="taskId" class="task-turn">
           <ol class="messages">
@@ -445,6 +456,7 @@ onUnmounted(() => {
             <li
               v-if="
                 turn.task?.status === 'RUNNING' ||
+                turn.publishedVersion ||
                 turn.messages.some((item) => item.role === 'assistant') ||
                 (turn.task?.status === 'COMPLETED' && liveReply?.taskId === taskId)
               "
@@ -466,6 +478,24 @@ onUnmounted(() => {
                 "
                 :content="liveReply.content"
               />
+              <button
+                v-if="turn.publishedVersion"
+                type="button"
+                class="artifact-card"
+                aria-haspopup="dialog"
+                :aria-disabled="previewing"
+                @click="preview(turn.publishedVersion, true)"
+              >
+                <img src="/assets/icons/file-text.svg" alt="" />
+                {{ turn.publishedVersion.title }} · 版本
+                {{ turn.publishedVersion.versionNumber }}
+              </button>
+              <p
+                v-if="previewError && previewError.versionId === turn.publishedVersion?.versionId"
+                role="alert"
+              >
+                {{ previewError.message }}
+              </p>
             </li>
           </ol>
           <div v-if="turn.task" class="task-status" aria-label="任务状态">
@@ -520,17 +550,6 @@ onUnmounted(() => {
                 运行诊断
               </button>
             </details>
-            <button
-              v-if="turn.task?.publishedVersion"
-              type="button"
-              class="artifact-card"
-              :disabled="previewing"
-              @click="preview(turn.task.publishedVersion)"
-            >
-              <img :src="'/assets/icons/file-text.svg'" alt="" />
-              {{ turn.task.publishedVersion.title }} · 版本
-              {{ turn.task.publishedVersion.versionNumber }}
-            </button>
           </div>
         </div>
       </DocumentPanel>

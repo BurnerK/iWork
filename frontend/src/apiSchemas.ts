@@ -33,7 +33,13 @@ const task = id.extend({
   errorCode: nullableText.optional(),
   publishedVersion: publishedVersion.nullable().optional(),
 })
-const message = z.object({ id: number, taskId: text, role: text, content: text })
+const message = z.object({
+  id: number,
+  taskId: text,
+  role: text,
+  content: text,
+  publishedVersion: publishedVersion.nullable().optional(),
+})
 const budget = z.object({
   currency: text,
   limit: text,

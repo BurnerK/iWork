@@ -28,6 +28,7 @@ const items = ref<Version[]>([]),
   loading = ref(false),
   previewing = ref(false),
   error = ref('')
+const previewError = ref<{ versionId: string; message: string }>()
 const dialog = ref<HTMLDialogElement>()
 let disposed = false,
   reload = false
@@ -72,17 +73,18 @@ function paginate(delta: number) {
 }
 function revisePreview() {
   if (!selected.value) return
-  emit('selectVersion', selected.value)
   dialog.value?.close()
+  emit('selectVersion', selected.value)
 }
-async function preview(version: Pick<Version, 'versionId'>) {
+async function preview(version: Pick<Version, 'versionId'>, fromReply = false) {
   if (previewing.value) return
-  if (selected.value?.versionId === version.versionId) {
+  if (!props.conversationPreview && selected.value?.versionId === version.versionId) {
     selected.value = undefined
     return
   }
   previewing.value = true
   error.value = ''
+  previewError.value = undefined
   try {
     const result = await request<Version & { markdown: string }>(
       `/api/document-versions/${version.versionId}`
@@ -96,7 +98,11 @@ async function preview(version: Pick<Version, 'versionId'>) {
       }
     }
   } catch (cause) {
-    if (!disposed) error.value = errorMessage(cause)
+    if (!disposed) {
+      if (fromReply)
+        previewError.value = { versionId: version.versionId, message: errorMessage(cause) }
+      else error.value = errorMessage(cause)
+    }
   } finally {
     previewing.value = false
   }
@@ -112,7 +118,12 @@ onUnmounted(() => {
 </script>
 <template>
   <section aria-label="正式文档">
-    <slot :items="items" :preview="preview" :previewing="previewing" />
+    <slot
+      :items="items"
+      :preview="preview"
+      :previewing="previewing"
+      :preview-error="previewError"
+    />
     <details :open="!conversationPreview">
       <summary v-if="conversationPreview">浏览文档版本</summary>
       <h2>正式文档</h2>
@@ -141,8 +152,12 @@ onUnmounted(() => {
           <button
             type="button"
             class="secondary"
-            :disabled="previewing"
-            :aria-expanded="selected?.versionId === version.versionId"
+            :disabled="!conversationPreview && previewing"
+            :aria-disabled="conversationPreview ? previewing : undefined"
+            :aria-haspopup="conversationPreview ? 'dialog' : undefined"
+            :aria-expanded="
+              conversationPreview ? undefined : selected?.versionId === version.versionId
+            "
             :aria-controls="conversationPreview ? undefined : 'document-preview'"
             @click="preview(version)"
           >
@@ -194,7 +209,7 @@ onUnmounted(() => {
       @close="selected = undefined"
     >
       <template v-if="selected">
-        <form method="dialog"><button class="secondary">关闭预览</button></form>
+        <form method="dialog"><button class="secondary" autofocus>关闭预览</button></form>
         <h2>{{ selected.title }} · 版本 {{ selected.versionNumber }}</h2>
         <MarkdownContent :content="markdown" />
         <a :href="`/api/document-versions/${selected.versionId}/content`">下载 .md</a>

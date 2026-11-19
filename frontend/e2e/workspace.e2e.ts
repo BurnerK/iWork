@@ -360,6 +360,7 @@ for (const width of [390, 1280]) {
 }
 
 test('opens and revises a task version outside the current document page', async ({ page }) => {
+  let failFirstPreview = true
   const oldVersion = {
     id: 'artifact',
     taskId: 'task',
@@ -371,6 +372,14 @@ test('opens and revises a task version outside the current document page', async
   }
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
+    if (path === '/api/document-versions/old-version' && failFirstPreview) {
+      failFirstPreview = false
+      await route.fulfill({
+        status: 503,
+        json: { success: false, data: null, error: 'service_unavailable' },
+      })
+      return
+    }
     const data =
       path === '/api/auth/me'
         ? user
@@ -397,7 +406,10 @@ test('opens and revises a task version outside the current document page', async
     await route.fulfill({ json: envelope(data) })
   })
   await page.goto('/#/conversations/first')
-  await page.getByRole('button', { name: '早期成果 · 版本 1' }).click()
+  const card = page.getByRole('button', { name: '早期成果 · 版本 1' })
+  await card.click()
+  await expect(page.getByRole('alert')).toBeVisible()
+  await card.click()
   const preview = page.getByRole('dialog', { name: '文档预览' })
   await expect(preview.getByText('早期正文')).toBeVisible()
   await expect(preview.getByRole('link', { name: '下载 .md' })).toHaveAttribute(
@@ -407,3 +419,131 @@ test('opens and revises a task version outside the current document page', async
   await preview.getByRole('button', { name: '基于此版本修改' }).click()
   await expect(page.getByText('基于《早期成果》版本 1 修改。')).toBeVisible()
 })
+
+for (const width of [390, 1280]) {
+  test(`reads the first of two weekly reports and returns to the conversation at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 700 })
+    const tasks: Record<string, unknown>[] = []
+    const replies: {
+      id: number
+      taskId: string
+      role: string
+      content: string
+      publishedVersion?: (typeof versions)[number]
+    }[] = []
+    const versions = [1, 2].map((number) => ({
+      id: 'weekly-report',
+      taskId: `report-task-${number}`,
+      versionId: `report-version-${number}`,
+      versionNumber: number,
+      title: '项目周报',
+      byteSize: 48,
+      markdown: number === 1 ? '# 初稿正文：完成需求梳理' : '# 修订正文：增加上线进度',
+    }))
+    await page.route('**/api/**', async (route) => {
+      const request = route.request()
+      const { pathname, searchParams } = new URL(request.url())
+      let data: unknown = emptyPage
+      if (pathname === '/api/auth/me') data = user
+      if (pathname === '/api/auth/csrf') data = { token: 'test-token' }
+      if (pathname === '/api/models') data = [{ id: 'model', name: '测试模型' }]
+      if (pathname === '/api/conversations/first') data = conversation
+      if (pathname === '/api/conversations/first/tasks') {
+        if (request.method() === 'POST') {
+          const submitted = request.postDataJSON()
+          const version = versions[tasks.length]!
+          expect(submitted.outputMode).toBe('DOCUMENT')
+          expect(submitted.baseVersionId).toBe(tasks.length ? versions[0]!.versionId : undefined)
+          const task = {
+            id: version.taskId,
+            requestId: submitted.requestId,
+            status: 'COMPLETED',
+            executionState: 'STOPPED',
+            outputMode: 'DOCUMENT',
+            publishedVersion: version,
+          }
+          tasks.unshift(task)
+          replies.push(
+            { id: replies.length + 1, taskId: task.id, role: 'user', content: submitted.message },
+            {
+              id: replies.length + 2,
+              taskId: task.id,
+              role: 'assistant',
+              content: version.versionNumber === 1 ? '已整理本周完成事项。' : '已补充上线进度。',
+              publishedVersion: version,
+            }
+          )
+          data = task
+        } else data = { items: tasks.slice(0, 1), hasMore: tasks.length > 1 }
+      }
+      if (pathname === '/api/conversations/first/messages') {
+        data = {
+          items: replies.filter((reply) => reply.id > Number(searchParams.get('after'))),
+          hasMore: false,
+        }
+      }
+      if (pathname === '/api/conversations/first/documents') {
+        data = { items: versions.slice(0, tasks.length).reverse(), hasMore: false }
+      }
+      const version = versions.find(
+        (entry) => pathname === `/api/document-versions/${entry.versionId}`
+      )
+      if (version) data = version
+      await route.fulfill({ json: envelope(data) })
+    })
+
+    await page.goto('/#/conversations/first')
+    const draft = page.getByRole('textbox', { name: '工作要求（必填）' })
+    const send = page.getByRole('button', { name: '提交任务' })
+    const dialog = page.getByRole('dialog', { name: '文档预览' })
+    const firstReply = page
+      .locator('[aria-label="助手"]')
+      .filter({ hasText: '已整理本周完成事项。' })
+    const firstCard = firstReply.getByRole('button', { name: '项目周报 · 版本 1' })
+    await page.locator('#task-model').selectOption('model')
+    await page.getByRole('button', { name: '资料', exact: true }).click()
+    await page.locator('#task-output').selectOption('DOCUMENT')
+    await page.getByRole('button', { name: '资料', exact: true }).click()
+    await draft.fill(`生成项目周报。\n${'本周事项。\n'.repeat(28)}`)
+    await send.click()
+
+    await firstCard.click()
+    await dialog.getByRole('button', { name: '基于此版本修改' }).click()
+    await draft.fill(`修订项目周报，增加上线进度。\n${'补充背景。\n'.repeat(40)}`)
+    await send.click()
+    const secondReply = page.locator('[aria-label="助手"]').filter({ hasText: '已补充上线进度。' })
+    await expect(secondReply.getByRole('button', { name: '项目周报 · 版本 2' })).toBeVisible()
+
+    await page.reload()
+    await draft.fill('下次还要补充的问题')
+    await firstCard.scrollIntoViewIfNeeded()
+    await firstCard.focus()
+    const thread = page.getByLabel('会话消息', { exact: true })
+    const readingPosition = await thread.evaluate((el) => el.scrollTop)
+    expect(readingPosition).toBeGreaterThan(0)
+    expect(
+      await thread.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop)
+    ).toBeGreaterThan(32)
+    await firstCard.press('Enter')
+    await expect(dialog.getByRole('heading', { name: '项目周报 · 版本 1' })).toBeVisible()
+    await expect(dialog.getByRole('heading', { name: '初稿正文：完成需求梳理' })).toBeVisible()
+    await expect(dialog.getByText('修订正文：增加上线进度')).toHaveCount(0)
+    const bounds = (await dialog.boundingBox())!
+    expect(bounds.x + bounds.width).toBe(width)
+    expect(bounds.x).toBe(width === 390 ? 0 : width - 640)
+    expect(bounds.y).toBe(0)
+    expect(bounds.height).toBe(700)
+    await dialog.getByRole('button', { name: '关闭预览' }).click()
+    await expect(dialog).toBeHidden()
+    await expect(firstCard).toBeFocused()
+    await expect(draft).toHaveValue('下次还要补充的问题')
+    expect(await thread.evaluate((el) => el.scrollTop)).toBe(readingPosition)
+
+    await page.getByText('浏览文档版本', { exact: true }).click()
+    const secondVersion = page.getByRole('listitem').filter({ hasText: '项目周报 · 版本 2' })
+    await secondVersion.getByRole('button', { name: '预览文档' }).click()
+    await expect(dialog.getByRole('heading', { name: '修订正文：增加上线进度' })).toBeVisible()
+  })
+}

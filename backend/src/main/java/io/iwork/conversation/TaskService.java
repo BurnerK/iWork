@@ -1,5 +1,6 @@
 package io.iwork.conversation;
 
+import io.iwork.artifacts.DocumentService.PublishedVersion;
 import io.iwork.identity.ApiFailure;
 import io.iwork.identity.Caller;
 import io.iwork.identity.IdentityService;
@@ -140,9 +141,13 @@ public class TaskService implements ApplicationRunner {
             String projectName,
             PublishedVersion publishedVersion) {}
 
-    public record PublishedVersion(String versionId, String title, int versionNumber) {}
-
-    public record Message(long id, String taskId, String role, String content, Instant createdAt) {}
+    public record Message(
+            long id,
+            String taskId,
+            String role,
+            String content,
+            Instant createdAt,
+            PublishedVersion publishedVersion) {}
 
     public record Page<T>(List<T> items, boolean hasMore) {}
 
@@ -236,10 +241,35 @@ public class TaskService implements ApplicationRunner {
                                         r.getString("task_id"),
                                         r.getString("role"),
                                         r.getString("content"),
-                                        r.getTimestamp("created_at").toInstant()),
+                                        r.getTimestamp("created_at").toInstant(),
+                                        null),
                         conversationId,
                         after);
-        return new Page<>(rows.stream().limit(100).toList(), rows.size() > 100);
+        var page = rows.stream().limit(100).toList();
+        var versions =
+                documents.publishedVersions(
+                        caller,
+                        page.stream()
+                                .filter(message -> message.role().equals("assistant"))
+                                .map(Message::taskId)
+                                .toList());
+        return new Page<>(
+                page.stream()
+                        .map(
+                                message -> {
+                                    var version = versions.get(message.taskId());
+                                    return version == null || !message.role().equals("assistant")
+                                            ? message
+                                            : new Message(
+                                                    message.id(),
+                                                    message.taskId(),
+                                                    message.role(),
+                                                    message.content(),
+                                                    message.createdAt(),
+                                                    version);
+                                })
+                        .toList(),
+                rows.size() > 100);
     }
 
     public Task submit(
