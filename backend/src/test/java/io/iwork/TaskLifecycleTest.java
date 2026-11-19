@@ -93,12 +93,25 @@ class TaskLifecycleTest {
         }
     }
 
+    static final java.util.concurrent.Semaphore releaseQueueGate =
+            new java.util.concurrent.Semaphore(0);
+    static final java.util.concurrent.BlockingQueue<String> queuedExecutions =
+            new java.util.concurrent.LinkedBlockingQueue<>();
+
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods = false)
     static class ExecutionConfiguration {
         @org.springframework.context.annotation.Bean
         @org.springframework.context.annotation.Primary
         io.iwork.conversation.TaskRunner runner() {
             return input -> {
+                if (input.message().startsWith("queue ")) {
+                    if (!releaseQueueGate.tryAcquire(10, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Queue gate timed out");
+                    if (input.message().equals("queue failure"))
+                        throw new IllegalStateException("Fixture failure");
+                }
+                if (Set.of("second", "third").contains(input.message()))
+                    queuedExecutions.add(input.message());
                 if (input.message().equals("hold")) Thread.sleep(30000);
                 if (input.message().equals("fail"))
                     throw new IllegalStateException("private-provider-detail");
@@ -438,6 +451,8 @@ class TaskLifecycleTest {
         ordinary.request("POST", "/api/tasks/" + ownTaskId + "/cancel", "{}", true);
         awaitTask(ordinary, ownTaskId, "executionState", "STOPPED");
 
+        verifyFollowUpQueue(cid, cid2, modelId, materialId, uid);
+
         var storageFailure =
                 admin.request(
                         "POST",
@@ -459,6 +474,219 @@ class TaskLifecycleTest {
             MYSQL.getDockerClient().unpauseContainerCmd(MYSQL.getContainerId()).exec();
         }
         awaitTask(admin, storageId, "status", "FAILED");
+    }
+
+    private void verifyFollowUpQueue(
+            String cid, String otherCid, String modelId, String materialId, String ownerId)
+            throws Exception {
+        String path = "/api/conversations/" + cid + "/tasks";
+        String otherPath = "/api/conversations/" + otherCid + "/tasks";
+        var browser = new Browser();
+        browser.login("admin", "Changed-task-password");
+        browser.csrf();
+        var first = submitFollowUp(browser, path, modelId, "queue-first", "queue gate", List.of());
+        assertThat(first.get("status").asString()).isEqualTo("RUNNING");
+        // Discard the first receipt. Recovery and retry must refer to the same queued request.
+        submitFollowUp(browser, path, modelId, "queue-second", "second", List.of(materialId));
+        var recent =
+                json.readTree(
+                        browser.request("GET", path + "?requestId=queue-second", null, false)
+                                .body());
+        assertThat(recent.get("confirmedRequestId").asString()).isEqualTo("queue-second");
+        assertThat(recent.get("items").valueStream().map(item -> item.get("requestId").asString()))
+                .doesNotContain("queue-second");
+        var retry =
+                submitFollowUp(
+                        browser, path, modelId, "queue-second", "second", List.of(materialId));
+        var third = submitFollowUp(browser, path, modelId, "queue-third", "third", List.of());
+        assertThat(retry.get("status").asString()).isEqualTo("QUEUED");
+        assertThat(third.get("status").asString()).isEqualTo("QUEUED");
+        String secondId = retry.get("id").asString();
+        var other =
+                submitFollowUp(
+                        browser, otherPath, modelId, "queue-other", "independent", List.of());
+        assertThat(other.get("status").asString()).isEqualTo("RUNNING");
+
+        browser.client.close();
+        releaseQueueGate.release();
+        assertThat(queuedExecutions.poll(5, java.util.concurrent.TimeUnit.SECONDS))
+                .isEqualTo("second");
+        assertThat(queuedExecutions.poll(5, java.util.concurrent.TimeUnit.SECONDS))
+                .isEqualTo("third");
+        var reopened = new Browser();
+        reopened.login("admin", "Changed-task-password");
+        reopened.csrf();
+        awaitTask(reopened, third.get("id").asString(), "executionState", "STOPPED");
+        awaitTask(reopened, third.get("id").asString(), "status", "COMPLETED");
+        awaitTask(reopened, other.get("id").asString(), "executionState", "STOPPED");
+        var messages =
+                json.readTree(
+                                reopened.request(
+                                                "GET",
+                                                "/api/conversations/" + cid + "/messages",
+                                                null,
+                                                false)
+                                        .body())
+                        .get("items");
+        assertThat(
+                        messages.valueStream()
+                                .filter(message -> message.get("role").asString().equals("user"))
+                                .map(message -> message.get("content").asString())
+                                .toList())
+                .endsWith("queue gate", "second", "third");
+        assertThat(
+                        messages.valueStream()
+                                .filter(
+                                        message ->
+                                                message.get("taskId").asString().equals(secondId))
+                                .count())
+                .isEqualTo(2);
+        assertThat(
+                        reopened.request(
+                                        "GET", "/api/tasks/" + secondId + "/materials", null, false)
+                                .body())
+                .contains(materialId);
+        assertThat(
+                        submitFollowUp(
+                                        reopened,
+                                        path,
+                                        modelId,
+                                        "queue-second",
+                                        "second",
+                                        List.of(materialId))
+                                .get("id")
+                                .asString())
+                .isEqualTo(secondId);
+
+        var permissionConversation =
+                json.readTree(reopened.request("POST", "/api/conversations", "{}", true).body());
+        String permissionPath =
+                "/api/conversations/" + permissionConversation.get("id").asString() + "/tasks";
+        var gate =
+                submitFollowUp(
+                        reopened,
+                        permissionPath,
+                        modelId,
+                        "permission-gate",
+                        "queue gate",
+                        List.of());
+        var rejected =
+                submitFollowUp(
+                        reopened,
+                        permissionPath,
+                        modelId,
+                        "permission-queued",
+                        "queued model",
+                        List.of());
+        submitFollowUp(
+                reopened, permissionPath, modelId, "permission-waiting", "waiting", List.of());
+        String accessPath = "/api/admin/users/" + ownerId + "/model-access";
+        assertThat(reopened.request("PUT", accessPath, "{\"modelIds\":[]}", true).statusCode())
+                .isEqualTo(200);
+        releaseQueueGate.release();
+        awaitTask(reopened, gate.get("id").asString(), "status", "COMPLETED");
+        awaitTask(reopened, rejected.get("id").asString(), "errorCode", "model_not_authorized");
+        assertThat(
+                        json.readTree(reopened.request("GET", permissionPath, null, false).body())
+                                .get("queuePaused")
+                                .asBoolean())
+                .isTrue();
+        assertThat(
+                        reopened.request(
+                                        "PUT",
+                                        accessPath,
+                                        json.writeValueAsString(
+                                                Map.of("modelIds", List.of(modelId))),
+                                        true)
+                                .statusCode())
+                .isEqualTo(200);
+
+        submitFollowUp(reopened, otherPath, modelId, "isolated-gate", "queue gate", List.of());
+        var independentFollowUp =
+                submitFollowUp(
+                        reopened,
+                        otherPath,
+                        modelId,
+                        "isolated-follow-up",
+                        "independent follow-up",
+                        List.of());
+        assertThat(independentFollowUp.get("status").asString()).isEqualTo("QUEUED");
+        releaseQueueGate.release();
+        awaitTask(reopened, independentFollowUp.get("id").asString(), "executionState", "STOPPED");
+        awaitTask(reopened, independentFollowUp.get("id").asString(), "status", "COMPLETED");
+        assertThat(
+                        json.readTree(reopened.request("GET", permissionPath, null, false).body())
+                                .get("queuedCount")
+                                .asInt())
+                .isEqualTo(1);
+
+        for (String trigger : List.of("cancel", "failure")) {
+            String target = trigger.equals("cancel") ? path : otherPath;
+            var current =
+                    submitFollowUp(
+                            reopened,
+                            target,
+                            modelId,
+                            "queue-" + trigger,
+                            "queue " + trigger,
+                            List.of());
+            String currentId = current.get("id").asString();
+            var waiting =
+                    submitFollowUp(
+                            reopened, target, modelId, "waiting-" + trigger, "waiting", List.of());
+            assertThat(waiting.get("status").asString()).isEqualTo("QUEUED");
+            if (trigger.equals("cancel")) {
+                reopened.request("POST", "/api/tasks/" + currentId + "/cancel", "{}", true);
+            } else {
+                releaseQueueGate.release();
+            }
+            awaitTask(
+                    reopened,
+                    currentId,
+                    "status",
+                    trigger.equals("cancel") ? "CANCELLED" : "FAILED");
+            var refreshed = json.readTree(reopened.request("GET", target, null, false).body());
+            assertThat(refreshed.get("queuePaused").asBoolean()).isTrue();
+            assertThat(refreshed.get("queuedCount").asInt()).isEqualTo(1);
+            assertThat(
+                            reopened.request(
+                                            "GET",
+                                            "/api/tasks/" + waiting.get("id").asString(),
+                                            null,
+                                            false)
+                                    .body())
+                    .contains("QUEUED");
+            awaitTask(reopened, currentId, "executionState", "STOPPED");
+        }
+    }
+
+    private tools.jackson.databind.JsonNode submitFollowUp(
+            Browser browser,
+            String path,
+            String modelId,
+            String requestId,
+            String message,
+            List<String> materials)
+            throws Exception {
+        var response =
+                browser.request(
+                        "POST",
+                        path,
+                        json.writeValueAsString(
+                                Map.of(
+                                        "requestId",
+                                        requestId,
+                                        "modelId",
+                                        modelId,
+                                        "message",
+                                        message,
+                                        "materialIds",
+                                        materials,
+                                        "allowQueue",
+                                        true)),
+                        true);
+        assertThat(response.statusCode()).as("response: %s", response.body()).isEqualTo(202);
+        return json.readTree(response.body());
     }
 
     void awaitTask(Browser browser, String id, String field, String expected) throws Exception {

@@ -97,7 +97,7 @@ function rememberMaterialNames(items: { id: string; name?: string }[]) {
 }
 const baseVersion = ref<{ versionId: string; title: string; versionNumber: number }>()
 function selectVersion(version: { versionId: string; title: string; versionNumber: number }) {
-  if (busy.value || pending.value || active.value) return
+  if (busy.value || pending.value) return
   baseVersion.value = version
   outputMode.value = 'DOCUMENT'
   document.getElementById('task-message')?.focus()
@@ -180,6 +180,7 @@ const storageKey = computed(() => `iwork-pending:${props.ownerId}:${conversation
 const draftKey = computed(() => `iwork-first-send:${props.ownerId}`)
 function acceptPending() {
   clearPending()
+  error.value = ''
   message.value = ''
   baseVersion.value = undefined
   materialIds.value = []
@@ -195,7 +196,9 @@ const usageTaskId = ref(''),
 const taskPage = ref(0),
   moreTasks = ref(false),
   moreMessages = ref(false)
-const active = computed(() => tasks.value.some((task) => task.status === 'RUNNING'))
+const runningTask = computed(() => tasks.value.find((task) => task.status === 'RUNNING'))
+const showPause = computed(() => !!runningTask.value && !pending.value && !message.value.trim())
+const queueStatus = ref('')
 const labels: Record<string, string> = {
   RUNNING: '运行中',
   COMPLETED: '已完成',
@@ -233,8 +236,17 @@ async function load() {
   if (!conversationId.value || loading.value || disposed) return
   loading.value = true
   try {
+    const pendingQuery = pending.value
+      ? `?requestId=${encodeURIComponent(pending.value.requestId)}`
+      : ''
     const [recent, incoming] = await Promise.all([
-      request<Page<Task>>(`/api/conversations/${conversationId.value}/tasks`),
+      request<
+        Page<Task> & {
+          queuedCount: number
+          queuePaused: boolean
+          confirmedRequestId: string | null
+        }
+      >(`/api/conversations/${conversationId.value}/tasks${pendingQuery}`),
       request<Page<Message>>(
         `/api/conversations/${conversationId.value}/messages?after=${messages.value.at(-1)?.id || 0}`
       ),
@@ -242,8 +254,15 @@ async function load() {
     if (disposed) return
     tasks.value = [
       ...recent.items,
-      ...tasks.value.filter((task) => !recent.items.some((item) => item.id === task.id)),
+      ...tasks.value.filter(
+        (task) => task.status !== 'RUNNING' && !recent.items.some((item) => item.id === task.id)
+      ),
     ]
+    queueStatus.value = recent.queuedCount
+      ? recent.queuePaused
+        ? '队列已暂停'
+        : '有待发送消息'
+      : ''
     if (taskPage.value === 0) moreTasks.value = recent.hasMore
     const follow = !showLatest.value
     messages.value.push(...incoming.items)
@@ -252,7 +271,8 @@ async function load() {
     if (
       !busy.value &&
       pending.value &&
-      recent.items.some((task) => task.requestId === pending.value?.requestId)
+      (recent.confirmedRequestId === pending.value.requestId ||
+        recent.items.some((task) => task.requestId === pending.value?.requestId))
     ) {
       acceptPending()
     }
@@ -273,16 +293,11 @@ function sendOnEnter(event: KeyboardEvent) {
   // Safari can report the IME confirmation after compositionend.
   if (event.isComposing || event.keyCode === 229) return
   event.preventDefault()
-  if (!event.repeat) (event.currentTarget as HTMLTextAreaElement).form?.requestSubmit()
+  if (!event.repeat && !showPause.value)
+    (event.currentTarget as HTMLTextAreaElement).form?.requestSubmit()
 }
 async function submit() {
-  if (
-    busy.value ||
-    creationUnconfirmed.value ||
-    materialBusy.value ||
-    (active.value && !pending.value)
-  )
-    return
+  if (busy.value || creationUnconfirmed.value || materialBusy.value) return
   if (!pending.value && (!message.value.trim() || (!agentId.value && !modelId.value))) return
   busy.value = true
   error.value = ''
@@ -318,7 +333,10 @@ async function submit() {
       JSON.stringify({ ...pending.value, selectedMaterials: selectedMaterials.value })
     )
     if (!props.conversationId) sessionStorage.setItem(draftKey.value, conversationId.value)
-    await request(`/api/conversations/${conversationId.value}/tasks`, 'POST', pending.value)
+    await request(`/api/conversations/${conversationId.value}/tasks`, 'POST', {
+      ...pending.value,
+      allowQueue: true,
+    })
     acceptPending()
     await load()
   } catch (cause) {
@@ -337,7 +355,7 @@ async function cancel(task: Task) {
   busy.value = true
   error.value = ''
   try {
-    await request(`/api/tasks/${task.id}/cancel`, 'POST', {})
+    await request(`/api/tasks/${task.id}/cancel`, 'POST', { pauseQueue: true })
     await load()
   } catch (cause) {
     await failure(cause)
@@ -438,7 +456,7 @@ onUnmounted(() => {
         v-if="conversationId"
         :conversation-id="conversationId"
         conversation-preview
-        :disabled="busy || !!pending || active"
+        :disabled="busy || !!pending"
         @select-version="selectVersion"
         :revision="tasks.map((task) => task.id + task.status).join(',')"
         v-slot="{ preview, previewing, previewError }"
@@ -593,6 +611,7 @@ onUnmounted(() => {
       回到最新消息
     </button>
     <div class="task-composer" @keydown.esc="closeMaterials">
+      <p v-if="queueStatus" class="hint" role="status">{{ queueStatus }}</p>
       <div
         v-show="materialsOpen"
         id="composer-materials"
@@ -606,7 +625,7 @@ onUnmounted(() => {
         <select
           id="task-output"
           v-model="outputMode"
-          :disabled="busy || !!pending || active || !!baseVersion"
+          :disabled="busy || !!pending || !!baseVersion"
         >
           <option value="TEXT">文字回复</option>
           <option value="DOCUMENT">Markdown 文档</option>
@@ -616,14 +635,14 @@ onUnmounted(() => {
           :key="projectId"
           :project-id="projectId"
           v-model="materialIds"
-          :disabled="busy || !!pending || active"
+          :disabled="busy || !!pending"
           @material-names="rememberMaterialNames"
           @failure="failure"
           @uploading="materialBusy = $event"
         />
         <MaterialPanel
           v-model="materialIds"
-          :disabled="busy || !!pending || active"
+          :disabled="busy || !!pending"
           @material-names="rememberMaterialNames"
           @failure="failure"
           @uploading="materialBusy = $event"
@@ -645,7 +664,7 @@ onUnmounted(() => {
           maxlength="20000"
           rows="2"
           enterkeyhint="enter"
-          :disabled="busy || !!pending || active"
+          :disabled="busy || !!pending"
           @keydown.enter="sendOnEnter"
         ></textarea>
         <ul
@@ -662,7 +681,7 @@ onUnmounted(() => {
           基于《{{ baseVersion.title }}》版本 {{ baseVersion.versionNumber }} 修改。<button
             type="button"
             class="secondary"
-            :disabled="busy || !!pending || active"
+            :disabled="busy || !!pending"
             @click="baseVersion = undefined"
           >
             清除来源版本
@@ -690,7 +709,7 @@ onUnmounted(() => {
             name="target"
             required
             :aria-describedby="agentId ? 'composer-agent-model' : undefined"
-            :disabled="busy || !!pending || active"
+            :disabled="busy || !!pending"
           >
             <option value="" disabled>选择模型或智能体</option>
             <optgroup v-if="models.length" label="模型">
@@ -705,18 +724,32 @@ onUnmounted(() => {
             </optgroup>
           </select>
           <button
-            type="submit"
+            :type="showPause ? 'button' : 'submit'"
             :class="{ 'composer-send': !pending }"
-            :aria-label="pending ? undefined : '提交任务'"
-            :title="pending ? undefined : '提交任务'"
+            :aria-label="pending ? undefined : showPause ? '暂停回答' : '提交任务'"
+            :title="pending ? undefined : showPause ? '暂停回答' : '提交任务'"
             :disabled="
               busy ||
-              materialBusy ||
-              creationUnconfirmed ||
-              (!pending && (active || !message.trim()))
+              (!showPause && (materialBusy || creationUnconfirmed || (!pending && !message.trim())))
             "
+            @click="showPause && runningTask && cancel(runningTask)"
           >
             <template v-if="pending">重试确认</template>
+            <svg
+              v-else-if="showPause"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                d="M9 6v12m6-12v12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
             <img v-else src="/assets/icons/arrow-up.svg" width="24" height="24" alt="" />
           </button>
         </div>
@@ -731,7 +764,7 @@ onUnmounted(() => {
           v-if="moreAgents"
           type="button"
           class="secondary"
-          :disabled="loadingAgents || busy || !!pending || active"
+          :disabled="loadingAgents || busy || !!pending"
           @click="loadAgents(agentPage + 1)"
         >
           加载更多智能体

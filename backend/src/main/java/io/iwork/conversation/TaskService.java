@@ -38,6 +38,9 @@ public class TaskService implements ApplicationRunner {
     private final io.iwork.agent.PersonalAgentService agents;
     private final ProjectService projects;
     private final Semaphore capacity;
+    private final ScheduledExecutorService dispatcher =
+            Executors.newSingleThreadScheduledExecutor(
+                    Thread.ofPlatform().daemon().name("task-queue").factory());
     private final ConcurrentMap<String, Thread> workers = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, LiveReply> liveReplies = new ConcurrentHashMap<>();
     private volatile boolean stopping;
@@ -151,6 +154,15 @@ public class TaskService implements ApplicationRunner {
 
     public record Page<T>(List<T> items, boolean hasMore) {}
 
+    public record TaskPage(
+            List<Task> items,
+            boolean hasMore,
+            int queuedCount,
+            boolean queuePaused,
+            String confirmedRequestId) {}
+
+    private record QueueHead(String taskId, String conversationId, Caller caller) {}
+
     private List<Task> query(String condition, Object... args) {
         return query(false, condition, args);
     }
@@ -191,12 +203,22 @@ public class TaskService implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        db.update(
-                "UPDATE tasks SET status='INTERRUPTED',execution_state='UNKNOWN',error_code='process_restarted',updated_at=CURRENT_TIMESTAMP(6) WHERE status='RUNNING'");
+        tx.executeWithoutResult(
+                status -> {
+                    db.update(
+                            """
+                    UPDATE conversations c SET queue_paused=TRUE
+                    WHERE EXISTS (SELECT 1 FROM tasks t WHERE t.conversation_id=c.id AND t.status='RUNNING')
+                      AND EXISTS (SELECT 1 FROM tasks t WHERE t.conversation_id=c.id AND t.status='QUEUED')
+                    """);
+                    db.update(
+                            "UPDATE tasks SET status='INTERRUPTED',execution_state='UNKNOWN',error_code='process_restarted',updated_at=CURRENT_TIMESTAMP(6) WHERE status='RUNNING'");
+                });
         db.update(
                 "UPDATE tasks SET execution_state='UNKNOWN' WHERE execution_state IN ('RUNNING','STOP_REQUESTED')");
         db.queryForList("SELECT task_id FROM document_drafts", String.class)
                 .forEach(documents::cleanup);
+        dispatcher.scheduleWithFixedDelay(this::dispatch, 0, 250, TimeUnit.MILLISECONDS);
     }
 
     public Task get(Caller caller, String id) {
@@ -216,17 +238,64 @@ public class TaskService implements ApplicationRunner {
         if (rows.isEmpty()) throw new ApiFailure(404, "not_found");
     }
 
-    public Page<Task> list(Caller caller, String conversationId, int page) {
+    public TaskPage list(Caller caller, String conversationId, int page, String requestId) {
         if (page < 0 || page > 100000) throw new ApiFailure(400, "invalid_pagination");
-        conversation(caller, conversationId, false);
-        var rows =
-                query(
-                        true,
-                        "tasks.owner_id=? AND tasks.conversation_id=? ORDER BY tasks.created_at DESC,tasks.id DESC LIMIT 21 OFFSET ?",
-                        caller.id(),
-                        conversationId,
-                        page * 20);
-        return new Page<>(rows.stream().limit(20).toList(), rows.size() > 20);
+        return tx.execute(
+                status -> {
+                    conversation(caller, conversationId, false);
+                    var rows =
+                            query(
+                                    true,
+                                    "tasks.owner_id=? AND tasks.conversation_id=? AND tasks.status<>'QUEUED' ORDER BY tasks.created_at DESC,tasks.id DESC LIMIT 21 OFFSET ?",
+                                    caller.id(),
+                                    conversationId,
+                                    page * 20);
+                    int count = queuedCount(conversationId);
+                    String confirmed = null;
+                    if (requestId != null && requestId.matches("[A-Za-z0-9_-]{1,100}")) {
+                        confirmed =
+                                db
+                                        .queryForList(
+                                                """
+                                SELECT request_id FROM tasks WHERE owner_id=? AND request_id=? AND conversation_id=?
+                                """,
+                                                String.class,
+                                                caller.id(),
+                                                requestId,
+                                                conversationId)
+                                        .stream()
+                                        .findFirst()
+                                        .orElse(null);
+                    }
+                    return new TaskPage(
+                            rows.stream().limit(20).toList(),
+                            rows.size() > 20,
+                            count,
+                            count > 0 && queuePaused(conversationId),
+                            confirmed);
+                });
+    }
+
+    private int queuedCount(String conversationId) {
+        return db.queryForObject(
+                "SELECT COUNT(*) FROM tasks WHERE conversation_id=? AND status='QUEUED'",
+                Integer.class,
+                conversationId);
+    }
+
+    private boolean queuePaused(String conversationId) {
+        return db.queryForObject(
+                "SELECT queue_paused FROM conversations WHERE id=?", Boolean.class, conversationId);
+    }
+
+    private void pauseQueue(String conversationId) {
+        db.update(
+                """
+                UPDATE conversations SET queue_paused=TRUE WHERE id=?
+                AND EXISTS (SELECT 1 FROM tasks WHERE conversation_id=? AND status='QUEUED')
+                """,
+                conversationId,
+                conversationId);
     }
 
     public Page<Message> messages(Caller caller, String conversationId, long after) {
@@ -325,6 +394,30 @@ public class TaskService implements ApplicationRunner {
             String outputMode,
             String baseVersionId,
             String agentId) {
+        return submit(
+                caller,
+                conversationId,
+                requestId,
+                modelId,
+                message,
+                materialIds,
+                outputMode,
+                baseVersionId,
+                agentId,
+                false);
+    }
+
+    public Task submit(
+            Caller caller,
+            String conversationId,
+            String requestId,
+            String modelId,
+            String message,
+            List<String> materialIds,
+            String outputMode,
+            String baseVersionId,
+            String agentId,
+            boolean allowQueue) {
         if (agentId != null && (!agentId.matches("[a-f0-9-]{36}") || modelId != null))
             throw new ApiFailure(400, "invalid_task");
         if (baseVersionId != null
@@ -400,9 +493,7 @@ public class TaskService implements ApplicationRunner {
             accepted =
                     tx.execute(
                             status -> {
-                                var live = identity.verify(caller, true);
-                                if (live.mustChangePassword())
-                                    throw new ApiFailure(403, "password_change_required");
+                                verifyExecutionCaller(caller);
                                 conversation(caller, conversationId, true);
                                 var existing =
                                         query(
@@ -436,75 +527,234 @@ public class TaskService implements ApplicationRunner {
                                 var project =
                                         projectId == null ? null : projects.get(caller, projectId);
                                 initializedInstructions[0] =
-                                        (project == null
-                                                        ? ""
-                                                        : "项目工作背景：\n"
-                                                                + project.instructions()
-                                                                + "\n")
-                                                + (config == null
-                                                        ? ""
-                                                        : "智能体处理方式：\n" + config.instructions());
+                                        instructions(
+                                                project == null ? null : project.instructions(),
+                                                config == null ? null : config.instructions());
                                 models.require(caller.id(), selectedModel);
-                                if (!query("conversation_id=? AND status='RUNNING'", conversationId)
-                                        .isEmpty()) throw new ApiFailure(409, "conversation_busy");
-                                if (!capacity.tryAcquire())
+                                boolean busy =
+                                        queuedCount(conversationId) > 0
+                                                || hasActiveTask(conversationId, allowQueue);
+                                if (busy && !allowQueue)
+                                    throw new ApiFailure(409, "conversation_busy");
+                                if (!busy && !capacity.tryAcquire())
                                     throw new ApiFailure(429, "task_capacity_exceeded");
-                                acquired[0] = true;
+                                acquired[0] = !busy;
                                 db.update(
-                                        "INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,status,execution_state,output_mode,base_version_id,agent_id,agent_name,agent_instructions,project_id,project_name,project_instructions) VALUES(?,?,?,?,?,?,'RUNNING','RUNNING',?,?,?,?,?,?,?,?)",
+                                        """
+                                        INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,
+                                            status,execution_state,output_mode,base_version_id,agent_id,agent_name,agent_instructions,
+                                            project_id,project_name,project_instructions,queued_message,queued_auth_version)
+                                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                        """,
                                         id,
                                         caller.id(),
                                         conversationId,
                                         selectedModel,
                                         requestId,
                                         hash,
+                                        busy ? "QUEUED" : "RUNNING",
+                                        busy ? "WAITING" : "RUNNING",
                                         outputMode,
                                         baseVersionId,
                                         agentId,
                                         config == null ? null : config.name(),
-                                        config == null ? "" : config.instructions(),
+                                        config == null ? null : config.instructions(),
                                         projectId,
                                         project == null ? null : project.name(),
-                                        project == null ? "" : project.instructions());
+                                        project == null ? null : project.instructions(),
+                                        busy ? message : null,
+                                        busy ? caller.authVersion() : null);
                                 for (int i = 0; i < materialIds.size(); i++)
                                     db.update(
                                             "INSERT INTO task_materials(task_id,material_id,position) VALUES(?,?,?)",
                                             id,
                                             materialIds.get(i),
                                             i);
-                                db.update(
-                                        "INSERT INTO messages(task_id,conversation_id,role,content) VALUES(?,?,'user',?)",
-                                        id,
-                                        conversationId,
-                                        message);
-                                db.update(
-                                        "UPDATE conversations SET updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",
-                                        conversationId);
-                                var task = get(caller, id);
-                                liveReplies.put(id, replyBuffer);
-                                return task;
+                                if (!busy) recordSend(id, conversationId, message, replyBuffer);
+                                return get(caller, id);
                             });
         } catch (RuntimeException failure) {
             finishReply(id);
             if (acquired[0]) capacity.release();
             throw failure;
         }
-        if (acquired[0]) {
-            var input =
-                    new TaskRunner.Input(
-                            accepted.id(),
-                            conversationId,
-                            caller,
-                            accepted.modelId(),
-                            message,
-                            outputMode,
-                            initializedInstructions[0],
-                            replyBuffer::append);
-            Thread worker = Thread.ofVirtual().unstarted(() -> execute(input));
-            workers.put(accepted.id(), worker);
-            worker.start();
-        }
+        if (acquired[0]) launch(accepted, caller, message, initializedInstructions[0], replyBuffer);
         return accepted;
+    }
+
+    private Caller verifyExecutionCaller(Caller caller) {
+        var live = identity.verify(caller, true);
+        if (live.mustChangePassword()) throw new ApiFailure(403, "password_change_required");
+        return live;
+    }
+
+    private static String instructions(String project, String agent) {
+        return (project == null ? "" : "项目工作背景：\n" + project + "\n")
+                + (agent == null ? "" : "智能体处理方式：\n" + agent);
+    }
+
+    private boolean hasActiveTask(String conversationId, boolean includeStopping) {
+        return db.queryForObject(
+                """
+                SELECT EXISTS (SELECT 1 FROM tasks WHERE conversation_id=?
+                    AND (status='RUNNING' OR (? AND execution_state IN ('RUNNING','STOP_REQUESTED'))))
+                """,
+                Boolean.class,
+                conversationId,
+                includeStopping);
+    }
+
+    private void recordSend(
+            String id, String conversationId, String message, LiveReply replyBuffer) {
+        db.update(
+                "INSERT INTO messages(task_id,conversation_id,role,content) VALUES(?,?,'user',?)",
+                id,
+                conversationId,
+                message);
+        db.update(
+                "UPDATE conversations SET updated_at=CURRENT_TIMESTAMP(6) WHERE id=?",
+                conversationId);
+        if (replyBuffer != null) liveReplies.put(id, replyBuffer);
+    }
+
+    private void launch(
+            Task task, Caller caller, String message, String instructions, LiveReply replyBuffer) {
+        var input =
+                new TaskRunner.Input(
+                        task.id(),
+                        task.conversationId(),
+                        caller,
+                        task.modelId(),
+                        message,
+                        task.outputMode(),
+                        instructions,
+                        replyBuffer::append);
+        launch(input);
+    }
+
+    private void launch(TaskRunner.Input input) {
+        Thread worker = Thread.ofVirtual().unstarted(() -> execute(input));
+        workers.put(input.taskId(), worker);
+        worker.start();
+    }
+
+    private void dispatch() {
+        if (stopping || capacity.availablePermits() == 0 || runners.getIfAvailable() == null)
+            return;
+        try {
+            var heads =
+                    db.query(
+                            """
+                    SELECT t.id,t.owner_id,t.conversation_id,t.queued_auth_version
+                    FROM tasks t JOIN conversations c ON c.id=t.conversation_id
+                    WHERE t.status='QUEUED' AND NOT c.queue_paused
+                      AND NOT EXISTS (SELECT 1 FROM tasks active
+                          WHERE active.conversation_id=t.conversation_id
+                            AND active.execution_state IN ('RUNNING','STOP_REQUESTED'))
+                      AND NOT EXISTS (SELECT 1 FROM tasks older
+                          WHERE older.conversation_id=t.conversation_id AND older.status='QUEUED'
+                            AND older.queue_order<t.queue_order)
+                    ORDER BY t.queue_order LIMIT 16
+                    """,
+                            (r, n) ->
+                                    new QueueHead(
+                                            r.getString("id"),
+                                            r.getString("conversation_id"),
+                                            new Caller(
+                                                    r.getString("owner_id"),
+                                                    null,
+                                                    null,
+                                                    null,
+                                                    false,
+                                                    r.getLong("queued_auth_version"))));
+            for (var head : heads) {
+                if (stopping || !capacity.tryAcquire()) break;
+                dispatch(head);
+            }
+        } catch (RuntimeException failure) {
+            if (!stopping)
+                org.slf4j.LoggerFactory.getLogger(TaskService.class)
+                        .warn("Task queue dispatch failed", failure);
+        }
+    }
+
+    private void dispatch(QueueHead head) {
+        var replyBuffer = new LiveReply();
+        TaskRunner.Input input = null;
+        try {
+            input = tx.execute(status -> promote(head, replyBuffer));
+            if (input != null) launch(input);
+        } finally {
+            if (input == null) {
+                finishReply(head.taskId());
+                capacity.release();
+            }
+        }
+    }
+
+    private TaskRunner.Input promote(QueueHead head, LiveReply replyBuffer) {
+        Caller live = null;
+        String error = null;
+        try {
+            live = verifyExecutionCaller(head.caller());
+        } catch (ApiFailure denied) {
+            error = denied.getMessage();
+        }
+        String cid = head.conversationId();
+        conversation(head.caller(), cid, true);
+        var task = get(head.caller(), head.taskId());
+        if (!task.status().equals("QUEUED") || queuePaused(cid) || hasActiveTask(cid, true))
+            return null;
+        var stored =
+                db.queryForMap(
+                        """
+                        SELECT queued_message,project_instructions,agent_instructions
+                        FROM tasks WHERE id=?
+                        """,
+                        task.id());
+        String message = (String) stored.get("queued_message");
+        if (error == null) {
+            try {
+                models.require(live.id(), task.modelId());
+                if (task.agentId() != null) agents.get(live, task.agentId());
+                if (task.projectId() != null) {
+                    projects.get(live, task.projectId());
+                } else if (stored.get("project_instructions") != null) {
+                    // Project deletion clears the foreign key, not the
+                    // snapshot.
+                    throw new ApiFailure(404, "not_found");
+                }
+                if (task.baseVersionId() != null) documents.version(live, task.baseVersionId());
+                materials(live, task.id());
+            } catch (ApiFailure denied) {
+                error = denied.getMessage();
+            }
+        }
+        db.update(
+                """
+                        UPDATE tasks SET status=?,execution_state=?,error_code=?,queued_message=NULL,
+                            queued_auth_version=NULL,updated_at=CURRENT_TIMESTAMP(6) WHERE id=?
+                        """,
+                error == null ? "RUNNING" : "FAILED",
+                error == null ? "RUNNING" : "STOPPED",
+                error,
+                task.id());
+        recordSend(task.id(), cid, message, error == null ? replyBuffer : null);
+        if (error != null) {
+            pauseQueue(cid);
+            return null;
+        }
+        return new TaskRunner.Input(
+                task.id(),
+                cid,
+                live,
+                task.modelId(),
+                message,
+                task.outputMode(),
+                instructions(
+                        (String) stored.get("project_instructions"),
+                        (String) stored.get("agent_instructions")),
+                replyBuffer::append);
     }
 
     private void execute(TaskRunner.Input input) {
@@ -517,11 +767,16 @@ public class TaskService implements ApplicationRunner {
             String errorCode = executionError(failure);
             persist(
                     () ->
-                            db.update(
-                                    "UPDATE tasks SET status=?,error_code=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND status='RUNNING'",
-                                    stopping ? "INTERRUPTED" : "FAILED",
-                                    stopping ? "process_restarted" : errorCode,
-                                    input.taskId()));
+                            tx.executeWithoutResult(
+                                    status -> {
+                                        conversation(input.caller(), input.conversationId(), true);
+                                        if (db.update(
+                                                        "UPDATE tasks SET status=?,error_code=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND status='RUNNING'",
+                                                        stopping ? "INTERRUPTED" : "FAILED",
+                                                        stopping ? "process_restarted" : errorCode,
+                                                        input.taskId())
+                                                > 0) pauseQueue(input.conversationId());
+                                    }));
         } finally {
             Thread.interrupted();
             finishReply(input.taskId());
@@ -549,6 +804,7 @@ public class TaskService implements ApplicationRunner {
         tx.executeWithoutResult(
                 status -> {
                     identity.verify(input.caller(), true);
+                    conversation(input.caller(), input.conversationId(), true);
                     var current = query("id=? FOR UPDATE", input.taskId()).getFirst();
                     if (!current.status().equals("RUNNING")) return;
                     if (draft != null) documents.publish(input, draft);
@@ -577,7 +833,8 @@ public class TaskService implements ApplicationRunner {
             try {
                 write.run();
                 return;
-            } catch (org.springframework.dao.DataAccessException unavailable) {
+            } catch (org.springframework.dao.DataAccessException
+                    | org.springframework.transaction.TransactionException unavailable) {
                 if (stopping) return;
                 try {
                     Thread.sleep(1000);
@@ -602,17 +859,23 @@ public class TaskService implements ApplicationRunner {
     }
 
     public Task cancel(Caller caller, String id) {
+        return cancel(caller, id, false);
+    }
+
+    public Task cancel(Caller caller, String id, boolean pausePending) {
         var cancelled =
                 tx.execute(
                         status -> {
                             identity.verify(caller, true);
-                            var rows = query("id=? AND owner_id=? FOR UPDATE", id, caller.id());
-                            if (rows.isEmpty()) throw new ApiFailure(404, "not_found");
-                            db.update(
-                                    "UPDATE tasks SET status='CANCELLED',execution_state='STOP_REQUESTED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_id=? AND status='RUNNING'",
-                                    id,
-                                    caller.id());
-                            return get(caller, id);
+                            var task = get(caller, id);
+                            conversation(caller, task.conversationId(), true);
+                            int changed =
+                                    db.update(
+                                            "UPDATE tasks SET status='CANCELLED',execution_state='STOP_REQUESTED',updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_id=? AND status='RUNNING'",
+                                            id,
+                                            caller.id());
+                            if (changed > 0 || pausePending) pauseQueue(task.conversationId());
+                            return query("id=? FOR UPDATE", id).getFirst();
                         });
         if (cancelled.status().equals("CANCELLED")) {
             finishReply(id);
@@ -625,6 +888,7 @@ public class TaskService implements ApplicationRunner {
     @PreDestroy
     void close() {
         stopping = true;
+        dispatcher.shutdownNow();
         workers.values().forEach(Thread::interrupt);
     }
 }

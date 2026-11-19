@@ -29,44 +29,94 @@ async function expectComposerLayout(page: Page) {
   expect(send.width).toBe(send.height)
 }
 
-test('keeps the composer appearance stable while a reply is running', async ({ page }) => {
-  let running = false
+test('queues consecutive follow-ups and switches between pause and send', async ({ page }) => {
+  const submissions: {
+    requestId: string
+    message: string
+    outputMode: string
+    allowQueue: boolean
+    materialIds: string[]
+  }[] = []
+  let running = true
   await page.route('**/api/**', async (route) => {
-    const path = new URL(route.request().url()).pathname
+    const request = route.request()
+    const { pathname: path, searchParams } = new URL(request.url())
     let data: unknown = emptyPage
     if (path === '/api/auth/me') data = user
+    if (path === '/api/auth/csrf') data = { token: 'test-token' }
     if (path === '/api/models') data = [{ id: 'model', name: '测试模型' }]
+    if (path === '/api/materials')
+      data = { items: [{ id: 'source', name: '参考资料.txt', byteSize: 3 }], hasMore: false }
     if (path === '/api/conversations/first') data = conversation
-    if (path === '/api/conversations/first/tasks' && running) {
-      data = {
-        items: [
-          { id: 'running', requestId: 'request', status: 'RUNNING', executionState: 'RUNNING' },
-        ],
-        hasMore: false,
+    if (path === '/api/conversations/first/tasks') {
+      if (request.method() === 'POST') {
+        submissions.push(request.postDataJSON())
+        if (submissions.length === 1) return route.abort()
+        data = { id: `queued-${submissions.length}`, status: 'QUEUED' }
+      } else {
+        data = {
+          items: [
+            {
+              id: 'running',
+              requestId: 'request',
+              status: running ? 'RUNNING' : 'CANCELLED',
+              executionState: running ? 'RUNNING' : 'STOPPED',
+            },
+          ],
+          hasMore: false,
+          queuedCount: submissions.length,
+          queuePaused: !running,
+          confirmedRequestId:
+            submissions.find(({ requestId }) => requestId === searchParams.get('requestId'))
+              ?.requestId ?? null,
+        }
       }
+    }
+    if (path === '/api/tasks/running/cancel') {
+      expect(request.method()).toBe('POST')
+      expect(request.postDataJSON()).toEqual({ pauseQueue: true })
+      running = false
+      data = { id: 'running', requestId: 'request', status: 'CANCELLED', executionState: 'STOPPED' }
     }
     await route.fulfill({ json: envelope(data) })
   })
   await page.goto('/#/conversations/first')
   const composer = page.locator('.task-composer')
   const message = page.locator('#task-message')
-  const model = page.locator('#task-model')
-  await model.selectOption('model')
-  await message.fill('后续要求')
-  const send = page.getByRole('button', { name: '提交任务' })
-  await expect(send).toBeEnabled()
-  const initialHeight = (await composer.boundingBox())?.height
+  const pause = composer.getByRole('button', { name: '暂停回答' })
+  const send = composer.getByRole('button', { name: '提交任务' })
+  await expect(pause).toBeEnabled()
+  await page.locator('#task-model').selectOption('model')
+  await expectComposerLayout(page)
+  await expect(message).toBeEditable()
+  await composer.getByRole('button', { name: /资料/ }).click()
+  const output = page.getByRole('combobox', { name: '成果形式', exact: true })
+  await output.selectOption('DOCUMENT')
+  await page.getByLabel(/参考资料\.txt/).check()
+  await output.press('Escape')
 
-  running = true
-  await page.getByRole('button', { name: '刷新任务' }).click()
-  await expect(page.getByRole('status').filter({ hasText: '运行中' })).toBeVisible()
-  await expect(send).toBeDisabled()
-  for (const field of [message, model]) {
-    await expect(field).toBeDisabled()
-    await expect(field).toHaveCSS('background-color', 'rgb(255, 255, 255)')
-    await expect(field).toHaveCSS('color', 'rgb(0, 0, 0)')
-  }
-  expect((await composer.boundingBox())?.height).toBe(initialHeight)
+  await message.fill('草稿')
+  await expect(send).toBeEnabled()
+  await expect(send).toHaveCSS('padding', '0px')
+  await message.clear()
+  await expect(pause).toBeEnabled()
+  await message.fill('第一条追问')
+  await send.click()
+  await expect(message).toBeEmpty()
+  await expect(pause).toBeEnabled()
+  await message.fill('第二条追问')
+  await message.press('Enter')
+  await expect(message).toBeEmpty()
+  await expect(pause).toBeEnabled()
+  expect(submissions).toMatchObject([
+    { message: '第一条追问', outputMode: 'DOCUMENT', allowQueue: true, materialIds: ['source'] },
+    { message: '第二条追问', outputMode: 'DOCUMENT', allowQueue: true, materialIds: [] },
+  ])
+  expect(submissions[0]!.requestId).not.toBe(submissions[1]!.requestId)
+  await pause.click()
+  await expect(page.getByText('队列已暂停')).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('队列已暂停')).toBeVisible()
 })
 
 for (const confirmByPolling of [false, true]) {
@@ -323,6 +373,7 @@ test.describe('touch composer', () => {
         message: '第一行\n第二行',
         modelId: 'model',
         materialIds: ['upload'],
+        allowQueue: true,
         outputMode: 'DOCUMENT',
         baseVersionId: 'source-version',
       }),

@@ -123,6 +123,11 @@ const diagnostic = z.object({
   ),
 })
 const page = <T extends z.ZodType>(item: T) => z.object({ items: z.array(item), hasMore: flag })
+const taskPage = page(task).extend({
+  queuedCount: number.int().nonnegative().default(0),
+  queuePaused: flag.default(false),
+  confirmedRequestId: nullableText.default(null),
+})
 const credentials = z.object({ temporaryPassword: text })
 const routes: [RegExp, z.ZodType, z.ZodType?][] = [
   [/^auth\/csrf$/, z.object({ token: text })],
@@ -143,7 +148,7 @@ const routes: [RegExp, z.ZodType, z.ZodType?][] = [
   [/^projects\/[^/]+\/conversations$/, page(conversation)],
   [/^conversations$/, page(conversation), id],
   [/^conversations\/[^/]+$/, conversation],
-  [/^conversations\/[^/]+\/tasks$/, page(task), id],
+  [/^conversations\/[^/]+\/tasks$/, taskPage, id],
   [/^conversations\/[^/]+\/messages$/, page(message)],
   [/^tasks\/[^/]+\/cancel$/, task],
   [/^tasks\/[^/]+\/calls$/, z.array(call)],

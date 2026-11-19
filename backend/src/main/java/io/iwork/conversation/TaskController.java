@@ -34,7 +34,8 @@ class TaskController {
                                 "materialIds",
                                 "outputMode",
                                 "baseVersionId",
-                                "agentId")
+                                "agentId",
+                                "allowQueue")
                         .containsAll(input.keySet())
                 || !(input.get("requestId") instanceof String requestId)
                 || !(input.get("message") instanceof String message))
@@ -44,6 +45,8 @@ class TaskController {
                 || ids.stream().anyMatch(value -> !(value instanceof String)))
             throw new ApiFailure(400, "invalid_task");
         if (!(input.getOrDefault("outputMode", "TEXT") instanceof String outputMode))
+            throw new ApiFailure(400, "invalid_task");
+        if (!(input.getOrDefault("allowQueue", false) instanceof Boolean allowQueue))
             throw new ApiFailure(400, "invalid_task");
         Object base = input.get("baseVersionId"),
                 agent = input.get("agentId"),
@@ -61,7 +64,8 @@ class TaskController {
                 ids.stream().map(String.class::cast).toList(),
                 outputMode,
                 (String) base,
-                (String) agent);
+                (String) agent,
+                allowQueue);
     }
 
     @GetMapping("/api/tasks/{id}/materials")
@@ -99,16 +103,19 @@ class TaskController {
             @AuthenticationPrincipal Caller caller,
             @PathVariable String id,
             @RequestBody Map<String, Object> input) {
-        if (!input.isEmpty()) throw new ApiFailure(400, "invalid_input");
-        return tasks.cancel(caller, id);
+        if (!Set.of("pauseQueue").containsAll(input.keySet())
+                || !(input.getOrDefault("pauseQueue", false) instanceof Boolean pauseQueue))
+            throw new ApiFailure(400, "invalid_input");
+        return tasks.cancel(caller, id, pauseQueue);
     }
 
     @GetMapping("/api/conversations/{id}/tasks")
-    TaskService.Page<TaskService.Task> list(
+    TaskService.TaskPage list(
             @AuthenticationPrincipal Caller caller,
             @PathVariable String id,
-            @RequestParam(defaultValue = "0") int page) {
-        return tasks.list(caller, id, page);
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(required = false) String requestId) {
+        return tasks.list(caller, id, page, requestId);
     }
 
     @GetMapping("/api/conversations/{id}/messages")
