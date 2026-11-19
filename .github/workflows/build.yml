@@ -24,8 +24,19 @@ jobs:
       - run: npm --prefix frontend run format:check
       - run: npm --prefix frontend run typecheck
       - run: npm --prefix frontend test
-      - run: npm --prefix frontend exec -- playwright install --with-deps chromium
-      - run: npm --prefix frontend run test:e2e
+      - name: Run Playwright E2E tests
+        run: |
+          playwright_version="$(node -p 'require("./frontend/node_modules/@playwright/test/package.json").version')"
+          node_home="$(dirname "$(dirname "$(realpath "$(command -v node)")")")"
+          docker run --rm --init --ipc=host \
+            --user "$(id -u):$(id -g)" \
+            --env CI=true --env HOME=/tmp \
+            --env PATH=/opt/ci-node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            --mount "type=bind,source=$GITHUB_WORKSPACE,target=/workspace" \
+            --mount "type=bind,source=$node_home,target=/opt/ci-node,readonly" \
+            --workdir /workspace \
+            "mcr.microsoft.com/playwright:v${playwright_version}-noble" \
+            npm --prefix frontend run test:e2e
       - run: backend/mvnw -B -f backend/pom.xml spotless:check
       - run: python3 scripts/verify-backend.py
       - run: python3 scripts/verify-compose.py
