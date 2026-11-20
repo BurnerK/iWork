@@ -41,6 +41,9 @@ class MaterialParsingTest {
             new java.util.concurrent.atomic.AtomicBoolean();
     static final java.util.concurrent.atomic.AtomicBoolean rejectCleanup =
             new java.util.concurrent.atomic.AtomicBoolean();
+    static final java.util.concurrent.atomic.AtomicBoolean holdAdmission =
+            new java.util.concurrent.atomic.AtomicBoolean();
+    static final java.util.concurrent.Semaphore admitParse = new java.util.concurrent.Semaphore(0);
     static final HttpClient proxyClient = HttpClient.newHttpClient();
     static final java.util.concurrent.ExecutorService proxyExecutor =
             java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
@@ -59,6 +62,13 @@ class MaterialParsingTest {
                             try (exchange) {
                                 if (exchange.getRequestMethod().equals("POST"))
                                     parseRequests.incrementAndGet();
+                                if (exchange.getRequestMethod().equals("POST")
+                                        && holdAdmission.compareAndSet(true, false)
+                                        && !admitParse.tryAcquire(
+                                                8, java.util.concurrent.TimeUnit.SECONDS)) {
+                                    exchange.sendResponseHeaders(503, -1);
+                                    return;
+                                }
                                 if ((exchange.getRequestMethod().equals("POST")
                                                 && rejectAdmission.compareAndSet(true, false))
                                         || (exchange.getRequestMethod().equals("DELETE")
@@ -401,6 +411,11 @@ class MaterialParsingTest {
     }
 
     String task(Browser browser, String model, String material, String message) throws Exception {
+        return task(browser, model, List.of(material), message);
+    }
+
+    String task(Browser browser, String model, List<String> materials, String message)
+            throws Exception {
         String cid =
                 json.readTree(browser.send("POST", "/api/conversations", "{}").body())
                         .get("id")
@@ -418,7 +433,7 @@ class MaterialParsingTest {
                                         "message",
                                         message,
                                         "materialIds",
-                                        List.of(material))));
+                                        materials)));
         assertThat(response.statusCode()).isEqualTo(202);
         String id = json.readTree(response.body()).get("id").asString();
         long deadline = System.nanoTime() + java.time.Duration.ofSeconds(60).toNanos();
@@ -431,6 +446,27 @@ class MaterialParsingTest {
             Thread.sleep(200);
         }
         throw new AssertionError("Task did not finish");
+    }
+
+    private java.util.stream.Stream<tools.jackson.databind.JsonNode> agUiEvents(
+            Browser browser, String task) throws Exception {
+        var response =
+                browser.client.send(
+                        HttpRequest.newBuilder(
+                                        URI.create(
+                                                "http://localhost:"
+                                                        + port
+                                                        + "/api/tasks/"
+                                                        + task
+                                                        + "/ag-ui"))
+                                .header("Accept", "text/event-stream")
+                                .timeout(java.time.Duration.ofSeconds(30))
+                                .build(),
+                        HttpResponse.BodyHandlers.ofLines());
+        assertThat(response.statusCode()).isEqualTo(200);
+        return response.body()
+                .filter(line -> line.startsWith("data:"))
+                .map(line -> json.readTree(line.substring(5)));
     }
 
     String submitDocument(
@@ -559,6 +595,7 @@ class MaterialParsingTest {
                                 List.of(material),
                                 "outputMode",
                                 "DOCUMENT"));
+        holdAdmission.set(true);
         var documentSubmit =
                 admin.send(
                         "POST",
@@ -566,12 +603,37 @@ class MaterialParsingTest {
                         documentRequest);
         assertThat(documentSubmit.statusCode()).isEqualTo(202);
         var documentTask = json.readTree(documentSubmit.body()).get("id").asString();
-        long documentDeadline = System.nanoTime() + java.time.Duration.ofSeconds(30).toNanos();
-        while (System.nanoTime() < documentDeadline
-                && json.readTree(admin.send("GET", "/api/tasks/" + documentTask, null).body())
-                        .get("status")
-                        .asString()
-                        .equals("RUNNING")) Thread.sleep(100);
+        List<tools.jackson.databind.JsonNode> documentEvents = new ArrayList<>();
+        try (var stream = agUiEvents(admin, documentTask)) {
+            var events = stream.iterator();
+            try {
+                while (events.hasNext()) {
+                    var event = events.next();
+                    documentEvents.add(event);
+                    if (event.path("name").asString().equals("iwork.tool")) {
+                        assertThat(event.path("value").path("status").asString())
+                                .isEqualTo("RUNNING");
+                        assertThat(event.path("value").path("materialLabel").asString())
+                                .isEqualTo("source.md");
+                        assertThat(
+                                        json.readTree(
+                                                        admin.send(
+                                                                        "GET",
+                                                                        "/api/tasks/"
+                                                                                + documentTask,
+                                                                        null)
+                                                                .body())
+                                                .path("status")
+                                                .asString())
+                                .isEqualTo("RUNNING");
+                        break;
+                    }
+                }
+            } finally {
+                admitParse.release();
+            }
+            events.forEachRemaining(documentEvents::add);
+        }
         assertThat(
                         json.readTree(admin.send("GET", "/api/tasks/" + documentTask, null).body())
                                 .get("status")
@@ -589,6 +651,10 @@ class MaterialParsingTest {
                         .path("items");
         assertThat(documents.size()).isEqualTo(1);
         String version = documents.get(0).get("versionId").asString();
+        assertToolEvents(documentEvents, "read_task_material", "source.md", "RUNNING", "COMPLETED");
+        assertThat(documentEvents.getLast().path("type").asString()).isEqualTo("RUN_FINISHED");
+        assertThat(documentEvents.getLast().path("result").path("versionId").asString())
+                .isEqualTo(version);
         assertThat(version)
                 .isNotEqualTo(documentTask)
                 .isNotEqualTo(documents.get(0).get("id").asString());
@@ -759,6 +825,13 @@ class MaterialParsingTest {
             awaitTask(admin, storage, "FAILED");
             assertThat(admin.send("GET", "/api/tasks/" + storage, null).body())
                     .contains("document_storage_unavailable");
+            try (var stream = agUiEvents(admin, storage)) {
+                var events = stream.toList();
+                assertToolEvents(events, "prepare_document", null, "RUNNING", "COMPLETED");
+                assertThat(events.getLast().path("type").asString()).isEqualTo("RUN_ERROR");
+                assertThat(events.getLast().path("code").asString())
+                        .isEqualTo("document_storage_unavailable");
+            }
         } finally {
             java.nio.file.Files.deleteIfExists(directory);
             java.nio.file.Files.move(held, directory);
@@ -820,7 +893,14 @@ class MaterialParsingTest {
         assertThat(duplicate.get(0).get("status").asString()).isEqualTo("COMPLETED");
         assertThat(duplicate.get(0).get("characters").isNull()).isFalse();
         var invalid = admin.upload(new byte[] {(byte) 0xff, (byte) 0xfe, 1});
-        var failed = task(admin, model, invalid, "请解析资料");
+        var failed = task(admin, model, List.of(invalid, material), "请解析资料");
+        try (var stream = agUiEvents(admin, failed)) {
+            var events = stream.toList();
+            assertToolEvents(
+                    events, "read_task_material", "source.md（第 1 份资料）", "RUNNING", "FAILED");
+            assertThat(events.getLast().path("type").asString()).isEqualTo("RUN_FINISHED");
+            assertThat(events.getLast().hasNonNull("result")).isFalse();
+        }
         var failedParse =
                 json.readTree(admin.send("GET", "/api/tasks/" + failed + "/parses", null).body())
                         .get(0);
@@ -909,5 +989,28 @@ class MaterialParsingTest {
                 .isEqualTo(404);
         assertThat(other.send("GET", "/api/tasks/" + tid + "/parses", null).statusCode())
                 .isEqualTo(404);
+    }
+
+    private void assertToolEvents(
+            List<tools.jackson.databind.JsonNode> events,
+            String name,
+            String label,
+            String... statuses) {
+        var calls =
+                events.stream()
+                        .filter(event -> event.path("name").asString().equals("iwork.tool"))
+                        .map(event -> event.path("value"))
+                        .filter(value -> value.path("name").asString().equals(name))
+                        .toList();
+        assertThat(calls)
+                .extracting(call -> call.path("status").asString())
+                .containsExactly(statuses);
+        assertThat(calls.getFirst().path("id").asString())
+                .isNotBlank()
+                .isEqualTo(calls.getLast().path("id").asString());
+        if (label != null)
+            assertThat(calls)
+                    .extracting(call -> call.path("materialLabel").asString())
+                    .containsOnly(label);
     }
 }

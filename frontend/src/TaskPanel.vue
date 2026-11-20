@@ -8,6 +8,7 @@ import UsagePanel from './UsagePanel.vue'
 import MaterialPanel from './MaterialPanel.vue'
 import { ApiError, errorMessage, request } from './api'
 import { submitRun } from './agUi'
+import { toolProgress, type ToolProgress } from './apiSchemas'
 const props = defineProps<{
   conversationId?: string
   ownerId: string
@@ -24,6 +25,7 @@ type Task = {
   outputMode?: string
   id: string
   publishedVersion?: PublishedVersion | null
+  toolProgress?: ToolProgress[]
   requestId: string
   replyTaskId?: string | null
   status: string
@@ -149,12 +151,14 @@ function returnToLatest() {
   thread.value?.focus({ preventScroll: true })
 }
 const liveReply = ref<{ taskId: string; content: string }>()
+const liveTools = ref<{ taskId: string; events: ToolProgress[] }>()
 const runningTask = computed(() => tasks.value.find((task) => task.status === 'RUNNING'))
 const streamingTaskId = computed(() => runningTask.value?.id)
 watch(streamingTaskId, (taskId, _, onCleanup) => {
   if (!taskId || typeof EventSource === 'undefined') return
   const stream = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/ag-ui`)
   let content = ''
+  let events: ToolProgress[] = []
   let closed = false
   const close = () => {
     closed = true
@@ -165,8 +169,20 @@ watch(streamingTaskId, (taskId, _, onCleanup) => {
     if (closed) return
     try {
       const update = JSON.parse(event.data)
-      if (update?.type === 'RUN_STARTED') content = ''
-      else if (update?.type === 'TEXT_MESSAGE_CONTENT' && typeof update.delta === 'string') {
+      if (update?.type === 'RUN_STARTED') {
+        content = ''
+        events = []
+        return
+      } else if (update?.type === 'CUSTOM' && update.name === 'iwork.tool') {
+        const progress = toolProgress.safeParse(update.value)
+        if (!progress.success) return
+        events.push(progress.data)
+        if (liveTools.value?.taskId !== taskId || events.length > liveTools.value.events.length) {
+          liveTools.value = { taskId, events: [...events] }
+          void nextTick(keepFollowing)
+        }
+        return
+      } else if (update?.type === 'TEXT_MESSAGE_CONTENT' && typeof update.delta === 'string') {
         content += update.delta
       } else if (
         update?.type === 'MESSAGES_SNAPSHOT' &&
@@ -178,7 +194,6 @@ watch(streamingTaskId, (taskId, _, onCleanup) => {
         void load()
         return
       } else return
-      if (update.type === 'RUN_STARTED') return
       liveReply.value = { taskId, content }
       void nextTick(keepFollowing)
     } catch {
@@ -224,6 +239,26 @@ const labels: Record<string, string> = {
   PAUSED: '已暂停',
   INTERRUPTED: '已中断',
 }
+function toolLabel(tool: ToolProgress, taskStatus: string) {
+  const status = tool.status === 'RUNNING' && taskStatus !== 'RUNNING' ? 'STOPPED' : tool.status
+  if (tool.name === 'prepare_document') {
+    return {
+      RUNNING: '正在准备文档正文',
+      COMPLETED: '文档正文已准备',
+      FAILED: '文档正文准备失败',
+      STOPPED: '文档正文准备已中止',
+    }[status]
+  }
+  const source =
+    tool.name === 'read_document_version' ? '来源文档版本' : tool.materialLabel || '资料'
+  const action = {
+    RUNNING: '正在读取',
+    COMPLETED: '读取完成',
+    FAILED: '读取失败',
+    STOPPED: '读取已中止',
+  }[status]
+  return `${source} · ${action}`
+}
 const replyId = (task: Task) => task.replyTaskId ?? task.id
 const latestPrompt = computed(() => messages.value.filter((item) => item.role === 'user').at(-1))
 const latestTask = computed(() =>
@@ -241,7 +276,13 @@ const composerAction = computed(() =>
 const turns = computed(() => {
   const groups = new Map<
     string,
-    { prompt?: Message; reply?: Message; task?: Task; publishedVersion?: PublishedVersion | null }
+    {
+      prompt?: Message
+      reply?: Message
+      task?: Task
+      tools?: ToolProgress[]
+      publishedVersion?: PublishedVersion | null
+    }
   >()
   for (const message of messages.value) {
     const group = groups.get(message.taskId) ?? {}
@@ -256,7 +297,15 @@ const turns = computed(() => {
     const key = replyId(task)
     const group = groups.get(key) ?? {}
     group.task = task
-    group.publishedVersion ??= task.publishedVersion
+    group.publishedVersion =
+      task.status === 'COMPLETED' ? (group.publishedVersion ?? task.publishedVersion) : null
+    const saved = task.toolProgress ?? []
+    const live = liveTools.value?.taskId === task.id ? liveTools.value.events : []
+    group.tools = [
+      ...new Map(
+        (live.length > saved.length ? live : saved).map((tool) => [tool.id, tool])
+      ).values(),
+    ]
     groups.set(key, group)
   }
   return groups
@@ -583,6 +632,7 @@ onUnmounted(() => {
               v-if="
                 turn.task?.status === 'RUNNING' ||
                 turn.publishedVersion ||
+                turn.tools?.length ||
                 turn.reply ||
                 turn.task?.status === 'FAILED' ||
                 turn.task?.status === 'PAUSED' ||
@@ -593,6 +643,13 @@ onUnmounted(() => {
               <p v-if="turn.task?.status === 'RUNNING'" class="hint" role="status">
                 {{ labels.RUNNING }}
               </p>
+              <div v-if="turn.task" aria-live="polite">
+                <ul v-if="turn.tools?.length" class="tool-progress" aria-label="工具进度">
+                  <li v-for="tool in turn.tools" :key="tool.id">
+                    {{ toolLabel(tool, turn.task.status) }}
+                  </li>
+                </ul>
+              </div>
               <MarkdownContent
                 v-if="
                   liveReply?.content &&

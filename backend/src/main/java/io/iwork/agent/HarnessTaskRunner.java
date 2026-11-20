@@ -59,7 +59,7 @@ public class HarnessTaskRunner implements TaskRunner {
         var toolkit =
                 new Toolkit(
                         io.agentscope.core.tool.ToolkitConfig.builder().parallel(false).build());
-        if (!attachments.isEmpty()) toolkit.registerTool(parsing.new Tools(input));
+        if (!attachments.isEmpty()) toolkit.registerTool(parsing.new Tools(input, attachments));
         var documentTools = documents.new Tools(input);
         boolean preparedDocument =
                 input.outputMode().equals("DOCUMENT") && documents.hasPreparedDraft(input);

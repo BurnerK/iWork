@@ -1,6 +1,7 @@
 package io.iwork.conversation;
 
 import io.iwork.artifacts.DocumentService.PublishedVersion;
+import io.iwork.conversation.TaskRunner.ToolProgress;
 import io.iwork.identity.ApiFailure;
 import io.iwork.identity.Caller;
 import io.iwork.identity.IdentityService;
@@ -22,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 @org.springframework.core.annotation.Order(0)
@@ -39,6 +41,7 @@ public class TaskService implements ApplicationRunner {
     private final io.iwork.artifacts.DocumentService documents;
     private final io.iwork.agent.PersonalAgentService agents;
     private final ProjectService projects;
+    private final ObjectMapper json;
     private final Semaphore capacity;
     private final ScheduledExecutorService dispatcher =
             Executors.newSingleThreadScheduledExecutor(
@@ -49,17 +52,20 @@ public class TaskService implements ApplicationRunner {
 
     record ReplySnapshot(int version, String content) {}
 
+    record LiveUpdate(ReplySnapshot reply, List<ToolProgress> tools) {}
+
     private static final class LiveReply {
-        private final Sinks.Many<ReplySnapshot> updates = Sinks.many().replay().latest();
+        private final Sinks.Many<LiveUpdate> updates = Sinks.many().replay().latest();
         private final String prefix;
         private final StringBuilder content = new StringBuilder();
+        private List<ToolProgress> tools = List.of();
         private String replyId;
         private int version;
         private boolean finished;
 
         LiveReply(String prefix) {
             this.prefix = prefix;
-            updates.tryEmitNext(new ReplySnapshot(0, prefix));
+            emit();
         }
 
         synchronized String snapshot() {
@@ -81,7 +87,20 @@ public class TaskService implements ApplicationRunner {
                     Math.min(delta.length(), MAX_REPLY_LENGTH - prefix.length() - content.length());
             if (length == 0) return;
             content.append(delta, 0, length);
-            updates.tryEmitNext(new ReplySnapshot(++version, snapshot()));
+            version++;
+            emit();
+        }
+
+        synchronized void tool(ToolProgress progress) {
+            if (finished) return;
+            var next = new ArrayList<>(tools);
+            next.add(progress);
+            tools = List.copyOf(next);
+            emit();
+        }
+
+        private void emit() {
+            updates.tryEmitNext(new LiveUpdate(new ReplySnapshot(version, snapshot()), tools));
         }
 
         synchronized void unseal() {
@@ -95,13 +114,19 @@ public class TaskService implements ApplicationRunner {
     }
 
     Flux<ReplySnapshot> replyStream(Caller caller, String id) {
-        return replyStream(caller, get(caller, id));
+        return liveUpdates(caller, get(caller, id)).map(LiveUpdate::reply).distinctUntilChanged();
     }
 
     Task observedTask(Caller caller, String id) {
         if (identity.verify(caller, false).mustChangePassword())
             throw new ApiFailure(403, "password_change_required");
         return get(caller, id);
+    }
+
+    PublishedVersion savedVersion(Caller caller, Task task) {
+        if (!task.status().equals("COMPLETED") || !task.outputMode().equals("DOCUMENT"))
+            return null;
+        return documents.publishedVersions(caller, List.of(task.id())).get(task.id());
     }
 
     String savedReply(Task task) {
@@ -121,7 +146,7 @@ public class TaskService implements ApplicationRunner {
                 .orElse("");
     }
 
-    Flux<ReplySnapshot> replyStream(Caller caller, Task task) {
+    Flux<LiveUpdate> liveUpdates(Caller caller, Task task) {
         var live = liveReplies.get(task.id());
         if (!task.status().equals("RUNNING") || live == null) return Flux.empty();
         return live.updates
@@ -144,6 +169,20 @@ public class TaskService implements ApplicationRunner {
         if (live != null) live.finish();
     }
 
+    private void recordTool(String taskId, LiveReply live, ToolProgress progress) {
+        if (db.update(
+                        "UPDATE tasks SET tool_progress=JSON_ARRAY_APPEND(COALESCE(tool_progress, JSON_ARRAY()), '$', CAST(? AS JSON)) WHERE id=? AND status='RUNNING'",
+                        json.writeValueAsString(progress),
+                        taskId)
+                > 0) live.tool(progress);
+    }
+
+    private List<ToolProgress> toolProgress(String stored) {
+        if (stored == null) return List.of();
+        return json.readValue(
+                stored, new tools.jackson.core.type.TypeReference<List<ToolProgress>>() {});
+    }
+
     public TaskService(
             JdbcTemplate db,
             TransactionTemplate tx,
@@ -154,6 +193,7 @@ public class TaskService implements ApplicationRunner {
             io.iwork.agent.PersonalAgentService agents,
             ProjectService projects,
             ObjectProvider<TaskRunner> runners,
+            ObjectMapper json,
             @Value("${iwork.task-capacity:2}") int capacity) {
         if (capacity < 1 || capacity > 16)
             throw new IllegalArgumentException("Task capacity must be 1 to 16");
@@ -166,6 +206,7 @@ public class TaskService implements ApplicationRunner {
         this.models = models;
         this.materials = materials;
         this.runners = runners;
+        this.json = json;
         this.capacity = new Semaphore(capacity);
     }
 
@@ -186,7 +227,8 @@ public class TaskService implements ApplicationRunner {
             String agentName,
             String projectId,
             String projectName,
-            PublishedVersion publishedVersion) {}
+            PublishedVersion publishedVersion,
+            List<ToolProgress> toolProgress) {}
 
     public record Message(
             long id,
@@ -249,7 +291,8 @@ public class TaskService implements ApplicationRunner {
                                         : new PublishedVersion(
                                                 r.getString("published_id"),
                                                 r.getString("published_title"),
-                                                r.getInt("published_number"))),
+                                                r.getInt("published_number")),
+                                toolProgress(r.getString("tool_progress"))),
                 args);
     }
 
@@ -794,7 +837,8 @@ public class TaskService implements ApplicationRunner {
                         task.outputMode(),
                         instructions,
                         replyBuffer.prefix,
-                        replyBuffer::append);
+                        replyBuffer::append,
+                        progress -> recordTool(task.id(), replyBuffer, progress));
         launch(input);
     }
 
@@ -921,7 +965,8 @@ public class TaskService implements ApplicationRunner {
                         (String) stored.get("project_instructions"),
                         (String) stored.get("agent_instructions")),
                 replyBuffer.prefix,
-                replyBuffer::append);
+                replyBuffer::append,
+                progress -> recordTool(task.id(), replyBuffer, progress));
     }
 
     private void execute(TaskRunner.Input input) {
@@ -1164,7 +1209,8 @@ public class TaskService implements ApplicationRunner {
                                                         (String) stored.get("project_instructions"),
                                                         (String) stored.get("agent_instructions")),
                                                 partial,
-                                                buffer::append);
+                                                buffer::append,
+                                                progress -> recordTool(id, buffer, progress));
                                 return get(live, id);
                             });
         } catch (RuntimeException failure) {

@@ -158,7 +158,7 @@ paths:
                     outputMode: {type: string, enum: [TEXT, DOCUMENT], default: TEXT}
       responses:
         '200':
-          description: AG-UI SSE。CUSTOM iwork.task 回执包含任务 ID、请求标识和业务状态。
+          description: AG-UI SSE。CUSTOM iwork.task 回执包含任务 ID、请求标识和业务状态，后续事件与按任务订阅一致。
           content:
             text/event-stream:
               schema: {type: string}
@@ -169,7 +169,7 @@ paths:
       summary: 订阅同一任务的 AG-UI 事件
       responses:
         '200':
-          description: AG-UI SSE。先发送该任务的完整回复快照，再按序发送正文更新。RUN_FINISHED 表示业务任务已完成。
+          description: AG-UI SSE。发送完整回复快照和后续正文更新。CUSTOM iwork.tool 按序发送工具开始和结果，同一次调用使用同一 id。RUN_FINISHED 表示业务完成，文档任务的 result 包含已保存的 versionId、title 和 versionNumber。业务失败使用 RUN_ERROR。
           content:
             text/event-stream:
               schema: {type: string}

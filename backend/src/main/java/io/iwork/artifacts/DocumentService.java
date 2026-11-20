@@ -334,9 +334,14 @@ public class DocumentService {
         public Map<String, Object> prepare(
                 @ToolParam(name = "title", description = "文档标题，无路径或扩展名") String title,
                 @ToolParam(name = "markdown", description = "完整Markdown正文") String markdown) {
-            if (baseVersion(input) != null && !sourceRead)
-                throw new ApiFailure(409, "document_source_required");
-            return DocumentService.this.prepare(input, title, markdown);
+            return input.observeTool(
+                    "prepare_document",
+                    null,
+                    () -> {
+                        if (baseVersion(input) != null && !sourceRead)
+                            throw new ApiFailure(409, "document_source_required");
+                        return DocumentService.this.prepare(input, title, markdown);
+                    });
         }
 
         public final class SourceTools {
@@ -345,6 +350,10 @@ public class DocumentService {
                     description = "读取本任务已选定的来源文档版本，每页最多12000字符。按 nextOffset 继续读取，不接受其他版本或路径。")
             public Map<String, Object> read(
                     @ToolParam(name = "offset", description = "字符起点，首次为0") int offset) {
+                return input.observeTool("read_document_version", null, () -> readSource(offset));
+            }
+
+            private Map<String, Object> readSource(int offset) {
                 tx.executeWithoutResult(status -> authorize(input));
                 String base = baseVersion(input);
                 if (base == null) throw new ApiFailure(403, "document_not_authorized");

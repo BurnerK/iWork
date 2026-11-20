@@ -323,9 +323,11 @@ public class MaterialParsing implements ApplicationRunner {
 
     public final class Tools {
         private final TaskRunner.Input input;
+        private final List<Map<String, Object>> attachments;
 
-        public Tools(TaskRunner.Input input) {
+        public Tools(TaskRunner.Input input, List<Map<String, Object>> attachments) {
             this.input = input;
+            this.attachments = attachments;
         }
 
         @Tool(
@@ -335,7 +337,26 @@ public class MaterialParsing implements ApplicationRunner {
         public Object read(
                 @ToolParam(name = "materialId", description = "当前任务资料ID") String materialId,
                 @ToolParam(name = "offset", description = "字符偏移，首次为0") int offset) {
-            return MaterialParsing.this.read(input, materialId, offset);
+            return input.observeTool(
+                    "read_task_material",
+                    materialLabel(materialId),
+                    () -> MaterialParsing.this.read(input, materialId, offset));
+        }
+
+        private String materialLabel(String materialId) {
+            for (int index = 0; index < attachments.size(); index++) {
+                var attachment = attachments.get(index);
+                if (!attachment.get("id").equals(materialId)) continue;
+                String name = (String) attachment.get("name");
+                boolean ambiguous =
+                        attachments.stream()
+                                        .filter(item -> name.equals(item.get("name")))
+                                        .limit(2)
+                                        .count()
+                                > 1;
+                return ambiguous ? name + "（第 " + (index + 1) + " 份资料）" : name;
+            }
+            return null;
         }
     }
 

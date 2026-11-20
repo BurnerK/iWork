@@ -18,6 +18,13 @@ const project = named.extend({ instructions: text.optional() })
 const agent = named.extend({ instructions: text, modelId: text })
 const material = named.extend({ byteSize: number })
 const publishedVersion = z.object({ versionId: text, title: text, versionNumber: number })
+export const toolProgress = z.object({
+  id: text,
+  name: z.enum(['read_task_material', 'prepare_document', 'read_document_version']),
+  materialLabel: nullableText.optional(),
+  status: z.enum(['RUNNING', 'COMPLETED', 'FAILED']),
+})
+export type ToolProgress = z.infer<typeof toolProgress>
 const version = publishedVersion.extend({
   id: text,
   taskId: text,
@@ -33,6 +40,7 @@ const task = id.extend({
   agentName: nullableText.optional(),
   errorCode: nullableText.optional(),
   publishedVersion: publishedVersion.nullable().optional(),
+  toolProgress: z.array(toolProgress).optional(),
 })
 const message = z.object({
   id: number,

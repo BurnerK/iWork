@@ -1285,7 +1285,7 @@ paths:
         required: true
       responses:
         "200":
-          description: AG-UI SSE。CUSTOM iwork.task 回执包含任务 ID、请求标识和业务状态。
+          description: AG-UI SSE。CUSTOM iwork.task 回执包含任务 ID、请求标识和业务状态，后续事件与按任务订阅一致。
           content:
             text/event-stream:
               schema:
@@ -2413,7 +2413,9 @@ paths:
           type: string
       responses:
         "200":
-          description: AG-UI SSE。先发送该任务的完整回复快照，再按序发送正文更新。RUN_FINISHED 表示业务任务已完成。
+          description: AG-UI SSE。发送完整回复快照和后续正文更新。CUSTOM iwork.tool 按序发送工具开始和结果，同一次调用使用同一
+            id。RUN_FINISHED 表示业务完成，文档任务的 result 包含已保存的 versionId、title 和 versionNumber。业务失败使用
+            RUN_ERROR。
           content:
             text/event-stream:
               schema:
@@ -3168,6 +3170,17 @@ components:
         updatedAt:
           type: string
           format: date-time
+    io.iwork.conversation.TaskRunner.ToolProgress:
+      type: object
+      properties:
+        id:
+          type: string
+        materialLabel:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
     io.iwork.conversation.TaskService.Message:
       type: object
       properties:
@@ -3257,6 +3270,10 @@ components:
           type: string
         status:
           type: string
+        toolProgress:
+          type: array
+          items:
+            $ref: "#/components/schemas/io.iwork.conversation.TaskRunner.ToolProgress"
         updatedAt:
           type: string
           format: date-time

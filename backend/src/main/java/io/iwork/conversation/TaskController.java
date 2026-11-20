@@ -3,6 +3,7 @@ package io.iwork.conversation;
 import io.agentscope.core.agui.encoder.AguiEventEncoder;
 import io.agentscope.core.agui.event.AguiEvent;
 import io.agentscope.core.agui.model.AguiMessage;
+import io.iwork.artifacts.DocumentService.PublishedVersion;
 import io.iwork.identity.ApiFailure;
 import io.iwork.identity.Caller;
 import jakarta.servlet.http.HttpServletResponse;
@@ -133,16 +134,30 @@ class TaskController {
                             if (current.status().equals("RUNNING")
                                     || current.status().equals("QUEUED")) {
                                 return state.concatWith(
-                                        tasks.replyStream(caller, current)
+                                        tasks.liveUpdates(caller, current)
                                                 .concatMapIterable(
-                                                        snapshot ->
-                                                                reply.update(snapshot.content())));
+                                                        update -> {
+                                                            var events =
+                                                                    new ArrayList<>(
+                                                                            reply.update(
+                                                                                    update.reply()
+                                                                                            .content()));
+                                                            events.addAll(
+                                                                    reply.tools(update.tools()));
+                                                            return events;
+                                                        }));
                             }
                             reply.finished = true;
                             return state.concatWith(
                                             Flux.fromIterable(
                                                     reply.update(tasks.savedReply(current))))
-                                    .concatWith(Flux.fromIterable(reply.finish(current)));
+                                    .concatWith(
+                                            Flux.fromIterable(reply.tools(current.toolProgress())))
+                                    .concatWith(
+                                            Flux.fromIterable(
+                                                    reply.finish(
+                                                            current,
+                                                            tasks.savedVersion(caller, current))));
                         })
                 .subscribeOn(Schedulers.boundedElastic());
     }
@@ -156,6 +171,7 @@ class TaskController {
         private boolean snapshotPending;
         private boolean finished;
         private boolean open;
+        private int sentTools;
 
         AgUiReply(TaskService.Task task, boolean restoreReply) {
             this.threadId = task.conversationId();
@@ -196,14 +212,24 @@ class TaskController {
                     threadId, runId, "iwork.observation_error", Map.of("code", code));
         }
 
-        List<AguiEvent> finish(TaskService.Task task) {
+        List<AguiEvent> tools(List<TaskRunner.ToolProgress> progress) {
+            var events = new ArrayList<AguiEvent>();
+            while (sentTools < progress.size()) {
+                events.add(
+                        new AguiEvent.Custom(
+                                threadId, runId, "iwork.tool", progress.get(sentTools++)));
+            }
+            return events;
+        }
+
+        List<AguiEvent> finish(TaskService.Task task, PublishedVersion version) {
             String code =
                     task.errorCode() == null
                             ? task.status().toLowerCase(Locale.ROOT)
                             : task.errorCode();
             AguiEvent terminal =
                     task.status().equals("COMPLETED")
-                            ? new AguiEvent.RunFinished(threadId, runId)
+                            ? new AguiEvent.RunFinished(threadId, runId, version, null)
                             : new AguiEvent.RunError(threadId, runId, code, code);
             return open
                     ? List.of(new AguiEvent.TextMessageEnd(threadId, runId, messageId), terminal)

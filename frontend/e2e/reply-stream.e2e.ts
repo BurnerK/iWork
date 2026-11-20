@@ -415,6 +415,25 @@ test('refreshes and reconnects from two tabs to the same running task', async ({
       const snapshot = completed ? final : continued ? restored : first
       const events = [
         { type: 'RUN_STARTED' },
+        ...['RUNNING', ...(continued ? ['COMPLETED'] : [])].map((status) => ({
+          type: 'CUSTOM',
+          name: 'iwork.tool',
+          value: {
+            id: 'read-source',
+            name: 'read_task_material',
+            materialLabel: '工作记录.txt',
+            status,
+          },
+        })),
+        ...(continued
+          ? [
+              {
+                type: 'CUSTOM',
+                name: 'iwork.tool',
+                value: { id: 'prepare', name: 'prepare_document', status: 'COMPLETED' },
+              },
+            ]
+          : []),
         {
           type: 'MESSAGES_SNAPSHOT',
           messages: [{ id: 'report-reply', role: 'assistant', content: snapshot }],
@@ -434,6 +453,8 @@ test('refreshes and reconnects from two tabs to the same running task', async ({
 
   await page.goto('/#/conversations/first')
   await expect(page.getByText(first, { exact: true })).toBeVisible()
+  await expect(page.getByText('工作记录.txt · 正在读取')).toBeVisible()
+  await expect(page.getByRole('button', { name: '周报 · 版本 1' })).toHaveCount(0)
   await page.reload()
   await expect(page.getByText(first, { exact: true })).toBeVisible()
 
@@ -443,6 +464,9 @@ test('refreshes and reconnects from two tabs to the same running task', async ({
   continued = true
   for (const tab of [page, other]) {
     await expect(tab.getByText(final, { exact: true })).toBeVisible()
+    await expect(tab.getByText('工作记录.txt · 读取完成')).toHaveCount(1)
+    await expect(tab.getByText('文档正文已准备', { exact: true })).toBeVisible()
+    await expect(tab.getByRole('button', { name: '周报 · 版本 1' })).toHaveCount(0)
     await expect(tab.getByText('请写周报', { exact: true })).toHaveCount(1)
   }
 
@@ -453,3 +477,60 @@ test('refreshes and reconnects from two tabs to the same running task', async ({
     await expect(tab.getByRole('button', { name: '周报 · 版本 1' })).toHaveCount(1)
   }
 })
+
+for (const saveFailed of [false, true]) {
+  test(`shows the ${saveFailed ? 'final save' : 'material'} failure without an artifact card`, async ({
+    page,
+  }) => {
+    const errorCode = saveFailed ? 'document_storage_unavailable' : 'material_parse_failed'
+    const progress = saveFailed
+      ? { id: 'prepare', name: 'prepare_document', status: 'COMPLETED' }
+      : {
+          id: 'read',
+          name: 'read_task_material',
+          materialLabel: '损坏的记录.txt（第 2 份资料）',
+          status: 'FAILED',
+        }
+    await page.route('**/api/**', async (route) => {
+      const { pathname } = new URL(route.request().url())
+      let data: unknown = { items: [], hasMore: false }
+      if (pathname === '/api/auth/me')
+        data = { id: 'alice', displayName: 'Alice', role: 'USER', mustChangePassword: false }
+      if (pathname === '/api/models') data = []
+      if (pathname === '/api/conversations/first')
+        data = { id: 'first', title: '工作会话', updatedAt: '2026-11-20T00:00:00Z' }
+      if (pathname.endsWith('/first/tasks'))
+        data = {
+          items: [
+            {
+              id: 'report',
+              requestId: 'write',
+              status: 'FAILED',
+              executionState: 'STOPPED',
+              outputMode: 'DOCUMENT',
+              errorCode,
+              toolProgress: [progress],
+            },
+          ],
+          hasMore: false,
+        }
+      if (pathname.endsWith('/first/messages'))
+        data = {
+          items: [{ id: 1, taskId: 'report', role: 'user', content: '写周报' }],
+          hasMore: false,
+        }
+      await route.fulfill({ json: { success: true, data, error: null } })
+    })
+
+    await page.goto('/#/conversations/first')
+    await expect(
+      page.getByText(saveFailed ? '文档正文已准备' : '损坏的记录.txt（第 2 份资料） · 读取失败', {
+        exact: true,
+      })
+    ).toBeVisible()
+    await expect(
+      page.getByRole('alert').filter({ hasText: saveFailed ? '文档保存' : '资料无法解析' })
+    ).toBeVisible()
+    await expect(page.getByRole('button', { name: /版本 1/ })).toHaveCount(0)
+  })
+}
