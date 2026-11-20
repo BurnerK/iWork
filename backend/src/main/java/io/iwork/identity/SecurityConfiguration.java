@@ -17,6 +17,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.session.web.http.CookieSerializer;
 import org.springframework.session.web.http.DefaultCookieSerializer;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -128,6 +132,7 @@ class SecurityConfiguration {
                                         org.springframework.security.config.http
                                                 .SessionCreationPolicy.STATELESS))
                 .requestCache(cache -> cache.disable())
+                .csrf(csrf -> csrf.disable())
                 .logout(logout -> logout.disable())
                 .anonymous(anonymous -> anonymous.disable())
                 .authorizeHttpRequests(
@@ -160,7 +165,11 @@ class SecurityConfiguration {
     @Bean
     @org.springframework.core.annotation.Order(2)
     @org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
-    SecurityFilterChain security(HttpSecurity http, IdentityService identity, Clock clock)
+    SecurityFilterChain security(
+            HttpSecurity http,
+            IdentityService identity,
+            Clock clock,
+            @Value("${iwork.cookie-secure:true}") boolean secure)
             throws Exception {
         var liveIdentity =
                 new OncePerRequestFilter() {
@@ -239,6 +248,7 @@ class SecurityConfiguration {
                                         .authenticated()
                                         .anyRequest()
                                         .denyAll())
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokens(secure)))
                 .requestCache(cache -> cache.disable())
                 .exceptionHandling(
                         errors ->
@@ -273,5 +283,38 @@ class SecurityConfiguration {
                                                 policy.policyDirectives(
                                                         "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'")))
                 .build();
+    }
+
+    private CsrfTokenRepository csrfTokens(boolean secure) {
+        var anonymousTokens = new CookieCsrfTokenRepository();
+        anonymousTokens.setCookieName(secure ? "__Host-IWORK_CSRF" : "IWORK_CSRF");
+        anonymousTokens.setHeaderName("X-CSRF-TOKEN");
+        anonymousTokens.setCookieCustomizer(
+                cookie -> cookie.secure(secure).path("/").sameSite("Strict"));
+        var authenticatedTokens = new HttpSessionCsrfTokenRepository();
+        return new CsrfTokenRepository() {
+            private CsrfTokenRepository repository() {
+                var auth = SecurityContextHolder.getContext().getAuthentication();
+                return auth != null && auth.getPrincipal() instanceof Caller
+                        ? authenticatedTokens
+                        : anonymousTokens;
+            }
+
+            @Override
+            public CsrfToken generateToken(HttpServletRequest request) {
+                return repository().generateToken(request);
+            }
+
+            @Override
+            public void saveToken(
+                    CsrfToken token, HttpServletRequest request, HttpServletResponse response) {
+                repository().saveToken(token, request, response);
+            }
+
+            @Override
+            public CsrfToken loadToken(HttpServletRequest request) {
+                return repository().loadToken(request);
+            }
+        };
     }
 }

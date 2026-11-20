@@ -294,9 +294,16 @@ class IdentityConversationTest {
     @Test
     @org.junit.jupiter.api.Order(4)
     void csrfRotationCookieAndLogoutAreEnforced() throws Exception {
+        var beforeBootstrap = REDIS.execInContainer("redis-cli", "DBSIZE");
+        assertThat(beforeBootstrap.getExitCode()).isZero();
         var browser = new Browser();
         browser.csrf();
-        String anonymous = browser.cookies.getCookieStore().getCookies().toString();
+        assertThat(browser.cookies.getCookieStore().getCookies())
+                .extracting(HttpCookie::getName)
+                .containsExactly("IWORK_CSRF");
+        var afterBootstrap = REDIS.execInContainer("redis-cli", "DBSIZE");
+        assertThat(afterBootstrap.getExitCode()).isZero();
+        assertThat(afterBootstrap.getStdout()).isEqualTo(beforeBootstrap.getStdout());
         assertThat(
                         browser.request(
                                         "POST",
@@ -307,8 +314,11 @@ class IdentityConversationTest {
                 .isEqualTo(403);
         var login = browser.login("admin", "Changed-password-11");
         assertThat(login.statusCode()).isEqualTo(200);
-        assertThat(browser.cookies.getCookieStore().getCookies().toString())
-                .isNotEqualTo(anonymous);
+        assertThat(browser.cookies.getCookieStore().getCookies())
+                .extracting(HttpCookie::getName)
+                .contains("IWORK_SESSION");
+        assertThat(browser.request("POST", "/api/conversations", "{}", true).statusCode())
+                .isEqualTo(403);
         assertThat(login.headers().firstValue("Set-Cookie").orElseThrow())
                 .contains("HttpOnly", "SameSite=Lax", "Max-Age=2592000");
         assertThat(login.headers().firstValue("Cache-Control").orElseThrow()).contains("no-store");
