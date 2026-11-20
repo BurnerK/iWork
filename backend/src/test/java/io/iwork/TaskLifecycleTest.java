@@ -28,6 +28,7 @@ import tools.jackson.databind.ObjectMapper;
             "iwork.task-conversation-queue-limit=3",
             "iwork.task-account-queue-limit=6",
             "IWORK_MODEL_KEY_TEST=synthetic-model-secret-12",
+            "IWORK_MODEL_URL_TEST=https://models.example.test/v1",
             "iwork.bootstrap.username=admin",
             "iwork.bootstrap.password=Initial-password-11"
         })

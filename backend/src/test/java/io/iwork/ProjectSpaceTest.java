@@ -24,6 +24,7 @@ import tools.jackson.databind.ObjectMapper;
             "iwork.files-directory=target/project-space-files",
             "iwork.cookie-secure=false",
             "IWORK_MODEL_KEY_TEST=synthetic-model-secret-12",
+            "IWORK_MODEL_URL_TEST=https://models.example.test/v1",
             "iwork.bootstrap.username=admin",
             "iwork.bootstrap.password=Initial-password-11"
         })

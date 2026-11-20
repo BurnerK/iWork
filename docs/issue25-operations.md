@@ -21,7 +21,7 @@
 5. 启动后查看 readiness、迁移与受限诊断。真实登录查回用户、任务、历史、原文与成果，下载对比。运行中的旧任务应显示中断，旧 requestId 不得产生新调用。通过新请求验证会话上下文仍可使用。Redis 不兼容时重新登录，业务数据由 MySQL 和文件备份恢复。
 6. 若启动时迁移失败，执行 `iwork_release stop app`，保持应用停止并定位。不得修改已应用迁移、自动 clean、忽略校验或对未知数据库 baseline。若新版本已写数据，在独立恢复环境恢复整套旧备份并核对，再由部署者决定是否切换。
 
-用私有 Compose 文件 `/secure/iwork-model.compose.yaml` 将模型密钥仅传给 app。对应的 `/secure/iwork-model.env` 权限设为 0600，由部署者按模型配置所引用的 `IWORK_MODEL_KEY_*` 变量名填充。
+用私有 Compose 文件 `/secure/iwork-model.compose.yaml` 将模型密钥仅传给 app。对应的 `/secure/iwork-model.env` 权限设为 0600，由部署者配置 `IWORK_MODEL_KEY_<名称>` 和同名的 `IWORK_MODEL_URL_<名称>`。URL 必须与该密钥获准使用的 HTTPS 基础地址完全一致，包括路径和末尾斜线。升级前为每个已用密钥补齐 URL，缺少绑定或地址不匹配的模型会拒绝保存和调用。服务商若返回重定向，请由部署者直接绑定经批准的最终地址。
 
 ```yaml
 services:

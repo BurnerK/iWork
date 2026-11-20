@@ -23,6 +23,7 @@ import tools.jackson.databind.ObjectMapper;
             "iwork.files-directory=target/model-files",
             "iwork.cookie-secure=false",
             "IWORK_MODEL_KEY_TEST=synthetic-model-secret-12",
+            "IWORK_MODEL_URL_TEST=https://models.example.test/v1",
             "iwork.bootstrap.username=admin",
             "iwork.bootstrap.password=Initial-password-11"
         })
@@ -258,6 +259,18 @@ class ModelConfigurationTest {
                                 .statusCode())
                 .isEqualTo(404);
 
+        for (var unapproved :
+                List.of("https://other.example.test/v1", "https://models.example.test/other")) {
+            changed.put("baseUrl", unapproved);
+            var rejected =
+                    admin.request(
+                            "PUT",
+                            "/api/admin/models/" + id,
+                            json.writeValueAsString(changed),
+                            true);
+            assertThat(rejected.statusCode()).isEqualTo(400);
+            assertThat(rejected.body()).contains("credential_not_configured");
+        }
         changed.put("baseUrl", input.get("baseUrl"));
         changed.put("credentialRef", "IWORK_MODEL_KEY_MISSING");
         assertThat(

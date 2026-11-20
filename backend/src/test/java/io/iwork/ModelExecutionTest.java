@@ -25,6 +25,7 @@ import tools.jackson.databind.ObjectMapper;
             "iwork.files-directory=target/model-execution-files",
             "iwork.cookie-secure=false",
             "IWORK_MODEL_KEY_TEST=synthetic-model-secret-12",
+            "IWORK_MODEL_URL_TEST=https://models.example.test/v1",
             "iwork.bootstrap.username=admin",
             "iwork.bootstrap.password=Initial-password-11"
         })
@@ -101,6 +102,10 @@ class ModelExecutionTest {
     static volatile java.util.concurrent.CountDownLatch auxiliaryGate =
             new java.util.concurrent.CountDownLatch(0);
     @org.springframework.beans.factory.annotation.Autowired io.iwork.model.ModelCallLedger ledger;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.jdbc.core.JdbcTemplate db;
+
     @org.springframework.beans.factory.annotation.Autowired io.iwork.model.GovernedModel models;
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -153,6 +158,8 @@ class ModelExecutionTest {
 
                 public reactor.core.publisher.Flux<String> stream(
                         io.agentscope.core.model.transport.HttpRequest request) {
+                    assertThat(request.getUrl())
+                            .isEqualTo("https://models.example.test/v1/chat/completions");
                     requests.incrementAndGet();
                     assertThat(request.getBody())
                             .doesNotContain(
@@ -649,6 +656,31 @@ class ModelExecutionTest {
                 "/api/admin/users/" + uid + "/model-access",
                 json.writeValueAsString(Map.of("modelIds", List.of(modelId))),
                 true);
+        int approvedRequests = requests.get();
+        db.update(
+                "UPDATE models SET base_url=? WHERE id=?",
+                "https://other.example.test/v1",
+                modelId);
+        try {
+            var unapproved = submit(admin, cid, modelId, "stored endpoint mismatch");
+            awaitStatus(admin, unapproved, "FAILED");
+            assertThat(requests.get()).isEqualTo(approvedRequests);
+            assertThat(
+                            admin.request("GET", "/api/tasks/" + unapproved + "/calls", null, false)
+                                    .body())
+                    .contains("NOT_SENT");
+            assertThat(
+                            db.queryForObject(
+                                    "SELECT error_code FROM model_calls WHERE task_id=?",
+                                    String.class,
+                                    unapproved))
+                    .isEqualTo("credential_not_configured");
+        } finally {
+            db.update(
+                    "UPDATE models SET base_url=? WHERE id=?",
+                    "https://models.example.test/v1",
+                    modelId);
+        }
         var skill =
                 java.nio.file.Path.of(
                         "target/model-execution-files/harness/skills/unexpected/SKILL.md");

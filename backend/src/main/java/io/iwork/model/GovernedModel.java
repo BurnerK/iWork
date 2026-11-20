@@ -7,12 +7,13 @@ import io.agentscope.core.util.JsonUtils;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import io.iwork.conversation.TaskRunner;
 import io.iwork.identity.ApiFailure;
+import java.net.URI;
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -25,17 +26,17 @@ public class GovernedModel {
             ExecutionConfig.builder().maxAttempts(1).timeout(Duration.ofSeconds(120)).build();
     private final ModelCallLedger ledger;
     private final HttpTransport transport;
-    private final Environment environment;
+    private final ModelCredentials credentials;
     private final ObjectMapper json;
 
     public GovernedModel(
             ModelCallLedger ledger,
             HttpTransport transport,
-            Environment environment,
+            ModelCredentials credentials,
             ObjectMapper json) {
         this.ledger = ledger;
         this.transport = transport;
-        this.environment = environment;
+        this.credentials = credentials;
         this.json = json;
     }
 
@@ -43,7 +44,13 @@ public class GovernedModel {
     static class TransportConfiguration {
         @Bean
         HttpTransport providerTransport() {
-            return JdkHttpTransport.builder().build();
+            var config = HttpTransportConfig.defaults();
+            var client =
+                    HttpClient.newBuilder()
+                            .followRedirects(HttpClient.Redirect.NEVER)
+                            .connectTimeout(config.getConnectTimeout())
+                            .build();
+            return JdkHttpTransport.builder().config(config).client(client).build();
         }
     }
 
@@ -89,9 +96,10 @@ public class GovernedModel {
                             int bytes = inputBytes(messages, tools);
                             var call = ledger.begin(input, purpose, bytes);
                             try {
-                                var key = environment.getProperty(call.credentialRef());
-                                if (key == null || key.isBlank())
-                                    throw new ApiFailure(503, "credential_not_configured");
+                                var key =
+                                        credentials.resolve(
+                                                call.baseUrl(), call.credentialRef(), 503);
+                                var approved = URI.create(call.baseUrl());
                                 var finished = new java.util.concurrent.atomic.AtomicBoolean();
                                 var outputBytes = new java.util.concurrent.atomic.AtomicLong();
                                 HttpTransport observed =
@@ -104,6 +112,8 @@ public class GovernedModel {
                                             public Flux<String> stream(HttpRequest request) {
                                                 return Flux.defer(
                                                         () -> {
+                                                            ModelCredentials.requireOrigin(
+                                                                    approved, request.getUrl());
                                                             ledger.sent(call.id());
                                                             return transport.stream(request)
                                                                     .doOnNext(

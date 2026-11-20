@@ -4,7 +4,6 @@ import io.iwork.identity.ApiFailure;
 import io.iwork.identity.Caller;
 import io.iwork.identity.IdentityService;
 import java.math.BigDecimal;
-import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,15 +16,12 @@ import org.springframework.web.bind.annotation.*;
 class ModelService {
     private final JdbcTemplate db;
     private final IdentityService identity;
-    private final org.springframework.core.env.Environment environment;
+    private final ModelCredentials credentials;
 
-    ModelService(
-            JdbcTemplate db,
-            IdentityService identity,
-            org.springframework.core.env.Environment environment) {
+    ModelService(JdbcTemplate db, IdentityService identity, ModelCredentials credentials) {
         this.db = db;
         this.identity = identity;
-        this.environment = environment;
+        this.credentials = credentials;
     }
 
     record Model(
@@ -106,21 +102,7 @@ class ModelService {
                 url = text(input, "baseUrl", 1000),
                 model = text(input, "modelName", 200),
                 ref = text(input, "credentialRef", 100);
-        try {
-            var uri = URI.create(url);
-            if (!"https".equals(uri.getScheme())
-                    || uri.getHost() == null
-                    || uri.getRawUserInfo() != null
-                    || uri.getRawQuery() != null
-                    || uri.getRawFragment() != null) throw new IllegalArgumentException();
-        } catch (IllegalArgumentException error) {
-            throw new ApiFailure(400, "invalid_model_url");
-        }
-        if (!ref.matches("IWORK_MODEL_KEY_[A-Z0-9_]{1,80}"))
-            throw new ApiFailure(400, "invalid_credential_reference");
-        var credential = environment.getProperty(ref);
-        if (credential == null || credential.isBlank())
-            throw new ApiFailure(400, "credential_not_configured");
+        credentials.resolve(url, ref, 400);
         Integer window = null;
         if (input.get("contextWindow") != null) {
             if (!(input.get("contextWindow") instanceof Integer number)
