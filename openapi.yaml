@@ -1431,7 +1431,8 @@ paths:
       tags:
       - 会话任务
       summary: 查看会话任务与待发送队列
-      description: queuedItems 按发送顺序排列，每项提供消息摘要。已移除的项不会出现在任务历史或队列中。恢复暂停的队列时使用 queuePauseVersion。
+      description: queuedItems 按发送顺序分页，每页 20 条，queuePage 从 0 开始。queuedCount 是整个会话的待发送总数。已移除的项不会出现在任务历史或队列中。恢复暂停的队列时使用
+        queuePauseVersion。
       operationId: get_api_conversations_id_tasks
       parameters:
       - name: id
@@ -1440,6 +1441,13 @@ paths:
         schema:
           type: string
       - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: queuePage
         in: query
         required: false
         schema:

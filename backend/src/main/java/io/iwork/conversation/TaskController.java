@@ -341,8 +341,9 @@ class TaskController {
             @AuthenticationPrincipal Caller caller,
             @PathVariable String id,
             @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "0") int queuePage,
             @RequestParam(required = false) String requestId) {
-        return tasks.list(caller, id, page, requestId);
+        return tasks.list(caller, id, page, queuePage, requestId);
     }
 
     @DeleteMapping("/api/conversations/{id}/tasks/queue/{taskId}")

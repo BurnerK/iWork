@@ -70,7 +70,7 @@ paths:
   /api/conversations/{id}/tasks:
     get:
       summary: 查看会话任务与待发送队列
-      description: queuedItems 按发送顺序排列，每项提供消息摘要。已移除的项不会出现在任务历史或队列中。恢复暂停的队列时使用 queuePauseVersion。
+      description: queuedItems 按发送顺序分页，每页 20 条，queuePage 从 0 开始。queuedCount 是整个会话的待发送总数。已移除的项不会出现在任务历史或队列中。恢复暂停的队列时使用 queuePauseVersion。
     post:
       summary: 提交会话任务
       requestBody:

@@ -25,6 +25,8 @@ import tools.jackson.databind.ObjectMapper;
         properties = {
             "iwork.files-directory=target/task-files",
             "iwork.cookie-secure=false",
+            "iwork.task-conversation-queue-limit=3",
+            "iwork.task-account-queue-limit=6",
             "IWORK_MODEL_KEY_TEST=synthetic-model-secret-12",
             "iwork.bootstrap.username=admin",
             "iwork.bootstrap.password=Initial-password-11"
@@ -48,6 +50,9 @@ class TaskLifecycleTest {
         r.add("spring.data.redis.host", REDIS::getHost);
         r.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
     }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.jdbc.core.JdbcTemplate db;
 
     @LocalServerPort int port;
     final ObjectMapper json = new ObjectMapper();
@@ -473,6 +478,7 @@ class TaskLifecycleTest {
         ordinary.request("POST", "/api/tasks/" + ownTaskId + "/cancel", "{}", true);
         awaitTask(ordinary, ownTaskId, "executionState", "STOPPED");
 
+        verifyQueueLimits(ordinary, userId, modelId);
         verifyFollowUpQueue(cid, cid2, modelId, materialId, uid);
         verifyAgUi(admin, modelId, materialId);
         verifyDetachedAgUiDocument(admin, modelId);
@@ -758,6 +764,106 @@ class TaskLifecycleTest {
                                 outputMode)));
     }
 
+    private void verifyQueueLimits(Browser browser, String ownerId, String modelId)
+            throws Exception {
+        String first = pausedQueue(browser, ownerId, modelId, 1);
+        var conversationRace = queueRace(browser, modelId, first, first, first);
+        assertThat(conversationRace)
+                .extracting(HttpResponse::statusCode)
+                .containsExactlyInAnyOrder(202, 202, 429);
+        var accepted =
+                json.readTree(
+                        conversationRace.stream()
+                                .filter(result -> result.statusCode() == 202)
+                                .findFirst()
+                                .orElseThrow()
+                                .body());
+        var replay =
+                submitFollowUp(
+                        browser,
+                        first,
+                        modelId,
+                        accepted.get("requestId").asString(),
+                        "concurrent queue fixture",
+                        List.of());
+        assertThat(replay.get("id").asString()).isEqualTo(accepted.get("id").asString());
+        assertThat(
+                        json.readTree(browser.request("GET", first, null, false).body())
+                                .get("queuedCount")
+                                .asInt())
+                .isEqualTo(3);
+
+        String second = pausedQueue(browser, ownerId, modelId, 1);
+        String third = pausedQueue(browser, ownerId, modelId, 1);
+        assertThat(queueRace(browser, modelId, second, third))
+                .extracting(HttpResponse::statusCode)
+                .containsExactlyInAnyOrder(202, 429);
+
+        String legacy = pausedQueue(browser, ownerId, modelId, 21);
+        for (int page = 0; page < 3; page++) {
+            var response = browser.request("GET", legacy + "?queuePage=" + page, null, false);
+            assertThat(response.statusCode()).isEqualTo(200);
+            var body = json.readTree(response.body());
+            assertThat(body.get("queuedCount").asInt()).isEqualTo(21);
+            assertThat(body.get("queuePaused").asBoolean()).isTrue();
+            assertThat(body.get("queuedItems").size()).isEqualTo(List.of(20, 1, 0).get(page));
+            if (page == 1)
+                assertThat(body.get("queuedItems").get(0).get("summary").asString())
+                        .isEqualTo("legacy 20");
+        }
+        assertThat(browser.request("GET", legacy + "?queuePage=-1", null, false).statusCode())
+                .isEqualTo(400);
+    }
+
+    private String pausedQueue(Browser browser, String ownerId, String modelId, int entries)
+            throws Exception {
+        var conversation = browser.request("POST", "/api/conversations", "{}", true);
+        assertThat(conversation.statusCode()).isEqualTo(201);
+        var id = json.readTree(conversation.body()).get("id").asString();
+        db.update("UPDATE conversations SET queue_paused=TRUE WHERE id=?", id);
+        for (int i = 0; i < entries; i++)
+            db.update(
+                    """
+                    INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,
+                        status,execution_state,queued_message,queued_auth_version)
+                    VALUES(?,?,?,?,?,?,'QUEUED','WAITING',?,1)
+                    """,
+                    UUID.randomUUID().toString(),
+                    ownerId,
+                    id,
+                    modelId,
+                    UUID.randomUUID().toString(),
+                    "0".repeat(64),
+                    "legacy " + i);
+        return "/api/conversations/" + id + "/tasks";
+    }
+
+    private List<HttpResponse<String>> queueRace(Browser browser, String modelId, String... paths)
+            throws Exception {
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var ready = new java.util.concurrent.CountDownLatch(1);
+            var pending = new ArrayList<java.util.concurrent.Future<HttpResponse<String>>>();
+            for (var path : paths)
+                pending.add(
+                        pool.submit(
+                                () -> {
+                                    ready.await();
+                                    return requestFollowUp(
+                                            browser,
+                                            path,
+                                            modelId,
+                                            UUID.randomUUID().toString(),
+                                            "concurrent queue fixture",
+                                            List.of());
+                                }));
+            ready.countDown();
+            var results = new ArrayList<HttpResponse<String>>();
+            for (var response : pending)
+                results.add(response.get(10, java.util.concurrent.TimeUnit.SECONDS));
+            return results;
+        }
+    }
+
     private void verifyFollowUpQueue(
             String cid, String otherCid, String modelId, String materialId, String ownerId)
             throws Exception {
@@ -991,25 +1097,35 @@ class TaskLifecycleTest {
             String message,
             List<String> materials)
             throws Exception {
-        var response =
-                browser.request(
-                        "POST",
-                        path,
-                        json.writeValueAsString(
-                                Map.of(
-                                        "requestId",
-                                        requestId,
-                                        "modelId",
-                                        modelId,
-                                        "message",
-                                        message,
-                                        "materialIds",
-                                        materials,
-                                        "allowQueue",
-                                        true)),
-                        true);
+        var response = requestFollowUp(browser, path, modelId, requestId, message, materials);
         assertThat(response.statusCode()).as("response: %s", response.body()).isEqualTo(202);
         return json.readTree(response.body());
+    }
+
+    private HttpResponse<String> requestFollowUp(
+            Browser browser,
+            String path,
+            String modelId,
+            String requestId,
+            String message,
+            List<String> materials)
+            throws Exception {
+        return browser.request(
+                "POST",
+                path,
+                json.writeValueAsString(
+                        Map.of(
+                                "requestId",
+                                requestId,
+                                "modelId",
+                                modelId,
+                                "message",
+                                message,
+                                "materialIds",
+                                materials,
+                                "allowQueue",
+                                true)),
+                true);
     }
 
     void awaitTask(Browser browser, String id, String field, String expected) throws Exception {

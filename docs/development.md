@@ -60,6 +60,8 @@ Flyway 随应用启动运行，V1 保留原基线，V2 新增账号与个人会�
 
 资料上传默认每账号累计 100 MiB、1,000 份，实例原文目录累计 10 GiB、10,000 份，并在写入前为共享文件系统保留 512 MiB 可用空间。实例额度包含目录里的遗留文件。超出账号额度返回 `409 material_quota_exceeded`，实例容量不足返回 `503 material_storage_unavailable`。已有资料仍可下载。Java 环境变量 `IWORK_MATERIAL_OWNER_MAX_BYTES`、`IWORK_MATERIAL_OWNER_MAX_FILES`、`IWORK_MATERIAL_INSTANCE_MAX_BYTES`、`IWORK_MATERIAL_INSTANCE_MAX_FILES` 和 `IWORK_MATERIAL_MIN_FREE_BYTES` 可覆盖默认值。在 Compose 部署中，通过应用服务的 `environment` 传入这些变量。
 
+每个会话默认最多等待 20 条任务，每个账号跨会话合计默认最多等待 100 条。可用 Java 环境变量 `IWORK_TASK_CONVERSATION_QUEUE_LIMIT`（1–20）和 `IWORK_TASK_ACCOUNT_QUEUE_LIMIT`（至少 1）调整。在 Compose 部署中，通过应用服务的 `environment` 传入这些变量。队列达到上限后，新排队请求返回 `429 task_capacity_exceeded`。降额前已有的队列仍可执行、移除或翻页查看，同一请求的重试仍返回原任务。
+
 ## 本机开发
 
 推荐使用根目录的统一 npm 入口，完整操作见 [README 本地开发](../README.md#本地开发推荐)：

@@ -31,6 +31,7 @@ public class TaskService implements ApplicationRunner {
     private static final int MAX_REPLY_LENGTH = 200000;
 
     private static final int QUEUE_SUMMARY_LENGTH = 160;
+    private static final int QUEUE_PAGE_SIZE = 20;
 
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
@@ -43,6 +44,8 @@ public class TaskService implements ApplicationRunner {
     private final ProjectService projects;
     private final ObjectMapper json;
     private final Semaphore capacity;
+    private final int conversationQueueLimit;
+    private final int accountQueueLimit;
     private final ScheduledExecutorService dispatcher =
             Executors.newSingleThreadScheduledExecutor(
                     Thread.ofPlatform().daemon().name("task-queue").factory());
@@ -194,9 +197,17 @@ public class TaskService implements ApplicationRunner {
             ProjectService projects,
             ObjectProvider<TaskRunner> runners,
             ObjectMapper json,
-            @Value("${iwork.task-capacity:2}") int capacity) {
+            @Value("${iwork.task-capacity:2}") int capacity,
+            @Value("${iwork.task-conversation-queue-limit:20}") int conversationQueueLimit,
+            @Value("${iwork.task-account-queue-limit:100}") int accountQueueLimit) {
         if (capacity < 1 || capacity > 16)
             throw new IllegalArgumentException("Task capacity must be 1 to 16");
+        if (conversationQueueLimit < 1
+                || conversationQueueLimit > QUEUE_PAGE_SIZE
+                || accountQueueLimit < 1)
+            throw new IllegalArgumentException("Invalid task queue limits");
+        this.conversationQueueLimit = conversationQueueLimit;
+        this.accountQueueLimit = accountQueueLimit;
         this.projects = projects;
         this.agents = agents;
         this.documents = documents;
@@ -347,8 +358,10 @@ public class TaskService implements ApplicationRunner {
         if (rows.isEmpty()) throw new ApiFailure(404, "not_found");
     }
 
-    public TaskPage list(Caller caller, String conversationId, int page, String requestId) {
-        if (page < 0 || page > 100000) throw new ApiFailure(400, "invalid_pagination");
+    public TaskPage list(
+            Caller caller, String conversationId, int page, int queuePage, String requestId) {
+        if (page < 0 || page > 100000 || queuePage < 0 || queuePage > 100000)
+            throw new ApiFailure(400, "invalid_pagination");
         return tx.execute(
                 status -> {
                     conversation(caller, conversationId, false);
@@ -359,25 +372,33 @@ public class TaskService implements ApplicationRunner {
                                     caller.id(),
                                     conversationId,
                                     page * 20);
+                    int totalQueued = queuedCount(conversationId);
                     var queuedItems =
                             db.query(
                                     """
+                                    WITH queue_page AS (
+                                        SELECT id,queue_order,queued_message FROM tasks
+                                        WHERE conversation_id=? AND status='QUEUED'
+                                        ORDER BY queue_order LIMIT ? OFFSET ?
+                                    )
                                     SELECT id, CASE WHEN CHAR_LENGTH(preview)>?
                                         THEN CONCAT(LEFT(preview,?),'…')
                                         ELSE preview END AS summary
                                     FROM (
                                         SELECT id,queue_order,
                                             REGEXP_REPLACE(queued_message,'^[[:space:]]+','') AS preview
-                                        FROM tasks WHERE conversation_id=? AND status='QUEUED'
+                                        FROM queue_page
                                     ) queued
                                     ORDER BY queue_order
                                     """,
                                     (row, index) ->
                                             new QueuedItem(
                                                     row.getString("id"), row.getString("summary")),
+                                    conversationId,
+                                    QUEUE_PAGE_SIZE,
+                                    queuePage * QUEUE_PAGE_SIZE,
                                     QUEUE_SUMMARY_LENGTH,
-                                    QUEUE_SUMMARY_LENGTH,
-                                    conversationId);
+                                    QUEUE_SUMMARY_LENGTH);
                     String confirmed = null;
                     if (requestId != null && requestId.matches("[A-Za-z0-9_-]{1,100}")) {
                         confirmed =
@@ -397,8 +418,8 @@ public class TaskService implements ApplicationRunner {
                     return new TaskPage(
                             rows.stream().limit(20).toList(),
                             rows.size() > 20,
-                            queuedItems.size(),
-                            !queuedItems.isEmpty() && queuePaused(conversationId),
+                            totalQueued,
+                            totalQueued > 0 && queuePaused(conversationId),
                             db.queryForObject(
                                     "SELECT queue_pause_version FROM conversations WHERE id=?",
                                     Long.class,
@@ -475,6 +496,18 @@ public class TaskService implements ApplicationRunner {
                 "SELECT COUNT(*) FROM tasks WHERE conversation_id=? AND status='QUEUED'",
                 Integer.class,
                 conversationId);
+    }
+
+    private int queuedForOwner(String ownerId) {
+        return db.queryForObject(
+                """
+                SELECT COUNT(*) FROM (
+                    SELECT 1 FROM tasks WHERE owner_id=? AND status='QUEUED' LIMIT ?
+                ) waiting
+                """,
+                Integer.class,
+                ownerId,
+                accountQueueLimit);
     }
 
     private boolean queuePaused(String conversationId) {
@@ -738,11 +771,17 @@ public class TaskService implements ApplicationRunner {
                                                 project == null ? null : project.instructions(),
                                                 config == null ? null : config.instructions());
                                 models.require(caller.id(), selectedModel);
+                                int waiting = queuedCount(conversationId);
                                 boolean busy =
-                                        queuedCount(conversationId) > 0
-                                                || hasActiveTask(conversationId, allowQueue);
+                                        waiting > 0 || hasActiveTask(conversationId, allowQueue);
                                 if (busy && !allowQueue)
                                     throw new ApiFailure(409, "conversation_busy");
+                                // The user and conversation locks above also cover queue admission.
+                                if (busy
+                                        && (waiting >= conversationQueueLimit
+                                                || queuedForOwner(caller.id())
+                                                        >= accountQueueLimit))
+                                    throw new ApiFailure(429, "task_capacity_exceeded");
                                 if (!busy && !capacity.tryAcquire())
                                     throw new ApiFailure(429, "task_capacity_exceeded");
                                 acquired[0] = !busy;
