@@ -60,7 +60,7 @@ class TaskController {
         submission.put("requestId", runId);
         submission.put("message", content);
         submission.put("allowQueue", true);
-        return agUi(caller, submitTask(caller, id, submission), response);
+        return agUi(caller, submitTask(caller, id, submission), response, false);
     }
 
     @GetMapping(value = "/api/tasks/{id}/ag-ui", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -68,17 +68,20 @@ class TaskController {
             @AuthenticationPrincipal Caller caller,
             @PathVariable String id,
             HttpServletResponse response) {
-        return agUi(caller, tasks.get(caller, id), response);
+        return agUi(caller, tasks.get(caller, id), response, true);
     }
 
     private Flux<ServerSentEvent<String>> agUi(
-            Caller caller, TaskService.Task task, HttpServletResponse response) {
+            Caller caller,
+            TaskService.Task task,
+            HttpServletResponse response,
+            boolean restoreReply) {
         response.setHeader("Cache-Control", "no-store");
         response.setHeader("X-Accel-Buffering", "no");
         String threadId = task.conversationId(), runId = task.requestId();
         return Flux.defer(
                         () -> {
-                            var reply = new AgUiReply(task);
+                            var reply = new AgUiReply(task, restoreReply);
                             var updates =
                                     observe(caller, task, reply)
                                             .repeatWhen(
@@ -150,20 +153,24 @@ class TaskController {
         private final String messageId;
         private String content = "";
         private String status;
+        private boolean snapshotPending;
         private boolean finished;
         private boolean open;
 
-        AgUiReply(TaskService.Task task) {
+        AgUiReply(TaskService.Task task, boolean restoreReply) {
             this.threadId = task.conversationId();
             this.runId = task.requestId();
             this.messageId = task.id() + "-reply";
             this.status = task.status();
+            this.snapshotPending = restoreReply;
         }
 
         List<AguiEvent> update(String next) {
-            if (next.equals(content)) return List.of();
+            if (!snapshotPending && next.equals(content)) return List.of();
             var events = new ArrayList<AguiEvent>();
-            if (!next.startsWith(content)) {
+            // The first replayed value and subsequent changes come from the same ordered stream.
+            if (snapshotPending || !next.startsWith(content)) {
+                snapshotPending = false;
                 events.add(
                         new AguiEvent.MessagesSnapshot(
                                 threadId,

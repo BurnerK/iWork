@@ -169,7 +169,7 @@ paths:
       summary: 订阅同一任务的 AG-UI 事件
       responses:
         '200':
-          description: AG-UI SSE。文本按序发送，RUN_FINISHED 表示业务任务已完成。
+          description: AG-UI SSE。先发送该任务的完整回复快照，再按序发送正文更新。RUN_FINISHED 表示业务任务已完成。
           content:
             text/event-stream:
               schema: {type: string}

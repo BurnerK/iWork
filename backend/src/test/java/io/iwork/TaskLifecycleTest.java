@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.net.*;
 import java.net.http.*;
 import java.util.*;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -98,12 +101,18 @@ class TaskLifecycleTest {
     static final java.util.concurrent.BlockingQueue<String> queuedExecutions =
             new java.util.concurrent.LinkedBlockingQueue<>();
 
+    static final Semaphore finishAgUiDocument = new Semaphore(0);
+    static final AtomicInteger agUiDocumentExecutions = new AtomicInteger();
+
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods = false)
     static class ExecutionConfiguration {
         @org.springframework.context.annotation.Bean
         @org.springframework.context.annotation.Primary
-        io.iwork.conversation.TaskRunner runner() {
+        io.iwork.conversation.TaskRunner runner(io.iwork.artifacts.DocumentService documents) {
             return input -> {
+                boolean agUiReply = input.message().equals("queue AG-UI");
+                boolean detachedDocument = agUiReply && input.outputMode().equals("DOCUMENT");
+                if (detachedDocument) agUiDocumentExecutions.incrementAndGet();
                 if (input.message().startsWith("queue ")) {
                     if (!releaseQueueGate.tryAcquire(10, java.util.concurrent.TimeUnit.SECONDS))
                         throw new IllegalStateException("Queue gate timed out");
@@ -114,11 +123,16 @@ class TaskLifecycleTest {
                         .contains(input.message().stripLeading()))
                     queuedExecutions.add(input.message());
                 if (input.message().equals("hold")) Thread.sleep(30000);
-                if (input.message().equals("queue AG-UI")) {
+                if (agUiReply) {
                     input.replyDelta().accept("reply", "第一段。");
                     if (!releaseQueueGate.tryAcquire(10, java.util.concurrent.TimeUnit.SECONDS))
                         throw new IllegalStateException("Reply gate timed out");
                     input.replyDelta().accept("reply", "第二段。");
+                    if (detachedDocument) {
+                        if (!finishAgUiDocument.tryAcquire(15, TimeUnit.SECONDS))
+                            throw new IllegalStateException("Document gate timed out");
+                        documents.new Tools(input).prepare("周报", "# 周报\n本周进展。");
+                    }
                     return "第一段。第二段。";
                 }
                 if (input.message().equals("fail"))
@@ -461,6 +475,7 @@ class TaskLifecycleTest {
 
         verifyFollowUpQueue(cid, cid2, modelId, materialId, uid);
         verifyAgUi(admin, modelId, materialId);
+        verifyDetachedAgUiDocument(admin, modelId);
 
         var storageFailure =
                 admin.request(
@@ -513,7 +528,7 @@ class TaskLifecycleTest {
                 assertThat(observer.statusCode()).isEqualTo(200);
                 try (var observed = observer.body()) {
                     assertThat(
-                                    observed.filter(line -> line.contains("TEXT_MESSAGE_CONTENT"))
+                                    observed.filter(line -> line.contains("MESSAGES_SNAPSHOT"))
                                             .findFirst())
                             .hasValueSatisfying(line -> assertThat(line).contains("第一段。"));
                 }
@@ -602,6 +617,94 @@ class TaskLifecycleTest {
         assertThat(tasks.get(1).get("status").asString()).isEqualTo("COMPLETED");
     }
 
+    private void verifyDetachedAgUiDocument(Browser admin, String modelId) throws Exception {
+        var cid =
+                json.readTree(admin.request("POST", "/api/conversations", "{}", true).body())
+                        .path("id")
+                        .asString();
+        var conversation = "/api/conversations/" + cid;
+        var documentRun =
+                agUiInput(cid, "agui-document", modelId, "queue AG-UI", List.of(), "DOCUMENT");
+        String taskId;
+        String queuedId;
+        try {
+            try (var submitted = openAgUi(admin, conversation + "/ag-ui", documentRun).body()) {
+                var events = submitted.filter(line -> line.startsWith("data:")).iterator();
+                events.next();
+                taskId =
+                        json.readTree(events.next().substring(5))
+                                .path("value")
+                                .path("id")
+                                .asString();
+                releaseQueueGate.release();
+                assertThat(events.next()).contains("TEXT_MESSAGE_START");
+                assertThat(events.next()).contains("TEXT_MESSAGE_CONTENT", "第一段。");
+            }
+            var followUp = agUiInput(cid, "agui-follow-up", modelId, "follow-up", List.of());
+            try (var queued = openAgUi(admin, conversation + "/ag-ui", followUp).body()) {
+                var receipt =
+                        json.readTree(
+                                        queued.filter(line -> line.contains("iwork.task"))
+                                                .findFirst()
+                                                .orElseThrow()
+                                                .substring(5))
+                                .path("value");
+                assertThat(receipt.path("status").asString()).isEqualTo("QUEUED");
+                queuedId = receipt.path("id").asString();
+            }
+            var observation = "/api/tasks/" + taskId + "/ag-ui";
+            try (var first = openAgUi(admin, observation, null).body();
+                    var second = openAgUi(admin, observation, null).body()) {
+                var firstEvents = first.filter(line -> line.startsWith("data:")).iterator();
+                assertThat(readAgUiSnapshot(firstEvents, taskId)).isEqualTo("第一段。");
+                releaseQueueGate.release();
+                assertThat(readAgUiDelta(firstEvents)).isEqualTo("第二段。");
+
+                // The second observer can sample the new text before or after its initial snapshot.
+                var secondEvents = second.filter(line -> line.startsWith("data:")).iterator();
+                String content = readAgUiSnapshot(secondEvents, taskId);
+                if (content.equals("第一段。")) content += readAgUiDelta(secondEvents);
+                assertThat(content).isEqualTo("第一段。第二段。");
+            }
+        } finally {
+            finishAgUiDocument.release();
+        }
+        awaitTask(admin, taskId, "status", "COMPLETED");
+        awaitTask(admin, queuedId, "status", "COMPLETED");
+        assertThat(agUiDocumentExecutions.get()).isEqualTo(1);
+        var versions =
+                json.readTree(admin.request("GET", conversation + "/documents", null, false).body())
+                        .path("items");
+        assertThat(versions).hasSize(1);
+        var versionId = versions.get(0).path("versionId").asString();
+        assertThat(versions.get(0).path("versionNumber").asInt()).isEqualTo(1);
+        var history =
+                json.readTree(admin.request("GET", conversation + "/messages", null, false).body())
+                        .path("items");
+        assertThat(history).hasSize(4);
+        assertThat(history.get(1).path("content").asString()).isEqualTo("第一段。第二段。");
+        assertThat(history.get(1).path("publishedVersion").path("versionId").asString())
+                .isEqualTo(versionId);
+        assertThat(history.get(3).path("content").asString()).isEqualTo("Fixture reply");
+        var restored = admin.request("GET", "/api/tasks/" + taskId + "/ag-ui", null, false);
+        assertThat(restored.body()).contains("MESSAGES_SNAPSHOT", "第一段。第二段。", "RUN_FINISHED");
+    }
+
+    private String readAgUiSnapshot(Iterator<String> events, String taskId) {
+        assertThat(events.next()).contains("RUN_STARTED");
+        assertThat(events.next()).contains(taskId, "RUNNING");
+        var snapshot = json.readTree(events.next().substring(5));
+        assertThat(snapshot.path("type").asString()).isEqualTo("MESSAGES_SNAPSHOT");
+        return snapshot.path("messages").path(0).path("content").asString();
+    }
+
+    private String readAgUiDelta(Iterator<String> events) {
+        assertThat(events.next()).contains("TEXT_MESSAGE_START");
+        var delta = json.readTree(events.next().substring(5));
+        assertThat(delta.path("type").asString()).isEqualTo("TEXT_MESSAGE_CONTENT");
+        return delta.path("delta").asString();
+    }
+
     private HttpResponse<java.util.stream.Stream<String>> openAgUi(
             Browser browser, String path, String body) throws Exception {
         var request =
@@ -621,6 +724,16 @@ class TaskLifecycleTest {
             String modelId,
             String message,
             List<String> materialIds) {
+        return agUiInput(threadId, runId, modelId, message, materialIds, "TEXT");
+    }
+
+    private String agUiInput(
+            String threadId,
+            String runId,
+            String modelId,
+            String message,
+            List<String> materialIds,
+            String outputMode) {
         return json.writeValueAsString(
                 Map.of(
                         "threadId",
@@ -636,7 +749,13 @@ class TaskLifecycleTest {
                         "context",
                         List.of(),
                         "forwardedProps",
-                        Map.of("modelId", modelId, "materialIds", materialIds)));
+                        Map.of(
+                                "modelId",
+                                modelId,
+                                "materialIds",
+                                materialIds,
+                                "outputMode",
+                                outputMode)));
     }
 
     private void verifyFollowUpQueue(

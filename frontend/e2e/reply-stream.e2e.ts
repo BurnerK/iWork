@@ -366,3 +366,90 @@ for (const action of ['answer', 'queue', 'both'] as const) {
     }
   })
 }
+
+test('refreshes and reconnects from two tabs to the same running task', async ({
+  context,
+  page,
+}) => {
+  const taskId = 'report'
+  const first = '第一段。'
+  const restored = first + '第二段。'
+  const last = '第三段。'
+  const final = restored + last
+  const version = { versionId: 'report-v1', title: '周报', versionNumber: 1 }
+  let continued = false
+  let completed = false
+  await context.route('**/api/**', async (route) => {
+    expect(route.request().method()).toBe('GET')
+    const { pathname, searchParams } = new URL(route.request().url())
+    let data: unknown = { items: [], hasMore: false, queuedItems: [] }
+    if (pathname === '/api/auth/me')
+      data = { id: 'alice', displayName: 'Alice', role: 'USER', mustChangePassword: false }
+    if (pathname === '/api/models') data = []
+    if (pathname === '/api/conversations/first')
+      data = { id: 'first', title: '工作会话', updatedAt: '2026-11-20T00:00:00Z' }
+    if (pathname.endsWith('/first/tasks'))
+      data = {
+        items: [
+          {
+            id: taskId,
+            requestId: 'write-report',
+            status: completed ? 'COMPLETED' : 'RUNNING',
+            executionState: completed ? 'STOPPED' : 'RUNNING',
+          },
+        ],
+        hasMore: false,
+        queuedItems: [],
+      }
+    if (pathname.endsWith('/first/messages'))
+      data = {
+        items: [
+          { id: 1, taskId, role: 'user', content: '请写周报' },
+          ...(completed
+            ? [{ id: 2, taskId, role: 'assistant', content: final, publishedVersion: version }]
+            : []),
+        ].filter((item) => item.id > Number(searchParams.get('after'))),
+        hasMore: false,
+      }
+    if (pathname === '/api/tasks/report/ag-ui') {
+      const snapshot = completed ? final : continued ? restored : first
+      const events = [
+        { type: 'RUN_STARTED' },
+        {
+          type: 'MESSAGES_SNAPSHOT',
+          messages: [{ id: 'report-reply', role: 'assistant', content: snapshot }],
+        },
+        ...(continued && !completed ? [{ type: 'TEXT_MESSAGE_CONTENT', delta: last }] : []),
+        ...(completed ? [{ type: 'RUN_FINISHED' }] : []),
+      ]
+      await route.fulfill({
+        contentType: 'text/event-stream',
+        body:
+          'retry: 100\n\n' + events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+      })
+      return
+    }
+    await route.fulfill({ json: { success: true, data, error: null } })
+  })
+
+  await page.goto('/#/conversations/first')
+  await expect(page.getByText(first, { exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.getByText(first, { exact: true })).toBeVisible()
+
+  const other = await context.newPage()
+  await other.goto('/#/conversations/first')
+  await expect(other.getByText(first, { exact: true })).toBeVisible()
+  continued = true
+  for (const tab of [page, other]) {
+    await expect(tab.getByText(final, { exact: true })).toBeVisible()
+    await expect(tab.getByText('请写周报', { exact: true })).toHaveCount(1)
+  }
+
+  completed = true
+  for (const tab of [page, other]) {
+    await expect(tab.getByText(final, { exact: true })).toBeVisible()
+    await expect(tab.getByText('已完成', { exact: true })).toBeVisible()
+    await expect(tab.getByRole('button', { name: '周报 · 版本 1' })).toHaveCount(1)
+  }
+})
