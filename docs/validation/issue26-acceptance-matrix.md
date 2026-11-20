@@ -1,6 +1,6 @@
 # #26 内部真实试用验收矩阵（未验收）
 
-[#25](https://github.com/BurnerK/iWork/issues/25) 已完成阿里云 ECS 单人低并发部署验收，产品发起者也确认通过了 SSH 隧道页面验收。#26 与父票 #9 的结项仍需产品发起者和试用同事分别使用获准真实资料，完成生成、隔天找回及续改，并检查真实模型的长会话压缩。试用人员、资料范围、供应商预算及两天的执行窗口待确认。[ECS 演练记录](issue25-ecs.md) · [页面验收确认](https://github.com/BurnerK/iWork/issues/25#issuecomment-7028035769)
+[#25](https://github.com/BurnerK/iWork/issues/25) 已完成阿里云 ECS 单人低并发部署验收，产品发起者随后确认通过了 SSH 隧道页面验收。#26 与父票 #9 的结项仍需产品发起者和试用同事分别使用获准真实资料，完成生成、隔天找回及续改，并验证真实模型生成会话摘要后能继续工作。试用人员、资料范围、供应商预算及两天的执行窗口待确认。[ECS 演练记录](issue25-ecs.md) · [后续页面验收确认](https://github.com/BurnerK/iWork/issues/25#issuecomment-7028035769)
 
 ## 执行前由负责人填写
 
@@ -8,7 +8,7 @@
 | --- | --- |
 | 产品发起者、试用同事各自账号 | 待填写；不得由 agent 假扮 |
 | 允许上传的真实资料和用途 | 待填写；不默认全部企业资料可用 |
-| 试用入口及版本 | ECS 当前通过 SSH 隧道访问，运行 `5447663`。原站资料解析停用，试用需要先确认入口和解析服务的运行窗口。 |
+| 试用入口及版本 | ECS 当前通过 SSH 隧道访问，运行 `5447663`，资料解析停用。试用前确认参与者的访问方式和解析运行窗口，记录实际发布提交及应用、管理器、解析器的镜像摘要。 |
 | 模型服务、模型名称、已验证上下文窗口 | DeepSeek 已实测文本回复，正式试用的模型与上下文窗口待确认。凭据由受控配置交付。 |
 | 允许的总费用、个人额度、截止条件和时间窗口 | 待填写。当前日常 DeepSeek 在 iWork 内的计价为零。试用前应确认供应商侧费用上限和停止条件，并核对个人额度配置。 |
 | 第一天及隔天复核时间 | 待填写，真实跨日找回 |
@@ -30,22 +30,22 @@
 
 | 场景 | 正式应用证据 | 尚需 |
 | --- | --- | --- |
-| T01 身份/模型/额度/管理权限 | [身份](issue-11.md)、[模型额度](issue-12.md)、[#24诊断](issue24-diagnostics.md)；ECS 实测临时账号授权、撤权、预算拦截和结算 | 确认试用账号、授权和预算配置 |
+| T01 身份/模型/额度/管理权限 | [身份](issue-11.md)、[模型额度](issue-12.md)、[#24诊断](issue24-diagnostics.md)；ECS 实测临时账号授权、撤权、预算拦截和结算。[ECS 授权与预算复验](https://github.com/BurnerK/iWork/issues/25#issuecomment-7027922823) | 确认试用账号、授权和预算配置 |
 | T02 项目组织/移动/删除保留 | [#23](issue23-project-spaces.md) | 真实用户项目流程 |
 | T03 资料→智能体/模型→文字成果 | [资料](issue-15.md)、[解析](issue-16.md)、[文档](issue-17.md)、[智能体](issue22-personal-agents.md) | 真实模型理解/工具调用/正文质量 |
 | T04 找回/续改/旧版不变 | [#18](issue18-versions.md)、[#23](issue23-project-spaces.md) | 两人各自隔天找回续改 |
-| T05 所有权/路径/跨任务反向 | [#15](issue-15.md)、[#16](issue-16.md)、[#18](issue18-versions.md)、[#23](issue23-project-spaces.md)；ECS 实测跨用户读取会话、用量、原文和成果均被拒绝 | 用实际试用账号记录代表流程 |
+| T05 所有权/路径/跨任务反向 | [#15](issue-15.md)、[#16](issue-16.md)、[#18](issue18-versions.md)、[#23](issue23-project-spaces.md)；ECS 实测跨用户读取会话、用量、原文和成果均被拒绝。[ECS 授权与预算复验](https://github.com/BurnerK/iWork/issues/25#issuecomment-7027922823) | 用实际试用账号记录代表流程 |
 | T06 幂等/互斥/并发容量 | [#13](issue-13.md)、[#18](issue18-versions.md) | 目标机器确认容量 |
 | T07 关闭连接仍后台继续 | [#13](issue-13.md) | 两位试用者关闭页面重开 |
 | T08 取消/迟到/重复发布/旧版保护 | [#19](issue19-cancellation.md) | 真实供应商取消边界代表流程 |
 | T09 强杀/中断/不自动续跑 | [#20](issue20-recovery.md)；ECS 升级时实测中断及幂等重提 | ECS 单任务代表场景已验 |
-| T10 用量/估算/重复回报/预占释放 | [#14](issue-14.md)、[#24](issue24-diagnostics.md)；ECS 已核对成功的 DeepSeek 调用用量和预占释放 | 真实模型取消/故障时核对已知用量和待核实项 |
+| T10 用量/估算/重复回报/额度预占释放 | [#14](issue-14.md)、[#24](issue24-diagnostics.md)；ECS 已核对成功的 DeepSeek 调用用量和额度预占释放。[ECS 授权与预算复验](https://github.com/BurnerK/iWork/issues/25#issuecomment-7027922823) | 真实模型取消/故障时核对已知用量和待核实项 |
 | T11 真容器隔离/资源/凭据边界 | [#16](issue-16.md)；ECS 副本实测 2 MiB 输入限制、管理接口鉴权与容器清理 | 核对试用环境启用解析时的镜像及挂载 |
 | T12 管理器重启/多容器/异实例保留 | [#20](issue20-recovery.md)；ECS 副本验证重启回收且保留其他实例的容器 | ECS 单容器加对照场景已验 |
 | T13 清理拒绝/通信失败/恢复 | [#21](issue21-supervision.md)、[#24](issue24-diagnostics.md)；ECS 副本验证清理未知、拒接新任务及恢复后重试 | ECS 单容器故障注入已验 |
-| T14 独立看门狗/外部期限 | [#21](issue21-supervision.md)；ECS 副本双进程强杀后，60.637 秒确认删除测试容器 | ECS 单容器测量已记录，适用条件见演练记录 |
-| T15 正式模型完整参与 | ECS 已实测真实 DeepSeek 文本和合成文档生成 | 用获准真实资料验证解析、工具调用、文档质量和取消 |
-| T16 Linux升级/协调恢复 | [操作说明](../issue25-operations.md)；ECS 已验证实际升级及同机独立项目恢复 | #25 单人范围已验 |
+| T14 独立看门狗/外部期限 | [#21](issue21-supervision.md)；强杀副本应用和管理器，看门狗在测试容器创建后 60.637 秒确认删除，比 60 秒租期多 637 毫秒 | ECS 单容器测量已记录，适用条件见演练记录 |
+| T15 正式模型完整参与 | ECS 已实测真实 DeepSeek 文本回复 | 用获准真实资料验证解析、工具调用、文档质量和取消 |
+| T16 Linux升级/协调恢复 | [操作说明](../issue25-operations.md)；ECS 已验证实际升级及同机独立项目恢复。[ECS 演练记录](issue25-ecs.md) | #25 单人范围已验 |
 | T17 跨请求/重启/压缩连续交流 | [#27](issue27-context.md)、[#20](issue20-recovery.md)；ECS 已验证恢复副本接续会话 | 真实模型触发摘要后的续改质量 |
 | T18 工具/快照/配置权限边界 | [#14](issue-14.md)、[#27](issue27-context.md)、[#22](issue22-personal-agents.md)、[#23](issue23-project-spaces.md) | 目标配置和真实流程抽验 |
 | T19 辅助调用授权/预算/取消/强杀 | [#27](issue27-context.md)、[#19](issue19-cancellation.md)、[#20](issue20-recovery.md)、[#24](issue24-diagnostics.md) | 实际辅助调用用量和质量 |
