@@ -58,8 +58,8 @@ def main():
         command += ['-f', str(Path(path).resolve())]
     command += ['-p', args.project]
 
-    def run(tail, *, data=None, output=subprocess.PIPE):
-        result = subprocess.run(command + tail, input=data, stdout=output, stderr=subprocess.PIPE)
+    def run(tail, *, output=subprocess.PIPE):
+        result = subprocess.run(command + tail, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.PIPE)
         if result.returncode:
             raise RuntimeError('Compose operation failed; inspect the selected project locally (no private output printed)')
         return result.stdout
@@ -78,10 +78,10 @@ def main():
     if args.database is not None:
         mysql_exec += ['-e', 'IWORK_BACKUP_DATABASE=' + args.database]
     mysql_exec += ['mysql', 'sh', '-c']
-    mysql = mysql_exec + ['MYSQL_PWD="$MYSQL_PASSWORD" exec mysql --default-character-set=utf8mb4 -u "$MYSQL_USER" -D "${IWORK_BACKUP_DATABASE:-$MYSQL_DATABASE}" --batch --skip-column-names']
+    mysql = mysql_exec + ['MYSQL_PWD="$MYSQL_PASSWORD" exec mysql --default-character-set=utf8mb4 -u "$MYSQL_USER" -D "${IWORK_BACKUP_DATABASE:-$MYSQL_DATABASE}" --batch --skip-column-names "$@"', 'mysql']
 
     def sql(query):
-        return run(mysql, data=query.encode()).decode().strip()
+        return run(mysql + ['-e', query]).decode().strip()
 
     def inspect():
         tables = sql('SHOW TABLES').splitlines()
@@ -89,7 +89,9 @@ def main():
             raise ValueError('Required iWork business tables are missing')
         if any(not re.fullmatch('[a-zA-Z0-9_]+', table) for table in tables):
             raise ValueError('Unexpected table name')
-        counts = {table: int(sql('SELECT COUNT(*) FROM `' + table + '`')) for table in tables}
+        statements = '\n'.join(f"SELECT '{table}', COUNT(*) FROM `{table}`;" for table in tables)
+        counts = {table: int(count) for table, count in
+                  (line.split('\t') for line in sql(statements).splitlines())}
         references = sql("SELECT CONCAT('originals/',id),byte_size,sha256 FROM materials UNION ALL SELECT CONCAT('documents/',id,'.md'),byte_size,sha256 FROM document_versions").splitlines()
         for line in references:
             relative, size, expected = line.split('\t')
