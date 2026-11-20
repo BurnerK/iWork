@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page, type Route } from '@playwright/test'
 
 const emptyPage = { items: [], hasMore: false }
 const user = { id: 'alice', displayName: 'Alice', role: 'USER', mustChangePassword: false }
@@ -9,6 +9,27 @@ const conversation = {
   projectId: null,
 }
 const envelope = (data: unknown) => ({ success: true, data, error: null })
+
+function submittedRun(route: Route) {
+  const { threadId, runId, messages, forwardedProps } = route.request().postDataJSON()
+  expect(route.request().method()).toBe('POST')
+  expect(route.request().headers()['x-csrf-token']).toBe('test-token')
+  expect(threadId).toBe('first')
+  expect(messages).toEqual([{ id: runId, role: 'user', content: expect.any(String) }])
+  return { ...forwardedProps, requestId: runId, message: messages[0].content }
+}
+
+async function receipt(route: Route, id: string, status: string) {
+  const { runId, threadId } = route.request().postDataJSON()
+  const frames = [
+    { type: 'RUN_STARTED', threadId, runId },
+    { type: 'CUSTOM', name: 'iwork.task', value: { id, requestId: runId, status } },
+  ]
+  await route.fulfill({
+    contentType: 'text/event-stream',
+    body: frames.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+  })
+}
 
 async function expectComposerLayout(page: Page) {
   const [card, message, tools, target, send] = await Promise.all(
@@ -34,7 +55,6 @@ test('queues consecutive follow-ups and switches between pause and send', async 
     requestId: string
     message: string
     outputMode: string
-    allowQueue: boolean
     materialIds: string[]
   }[] = []
   let queuedItems: { id: string; summary: string }[] = []
@@ -49,31 +69,50 @@ test('queues consecutive follow-ups and switches between pause and send', async 
     if (path === '/api/materials')
       data = { items: [{ id: 'source', name: '参考资料.txt', byteSize: 3 }], hasMore: false }
     if (path === '/api/conversations/first') data = conversation
+    if (path === '/api/conversations/first/messages')
+      data = {
+        items: Number(searchParams.get('after'))
+          ? []
+          : [{ id: 1, taskId: 'running', role: 'user', content: '先写一份周报' }],
+        hasMore: false,
+      }
+    if (path === '/api/tasks/running/ag-ui') {
+      const run = { threadId: 'first', runId: 'request' }
+      const frames = [
+        { ...run, type: 'RUN_STARTED' },
+        { ...run, type: 'TEXT_MESSAGE_START', messageId: 'reply', role: 'assistant' },
+        { ...run, type: 'TEXT_MESSAGE_CONTENT', messageId: 'reply', delta: '第一段。' },
+        { ...run, type: 'TEXT_MESSAGE_CONTENT', messageId: 'reply', delta: '第二段。' },
+      ]
+      return route.fulfill({
+        contentType: 'text/event-stream',
+        body: frames.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+      })
+    }
+    if (path === '/api/conversations/first/ag-ui') {
+      submissions.push(submittedRun(route))
+      const id = `queued-${submissions.length}`
+      queuedItems.push({ id, summary: submissions.at(-1)!.message })
+      if (submissions.length === 1) return route.abort()
+      return receipt(route, id, 'QUEUED')
+    }
     if (path === '/api/conversations/first/tasks') {
-      if (request.method() === 'POST') {
-        submissions.push(request.postDataJSON())
-        const id = `queued-${submissions.length}`
-        queuedItems.push({ id, summary: submissions.at(-1)!.message })
-        if (submissions.length === 1) return route.abort()
-        data = { id, status: 'QUEUED' }
-      } else {
-        data = {
-          items: [
-            {
-              id: 'running',
-              requestId: 'request',
-              status: running ? 'RUNNING' : 'PAUSED',
-              executionState: running ? 'RUNNING' : 'STOPPED',
-            },
-          ],
-          hasMore: false,
-          queuedCount: queuedItems.length,
-          queuedItems,
-          queuePaused: !running,
-          confirmedRequestId:
-            submissions.find(({ requestId }) => requestId === searchParams.get('requestId'))
-              ?.requestId ?? null,
-        }
+      data = {
+        items: [
+          {
+            id: 'running',
+            requestId: 'request',
+            status: running ? 'RUNNING' : 'PAUSED',
+            executionState: running ? 'RUNNING' : 'STOPPED',
+          },
+        ],
+        hasMore: false,
+        queuedCount: queuedItems.length,
+        queuedItems,
+        queuePaused: !running,
+        confirmedRequestId:
+          submissions.find(({ requestId }) => requestId === searchParams.get('requestId'))
+            ?.requestId ?? null,
       }
     }
     if (path === '/api/conversations/first/tasks/queue/queued-2') {
@@ -94,6 +133,7 @@ test('queues consecutive follow-ups and switches between pause and send', async 
   const pause = composer.getByRole('button', { name: '暂停回答' })
   const send = composer.getByRole('button', { name: '提交任务' })
   await expect(pause).toBeEnabled()
+  await expect(page.getByText('第一段。第二段。', { exact: true })).toBeVisible()
   await page.locator('#task-model').selectOption('model')
   await expectComposerLayout(page)
   await expect(message).toBeEditable()
@@ -120,8 +160,8 @@ test('queues consecutive follow-ups and switches between pause and send', async 
   await expect(message).toBeEmpty()
   await expect(pause).toBeEnabled()
   expect(submissions).toMatchObject([
-    { message: '第一条追问', outputMode: 'DOCUMENT', allowQueue: true, materialIds: ['source'] },
-    { message: '第二条追问', outputMode: 'DOCUMENT', allowQueue: true, materialIds: [] },
+    { message: '第一条追问', outputMode: 'DOCUMENT', materialIds: ['source'] },
+    { message: '第二条追问', outputMode: 'DOCUMENT', materialIds: [] },
   ])
   expect(submissions[0]!.requestId).not.toBe(submissions[1]!.requestId)
   await message.fill('第三条追问')
@@ -185,8 +225,8 @@ for (const confirmByPolling of [false, true]) {
           items: showAccepted && searchParams.get('after') === '0' ? replies : [],
           hasMore: false,
         }
-      if (path === '/api/conversations/first/tasks' && request.method() === 'POST') {
-        const submitted = request.postDataJSON()
+      if (path === '/api/conversations/first/ag-ui') {
+        const submitted = submittedRun(route)
         submissions.push(submitted)
         const existing = accepted.find((task) => task.requestId === submitted.requestId)
         const task = existing ?? {
@@ -200,8 +240,7 @@ for (const confirmByPolling of [false, true]) {
           return route.abort()
         }
         showAccepted = true
-        data = task
-        status = 202
+        return receipt(route, task.id, task.status)
       }
       await route.fulfill({ status, json: envelope(data) })
     })
@@ -350,9 +389,9 @@ test.describe('touch composer', () => {
         data = { items: [projectMaterial], hasMore: false }
       if (path === '/api/materials')
         data = request.method() === 'POST' ? upload : { items: [upload], hasMore: false }
-      if (path === '/api/conversations/first/tasks' && request.method() === 'POST') {
-        submissions.push(request.postDataJSON())
-        data = { id: 'sent' }
+      if (path === '/api/conversations/first/ag-ui') {
+        submissions.push(submittedRun(route))
+        return receipt(route, 'sent', 'RUNNING')
       }
       await route.fulfill({ json: envelope(data) })
     })
@@ -401,7 +440,6 @@ test.describe('touch composer', () => {
         message: '第一行\n第二行',
         modelId: 'model',
         materialIds: ['upload'],
-        allowQueue: true,
         outputMode: 'DOCUMENT',
         baseVersionId: 'source-version',
       }),
@@ -529,34 +567,34 @@ for (const width of [390, 1280]) {
       if (pathname === '/api/auth/csrf') data = { token: 'test-token' }
       if (pathname === '/api/models') data = [{ id: 'model', name: '测试模型' }]
       if (pathname === '/api/conversations/first') data = conversation
-      if (pathname === '/api/conversations/first/tasks') {
-        if (request.method() === 'POST') {
-          const submitted = request.postDataJSON()
-          const version = versions[tasks.length]!
-          expect(submitted.outputMode).toBe('DOCUMENT')
-          expect(submitted.baseVersionId).toBe(tasks.length ? versions[0]!.versionId : undefined)
-          const task = {
-            id: version.taskId,
-            requestId: submitted.requestId,
-            status: 'COMPLETED',
-            executionState: 'STOPPED',
-            outputMode: 'DOCUMENT',
+      if (pathname === '/api/conversations/first/ag-ui') {
+        const submitted = submittedRun(route)
+        const version = versions[tasks.length]!
+        expect(submitted.outputMode).toBe('DOCUMENT')
+        expect(submitted.baseVersionId).toBe(tasks.length ? versions[0]!.versionId : undefined)
+        const task = {
+          id: version.taskId,
+          requestId: submitted.requestId,
+          status: 'COMPLETED',
+          executionState: 'STOPPED',
+          outputMode: 'DOCUMENT',
+          publishedVersion: version,
+        }
+        tasks.unshift(task)
+        replies.push(
+          { id: replies.length + 1, taskId: task.id, role: 'user', content: submitted.message },
+          {
+            id: replies.length + 2,
+            taskId: task.id,
+            role: 'assistant',
+            content: version.versionNumber === 1 ? '已整理本周完成事项。' : '已补充上线进度。',
             publishedVersion: version,
           }
-          tasks.unshift(task)
-          replies.push(
-            { id: replies.length + 1, taskId: task.id, role: 'user', content: submitted.message },
-            {
-              id: replies.length + 2,
-              taskId: task.id,
-              role: 'assistant',
-              content: version.versionNumber === 1 ? '已整理本周完成事项。' : '已补充上线进度。',
-              publishedVersion: version,
-            }
-          )
-          data = task
-        } else data = { items: tasks.slice(0, 1), hasMore: tasks.length > 1 }
+        )
+        return receipt(route, task.id, task.status)
       }
+      if (pathname === '/api/conversations/first/tasks')
+        data = { items: tasks.slice(0, 1), hasMore: tasks.length > 1 }
       if (pathname === '/api/conversations/first/messages') {
         data = {
           items: replies.filter((reply) => reply.id > Number(searchParams.get('after'))),

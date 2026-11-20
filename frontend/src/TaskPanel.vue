@@ -7,6 +7,7 @@ import ParsingPanel from './ParsingPanel.vue'
 import UsagePanel from './UsagePanel.vue'
 import MaterialPanel from './MaterialPanel.vue'
 import { ApiError, errorMessage, request } from './api'
+import { submitRun } from './agUi'
 const props = defineProps<{
   conversationId?: string
   ownerId: string
@@ -147,34 +148,42 @@ function returnToLatest() {
   scrollLatest()
   thread.value?.focus({ preventScroll: true })
 }
-const liveReply = ref<{ taskId: string; version: number; content: string }>()
+const liveReply = ref<{ taskId: string; content: string }>()
 const runningTask = computed(() => tasks.value.find((task) => task.status === 'RUNNING'))
 const streamingTaskId = computed(() => runningTask.value?.id)
 watch(streamingTaskId, (taskId, _, onCleanup) => {
   if (!taskId || typeof EventSource === 'undefined') return
-  const stream = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/reply-stream`)
+  const stream = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/ag-ui`)
+  let content = ''
   let closed = false
   const close = () => {
     closed = true
     stream.close()
   }
   onCleanup(close)
-  stream.addEventListener('reply', (event: MessageEvent<string>) => {
+  stream.addEventListener('message', (event: MessageEvent<string>) => {
     if (closed) return
     try {
       const update = JSON.parse(event.data)
-      if (typeof update?.content !== 'string' || !Number.isSafeInteger(update.version)) return
-      if (liveReply.value?.taskId === taskId && liveReply.value.version >= update.version) return
-      liveReply.value = { taskId, version: update.version, content: update.content }
+      if (update?.type === 'RUN_STARTED') content = ''
+      else if (update?.type === 'TEXT_MESSAGE_CONTENT' && typeof update.delta === 'string') {
+        content += update.delta
+      } else if (
+        update?.type === 'MESSAGES_SNAPSHOT' &&
+        typeof update.messages?.[0]?.content === 'string'
+      ) {
+        content = update.messages[0].content
+      } else if (update?.type === 'RUN_FINISHED' || update?.type === 'RUN_ERROR') {
+        close()
+        void load()
+        return
+      } else return
+      if (update.type === 'RUN_STARTED') return
+      liveReply.value = { taskId, content }
       void nextTick(keepFollowing)
     } catch {
       // The next valid snapshot or the saved reply can still be rendered.
     }
-  })
-  stream.addEventListener('done', () => {
-    if (closed) return
-    close()
-    void load()
   })
 })
 const storageKey = computed(() => `iwork-pending:${props.ownerId}:${conversationId.value}`)
@@ -423,10 +432,7 @@ async function submit() {
       JSON.stringify({ ...pending.value, selectedMaterials: selectedMaterials.value })
     )
     if (!props.conversationId) sessionStorage.setItem(draftKey.value, conversationId.value)
-    await request(`/api/conversations/${conversationId.value}/tasks`, 'POST', {
-      ...pending.value,
-      allowQueue: true,
-    })
+    await submitRun(conversationId.value, pending.value)
     acceptPending()
     await load()
   } catch (cause) {

@@ -95,8 +95,34 @@ public class TaskService implements ApplicationRunner {
     }
 
     Flux<ReplySnapshot> replyStream(Caller caller, String id) {
-        var task = get(caller, id);
-        var live = liveReplies.get(id);
+        return replyStream(caller, get(caller, id));
+    }
+
+    Task observedTask(Caller caller, String id) {
+        if (identity.verify(caller, false).mustChangePassword())
+            throw new ApiFailure(403, "password_change_required");
+        return get(caller, id);
+    }
+
+    String savedReply(Task task) {
+        return db
+                .queryForList(
+                        """
+                        SELECT m.content FROM messages m JOIN tasks t ON t.id=m.task_id
+                        WHERE (t.id=? OR t.reply_task_id=?) AND t.created_at<=? AND m.role='assistant'
+                        ORDER BY m.id DESC LIMIT 1
+                        """,
+                        String.class,
+                        task.replyTaskId(),
+                        task.replyTaskId(),
+                        java.sql.Timestamp.from(task.createdAt()))
+                .stream()
+                .findFirst()
+                .orElse("");
+    }
+
+    Flux<ReplySnapshot> replyStream(Caller caller, Task task) {
+        var live = liveReplies.get(task.id());
         if (!task.status().equals("RUNNING") || live == null) return Flux.empty();
         return live.updates
                 .asFlux()
@@ -1095,20 +1121,7 @@ public class TaskService implements ApplicationRunner {
                                 if (!capacity.tryAcquire())
                                     throw new ApiFailure(429, "task_capacity_exceeded");
                                 acquired[0] = true;
-                                var partial =
-                                        db
-                                                .queryForList(
-                                                        """
-                        SELECT m.content FROM messages m JOIN tasks t ON t.id=m.task_id
-                        WHERE (t.id=? OR t.reply_task_id=?) AND m.role='assistant'
-                        ORDER BY m.id DESC LIMIT 1
-                        """,
-                                                        String.class,
-                                                        root,
-                                                        root)
-                                                .stream()
-                                                .findFirst()
-                                                .orElse("");
+                                var partial = savedReply(source);
                                 if (partial.length() >= MAX_REPLY_LENGTH)
                                     throw new ApiFailure(409, "reply_not_resumable");
                                 db.update(

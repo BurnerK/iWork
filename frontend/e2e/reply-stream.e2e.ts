@@ -10,16 +10,14 @@ for (const width of [390, 1280]) {
         constructor(path: string) {
           super()
           this.onUpdate = (event) =>
-            this.dispatchEvent(new MessageEvent(event.type, { data: event.detail }))
-          if (path.endsWith('/running/reply-stream')) {
+            this.dispatchEvent(new MessageEvent('message', { data: event.detail }))
+          if (path.endsWith('/running/ag-ui')) {
             window.addEventListener('reply', this.onUpdate)
-            window.addEventListener('done', this.onUpdate)
           }
         }
         private onUpdate: (event: CustomEvent) => void
         close() {
           window.removeEventListener('reply', this.onUpdate)
-          window.removeEventListener('done', this.onUpdate)
         }
       } as unknown as typeof EventSource
     })
@@ -68,18 +66,17 @@ for (const width of [390, 1280]) {
     await expect(page.getByRole('heading', { name: '先前回复' })).toBeVisible()
     await expect(page.getByRole('status').filter({ hasText: '运行中' })).toBeVisible()
     await expect(page.getByRole('button', { name: '查看用量' })).toBeHidden()
-    const sendSnapshot = (version: number, content: string) =>
-      page.evaluate(
-        ({ version, content }) => {
-          window.dispatchEvent(
-            new CustomEvent('reply', { detail: JSON.stringify({ version, content }) })
-          )
-        },
-        { version, content }
-      )
+    const sendDelta = (delta: string) =>
+      page.evaluate((delta) => {
+        window.dispatchEvent(
+          new CustomEvent('reply', {
+            detail: JSON.stringify({ type: 'TEXT_MESSAGE_CONTENT', delta }),
+          })
+        )
+      }, delta)
     const thread = page.locator('.task-thread')
     const distance = () => thread.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop)
-    await sendSnapshot(1, `## 本次回复\n\n${paragraphs}`)
+    await sendDelta(`## 本次回复\n\n${paragraphs}`)
     await expect(page.getByText('段落 36', { exact: true })).toBeVisible()
     await expect.poll(distance).toBeLessThanOrEqual(1)
 
@@ -89,16 +86,22 @@ for (const width of [390, 1280]) {
     const latest = page.getByRole('button', { name: '回到最新消息' })
     await expect(latest).toBeVisible()
     const position = await thread.evaluate((el) => el.scrollTop)
-    await sendSnapshot(2, `## 本次回复\n\n${paragraphs}\n\n第二段更新`)
+    await sendDelta('\n\n第二段更新')
     await expect(page.getByText('第二段更新')).toBeAttached()
     expect(await thread.evaluate((el) => el.scrollTop)).toBe(position)
     await latest.click()
-    await sendSnapshot(3, final)
+    await sendDelta('\n\n已保存正文')
     await expect(page.getByText('已保存正文')).toBeVisible()
     await expect.poll(distance).toBeLessThanOrEqual(1)
 
     completed = true
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent('done')))
+    await page.evaluate(() =>
+      window.dispatchEvent(
+        new CustomEvent('reply', {
+          detail: JSON.stringify({ type: 'RUN_FINISHED' }),
+        })
+      )
+    )
     await expect(page.getByText('已完成', { exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: '本次回复' })).toHaveCount(1)
   })
@@ -108,7 +111,7 @@ test('pauses, continues and retries within one reply', async ({ page }) => {
   await page.addInitScript(() => {
     window.EventSource = class extends EventTarget {
       private onReply = (event: Event) =>
-        this.dispatchEvent(new MessageEvent('reply', { data: (event as CustomEvent).detail }))
+        this.dispatchEvent(new MessageEvent('message', { data: (event as CustomEvent).detail }))
       constructor(path: string) {
         super()
         window.addEventListener(path, this.onReply)
@@ -179,8 +182,8 @@ test('pauses, continues and retries within one reply', async ({ page }) => {
     page.evaluate(
       ({ attempt, content }) =>
         window.dispatchEvent(
-          new CustomEvent(`/api/tasks/${attempt}/reply-stream`, {
-            detail: JSON.stringify({ version: 1, content }),
+          new CustomEvent(`/api/tasks/${attempt}/ag-ui`, {
+            detail: JSON.stringify({ type: 'TEXT_MESSAGE_CONTENT', delta: content }),
           })
         ),
       { attempt, content }
@@ -225,6 +228,7 @@ for (const action of ['answer', 'queue', 'both'] as const) {
     let queuePaused = true
     let pauseVersion = 4
     let mailStarted = false
+    let mailCancelled = false
     const tasks = '/api/conversations/first/tasks'
     const finishReport = () => {
       report = { ...report, status: 'COMPLETED', executionState: 'STOPPED' }
@@ -247,7 +251,12 @@ for (const action of ['answer', 'queue', 'both'] as const) {
         data = {
           items: mailStarted
             ? [
-                { id: 'mail', requestId: 'mail', status: 'RUNNING', executionState: 'RUNNING' },
+                {
+                  id: 'mail',
+                  requestId: 'mail',
+                  status: mailCancelled ? 'CANCELLED' : 'RUNNING',
+                  executionState: mailCancelled ? 'STOPPED' : 'RUNNING',
+                },
                 report,
               ]
             : [report],
@@ -287,7 +296,14 @@ for (const action of ['answer', 'queue', 'both'] as const) {
         await route.fulfill({ status: 204 })
         return
       }
-      if (pathname.endsWith('/reply-stream')) {
+      if (pathname === '/api/tasks/mail/cancel') {
+        expect(route.request().method()).toBe('POST')
+        expect(route.request().postDataJSON()).toEqual({ pauseQueue: true })
+        mailCancelled = true
+        queuePaused = true
+        data = { id: 'mail', requestId: 'mail', status: 'CANCELLED', executionState: 'STOPPED' }
+      }
+      if (pathname.endsWith('/ag-ui')) {
         await route.fulfill({ contentType: 'text/event-stream', body: '' })
         return
       }
@@ -344,5 +360,9 @@ for (const action of ['answer', 'queue', 'both'] as const) {
       await expect(page.getByText('周报已写一半。')).toBeVisible()
     }
     await expect(mailPrompt).toBeVisible()
+    if (action === 'both') {
+      await page.getByRole('button', { name: '取消任务', exact: true }).click()
+      await expect(page.getByText('已取消', { exact: true })).toBeVisible()
+    }
   })
 }

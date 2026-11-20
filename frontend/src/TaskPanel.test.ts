@@ -1,4 +1,4 @@
-import { apiResponse } from './testResponse'
+import { apiResponse, agUiReceipt } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import TaskPanel from './TaskPanel.vue'
@@ -13,11 +13,7 @@ it('retries an uncertain submission with the same request identity and never can
     if (init?.method === 'POST') {
       bodies.push(String(init.body))
       if (bodies.length === 1) return Promise.reject(new TypeError('connection lost'))
-      return Promise.resolve(
-        apiResponse('{"id":"task-one","status":"RUNNING","executionState":"RUNNING"}', {
-          status: 202,
-        })
-      )
+      return Promise.resolve(agUiReceipt('task-one', JSON.parse(bodies.at(-1)!).runId))
     }
     return Promise.resolve(
       apiResponse(
@@ -121,7 +117,7 @@ it('waits for an in-flight upload before accepting the task input', async () => 
   await form.trigger('submit')
   await flushPromises()
   expect(
-    fetch.mock.calls.some(([url, init]) => url.includes('/tasks') && init?.method === 'POST')
+    fetch.mock.calls.some(([url, init]) => url.endsWith('/ag-ui') && init?.method === 'POST')
   ).toBe(false)
   finish(apiResponse('{"id":"saved","name":"source.txt","byteSize":6}'))
   await flushPromises()
@@ -165,7 +161,7 @@ it('preserves explicit document output when retrying an uncertain request', asyn
   expect((panel.get('#task-output').element as HTMLSelectElement).value).toBe('DOCUMENT')
   await panel.get('form[aria-label="提交任务"]').trigger('submit')
   await flushPromises()
-  expect(JSON.parse(bodies[0]!).outputMode).toBe('DOCUMENT')
+  expect(JSON.parse(bodies[0]!).forwardedProps.outputMode).toBe('DOCUMENT')
   expect(bodies[0]).toBe(bodies[1])
   panel.unmount()
   localStorage.clear()
@@ -225,7 +221,7 @@ it('selects a personal version and preserves its source across an uncertain retr
   await flushPromises()
   await panel.get('form[aria-label="提交任务"]').trigger('submit')
   await flushPromises()
-  expect(JSON.parse(bodies[0]!)).toMatchObject({
+  expect(JSON.parse(bodies[0]!).forwardedProps).toMatchObject({
     baseVersionId: 'source-version',
     outputMode: 'DOCUMENT',
   })
@@ -274,8 +270,8 @@ it('retains a selected personal agent across uncertain submission and reopening 
   await flushPromises()
   expect(bodies).toHaveLength(2)
   expect(bodies[0]).toBe(bodies[1])
-  expect(JSON.parse(bodies[0]!)).toMatchObject({ agentId: 'agent' })
-  expect(JSON.parse(bodies[0]!)).not.toHaveProperty('modelId')
+  expect(JSON.parse(bodies[0]!).forwardedProps).toMatchObject({ agentId: 'agent' })
+  expect(JSON.parse(bodies[0]!).forwardedProps).not.toHaveProperty('modelId')
   panel.unmount()
   localStorage.clear()
 })
@@ -288,10 +284,10 @@ it('creates a draft conversation once and retries its first task with the same r
     if (url.includes('/documents')) return apiResponse('{"items":[],"hasMore":false}')
     if (url === '/api/conversations' && init?.method === 'POST')
       return apiResponse('{"id":"first"}', { status: 201 })
-    if (url === '/api/conversations/first/tasks' && init?.method === 'POST') {
+    if (url === '/api/conversations/first/ag-ui' && init?.method === 'POST') {
       submissions.push(String(init.body))
       if (submissions.length === 1) throw new TypeError('connection lost')
-      return apiResponse('{"id":"task"}', { status: 202 })
+      return agUiReceipt('task', JSON.parse(submissions.at(-1)!).runId)
     }
     return apiResponse('{"items":[],"hasMore":false}')
   })

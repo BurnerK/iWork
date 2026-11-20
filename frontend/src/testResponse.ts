@@ -8,3 +8,13 @@ export function apiResponse(body: string | null, init?: ResponseInit): Response 
     init
   )
 }
+
+export function agUiReceipt(id: string, requestId: string): Response {
+  const frames = [
+    { type: 'RUN_STARTED', runId: requestId },
+    { type: 'CUSTOM', name: 'iwork.task', value: { id, requestId } },
+  ]
+  return new Response(frames.map((event) => `data: ${JSON.stringify(event)}\r\n\r\n`).join(''), {
+    headers: { 'Content-Type': 'text/event-stream' },
+  })
+}

@@ -41,6 +41,7 @@
     <dependency><groupId>io.agentscope</groupId><artifactId>agentscope-core</artifactId><version>${agentscope.version}</version></dependency>
     <dependency><groupId>io.agentscope</groupId><artifactId>agentscope-harness</artifactId><version>${agentscope.version}</version></dependency>
     <dependency><groupId>io.agentscope</groupId><artifactId>agentscope-extensions-model-openai</artifactId><version>${agentscope.version}</version></dependency>
+    <dependency><groupId>io.agentscope</groupId><artifactId>agentscope-extensions-agui</artifactId><version>${agentscope.version}</version></dependency>
     <dependency><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-sdk-trace</artifactId></dependency>
     <dependency><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-exporter-otlp</artifactId></dependency>
     <dependency>

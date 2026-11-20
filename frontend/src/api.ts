@@ -21,7 +21,25 @@ export async function request<T>(
   method = 'GET',
   body?: object | URLSearchParams | File
 ): Promise<T> {
+  const response = await fetchApi(path, method, body)
+  if (response.status === 204) return undefined as T
+  const data: unknown = await response.json().catch(() => undefined)
+  const envelope = successEnvelope.safeParse(data)
+  const schema = responseSchema(path, method)
+  if (!envelope.success || !schema) throw new ApiError(503, 'invalid_response')
+  const parsed = schema.safeParse(envelope.data.data)
+  if (!parsed.success) throw new ApiError(503, 'invalid_response')
+  return parsed.data as T
+}
+
+export async function fetchApi(
+  path: string,
+  method: string,
+  body?: object | URLSearchParams | File,
+  accept?: string
+): Promise<Response> {
   const headers: Record<string, string> = {}
+  if (accept) headers.Accept = accept
   if (method !== 'GET') {
     const { token } = await request<{ token: string }>('/api/auth/csrf')
     headers['X-CSRF-TOKEN'] = token
@@ -51,18 +69,11 @@ export async function request<T>(
   } catch {
     throw new ApiError(503, 'service_unavailable')
   }
-  if (response.status === 204) return undefined as T
-  const data: unknown = await response.json().catch(() => undefined)
   if (!response.ok) {
-    const error = failureEnvelope.safeParse(data)
+    const error = failureEnvelope.safeParse(await response.json().catch(() => undefined))
     throw new ApiError(response.status, error.success ? error.data.error : 'request_failed')
   }
-  const envelope = successEnvelope.safeParse(data)
-  const schema = responseSchema(path, method)
-  if (!envelope.success || !schema) throw new ApiError(503, 'invalid_response')
-  const parsed = schema.safeParse(envelope.data.data)
-  if (!parsed.success) throw new ApiError(503, 'invalid_response')
-  return parsed.data as T
+  return response
 }
 export function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '操作失败，请重试。'

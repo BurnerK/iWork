@@ -114,6 +114,13 @@ class TaskLifecycleTest {
                         .contains(input.message().stripLeading()))
                     queuedExecutions.add(input.message());
                 if (input.message().equals("hold")) Thread.sleep(30000);
+                if (input.message().equals("queue AG-UI")) {
+                    input.replyDelta().accept("reply", "第一段。");
+                    if (!releaseQueueGate.tryAcquire(10, java.util.concurrent.TimeUnit.SECONDS))
+                        throw new IllegalStateException("Reply gate timed out");
+                    input.replyDelta().accept("reply", "第二段。");
+                    return "第一段。第二段。";
+                }
                 if (input.message().equals("fail"))
                     throw new IllegalStateException("private-provider-detail");
                 if (input.message().equals("late")) {
@@ -453,6 +460,7 @@ class TaskLifecycleTest {
         awaitTask(ordinary, ownTaskId, "executionState", "STOPPED");
 
         verifyFollowUpQueue(cid, cid2, modelId, materialId, uid);
+        verifyAgUi(admin, modelId, materialId);
 
         var storageFailure =
                 admin.request(
@@ -475,6 +483,160 @@ class TaskLifecycleTest {
             MYSQL.getDockerClient().unpauseContainerCmd(MYSQL.getContainerId()).exec();
         }
         awaitTask(admin, storageId, "status", "FAILED");
+    }
+
+    private void verifyAgUi(Browser admin, String modelId, String materialId) throws Exception {
+        var cid =
+                json.readTree(admin.request("POST", "/api/conversations", "{}", true).body())
+                        .get("id")
+                        .asString();
+        var path = "/api/conversations/" + cid + "/ag-ui";
+        var first = agUiInput(cid, "agui-first", modelId, "queue AG-UI", List.of());
+        releaseQueueGate.drainPermits();
+        var response = openAgUi(admin, path, first);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Content-Type").orElseThrow())
+                .startsWith("text/event-stream");
+        String taskId;
+        try (var lines = response.body()) {
+            var events = lines.filter(line -> line.startsWith("data:")).iterator();
+            assertThat(json.readTree(events.next().substring(5)).get("type").asString())
+                    .isEqualTo("RUN_STARTED");
+            var receipt = json.readTree(events.next().substring(5));
+            assertThat(receipt.get("name").asString()).isEqualTo("iwork.task");
+            taskId = receipt.get("value").get("id").asString();
+            releaseQueueGate.release();
+            assertThat(events.next()).contains("TEXT_MESSAGE_START");
+            assertThat(events.next()).contains("TEXT_MESSAGE_CONTENT", "第一段。");
+            try {
+                var observer = openAgUi(admin, "/api/tasks/" + taskId + "/ag-ui", null);
+                assertThat(observer.statusCode()).isEqualTo(200);
+                try (var observed = observer.body()) {
+                    assertThat(
+                                    observed.filter(line -> line.contains("TEXT_MESSAGE_CONTENT"))
+                                            .findFirst())
+                            .hasValueSatisfying(line -> assertThat(line).contains("第一段。"));
+                }
+                var retry = openAgUi(admin, path, first);
+                assertThat(retry.statusCode()).isEqualTo(200);
+                try (var retried = retry.body()) {
+                    assertThat(retried.filter(line -> line.contains("iwork.task")).findFirst())
+                            .hasValueSatisfying(line -> assertThat(line).contains(taskId));
+                }
+                var followUp = agUiInput(cid, "agui-next", modelId, "fail", List.of(materialId));
+                var queued = openAgUi(admin, path, followUp);
+                assertThat(queued.statusCode()).isEqualTo(200);
+                String queuedId;
+                try (var queuedLines = queued.body()) {
+                    var queuedReceipt =
+                            queuedLines
+                                    .filter(line -> line.contains("iwork.task"))
+                                    .findFirst()
+                                    .orElseThrow();
+                    var queuedTask = json.readTree(queuedReceipt.substring(5)).get("value");
+                    assertThat(queuedTask.get("status").asString()).isEqualTo("QUEUED");
+                    queuedId = queuedTask.get("id").asString();
+                }
+                assertThat(
+                                admin.request(
+                                                "GET",
+                                                "/api/tasks/" + queuedId + "/materials",
+                                                null,
+                                                false)
+                                        .body())
+                        .contains(materialId);
+                assertThat(
+                                admin.request(
+                                                "GET",
+                                                "/api/conversations/"
+                                                        + cid
+                                                        + "/tasks?requestId=agui-first",
+                                                null,
+                                                false)
+                                        .body())
+                        .contains(taskId, "agui-first");
+                releaseQueueGate.release();
+                var terminal = new ArrayList<String>();
+                events.forEachRemaining(line -> terminal.add(line.substring(5)));
+                assertThat(
+                                terminal.stream()
+                                        .map(line -> json.readTree(line).get("type").asString()))
+                        .containsSubsequence(
+                                "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_END", "RUN_FINISHED");
+                assertThat(
+                                terminal.stream()
+                                        .map(json::readTree)
+                                        .filter(
+                                                event ->
+                                                        event.get("type")
+                                                                .asString()
+                                                                .equals("TEXT_MESSAGE_CONTENT"))
+                                        .map(event -> event.get("delta").asString()))
+                        .containsExactly("第二段。");
+                assertThat(admin.request("POST", path, first, true).body())
+                        .contains(taskId, "RUN_FINISHED");
+                assertThat(
+                                admin.request(
+                                                "GET",
+                                                "/api/tasks/" + queuedId + "/ag-ui",
+                                                null,
+                                                false)
+                                        .body())
+                        .contains("RUN_ERROR", "execution_failed")
+                        .doesNotContain("RUN_FINISHED", "private-provider-detail");
+            } finally {
+                releaseQueueGate.drainPermits();
+            }
+        }
+        var tasks =
+                json.readTree(
+                                admin.request(
+                                                "GET",
+                                                "/api/conversations/" + cid + "/tasks",
+                                                null,
+                                                false)
+                                        .body())
+                        .get("items");
+        assertThat(tasks).hasSize(2);
+        assertThat(tasks.get(0).get("status").asString()).isEqualTo("FAILED");
+        assertThat(tasks.get(1).get("status").asString()).isEqualTo("COMPLETED");
+    }
+
+    private HttpResponse<java.util.stream.Stream<String>> openAgUi(
+            Browser browser, String path, String body) throws Exception {
+        var request =
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                        .timeout(java.time.Duration.ofSeconds(15))
+                        .header("Accept", "text/event-stream");
+        if (body != null)
+            request.header("Content-Type", "application/json")
+                    .header("X-CSRF-TOKEN", browser.csrf)
+                    .POST(HttpRequest.BodyPublishers.ofString(body));
+        return browser.client.send(request.build(), HttpResponse.BodyHandlers.ofLines());
+    }
+
+    private String agUiInput(
+            String threadId,
+            String runId,
+            String modelId,
+            String message,
+            List<String> materialIds) {
+        return json.writeValueAsString(
+                Map.of(
+                        "threadId",
+                        threadId,
+                        "runId",
+                        runId,
+                        "state",
+                        Map.of(),
+                        "messages",
+                        List.of(Map.of("id", runId, "role", "user", "content", message)),
+                        "tools",
+                        List.of(),
+                        "context",
+                        List.of(),
+                        "forwardedProps",
+                        Map.of("modelId", modelId, "materialIds", materialIds)));
     }
 
     private void verifyFollowUpQueue(

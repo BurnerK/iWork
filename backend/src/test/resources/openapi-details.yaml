@@ -119,6 +119,60 @@ paths:
           content:
             text/event-stream:
               schema: {type: string}
+  /api/conversations/{id}/ag-ui:
+    post:
+      summary: 通过 AG-UI 提交消息
+      description: threadId 须与路径中的会话一致。runId 用作幂等标识。提交后可按任务 ID 另行订阅，断开流不会取消任务。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [threadId, runId, messages, forwardedProps]
+              properties:
+                threadId: {type: string}
+                runId: {type: string, maxLength: 100}
+                messages:
+                  type: array
+                  minItems: 1
+                  maxItems: 1
+                  items:
+                    type: object
+                    required: [id, role, content]
+                    properties:
+                      id: {type: string}
+                      role: {type: string, enum: [user]}
+                      content: {type: string, maxLength: 20000}
+                tools: {type: array, items: {type: object}}
+                context: {type: array, items: {type: object}}
+                state: {type: object}
+                forwardedProps:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    modelId: {type: string}
+                    agentId: {type: string}
+                    materialIds: {type: array, maxItems: 5, items: {type: string}}
+                    baseVersionId: {type: string}
+                    outputMode: {type: string, enum: [TEXT, DOCUMENT], default: TEXT}
+      responses:
+        '200':
+          description: AG-UI SSE。CUSTOM iwork.task 回执包含任务 ID、请求标识和业务状态。
+          content:
+            text/event-stream:
+              schema: {type: string}
+        '409':
+          $ref: '#/components/responses/ApiError'
+  /api/tasks/{id}/ag-ui:
+    get:
+      summary: 订阅同一任务的 AG-UI 事件
+      responses:
+        '200':
+          description: AG-UI SSE。文本按序发送，RUN_FINISHED 表示业务任务已完成。
+          content:
+            text/event-stream:
+              schema: {type: string}
   /api/projects:
     post:
       summary: 创建项目
