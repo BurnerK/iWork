@@ -20,8 +20,9 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-            "iwork.files-directory=target/material-test-files",
             "iwork.cookie-secure=false",
+            "iwork.material-owner-max-bytes=2097152",
+            "iwork.material-instance-max-bytes=4194304",
             "IWORK_MODEL_KEY_TEST=synthetic-model-secret-12",
             "iwork.bootstrap.username=admin",
             "iwork.bootstrap.password=Initial-password-11"
@@ -39,12 +40,24 @@ class MaterialStorageTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry r) {
+        r.add("iwork.files-directory", () -> files.toString());
         r.add("spring.datasource.url", MYSQL::getJdbcUrl);
         r.add("spring.datasource.username", MYSQL::getUsername);
         r.add("spring.datasource.password", MYSQL::getPassword);
         r.add("spring.data.redis.host", REDIS::getHost);
         r.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
     }
+
+    @org.junit.jupiter.api.io.TempDir static java.nio.file.Path files;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.jdbc.core.JdbcTemplate db;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.transaction.support.TransactionTemplate tx;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    io.iwork.identity.IdentityService identity;
 
     @LocalServerPort int port;
     final ObjectMapper json = new ObjectMapper();
@@ -198,12 +211,85 @@ class MaterialStorageTest {
                                 .get("items")
                                 .size())
                 .isEqualTo(2);
-        java.nio.file.Files.write(
-                java.nio.file.Path.of("target/material-test-files/originals", id), new byte[] {1});
+        var originals = files.resolve("originals");
+        java.nio.file.Files.write(originals.resolve(id), new byte[] {1});
         assertThat(
                         admin.request("GET", "/api/materials/" + id + "/content", null, false)
                                 .statusCode())
                 .isEqualTo(503);
+
+        var callers = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            var first =
+                    callers.submit(
+                            () -> {
+                                start.await();
+                                return upload(admin, "first.txt", new byte[1536 * 1024]);
+                            });
+            var second =
+                    callers.submit(
+                            () -> {
+                                start.await();
+                                return upload(admin, "second.txt", new byte[1536 * 1024]);
+                            });
+            start.countDown();
+            var responses =
+                    List.of(
+                            first.get(20, java.util.concurrent.TimeUnit.SECONDS),
+                            second.get(20, java.util.concurrent.TimeUnit.SECONDS));
+            assertThat(responses)
+                    .extracting(HttpResponse::statusCode)
+                    .containsExactlyInAnyOrder(201, 409);
+            assertThat(responses)
+                    .filteredOn(response -> response.statusCode() == 409)
+                    .allSatisfy(
+                            response ->
+                                    assertThat(response.body())
+                                            .contains("material_quota_exceeded"));
+        } finally {
+            callers.shutdownNow();
+        }
+
+        var orphan =
+                java.nio.file.Files.write(
+                        originals.resolve(".orphan.part"), new byte[3 * 1024 * 1024]);
+        try {
+            var denied = upload(other, "instance.txt", bytes);
+            assertThat(denied.statusCode()).isEqualTo(503);
+            assertThat(denied.body()).contains("material_storage_unavailable");
+            try (var stored = java.nio.file.Files.list(originals)) {
+                assertThat(stored.count()).isEqualTo(4);
+            }
+        } finally {
+            java.nio.file.Files.delete(orphan);
+        }
+        assertThat(upload(other, "independent.txt", bytes).statusCode()).isEqualTo(201);
+
+        var noFreeSpace =
+                new io.iwork.artifacts.MaterialService(
+                        originals.getParent(),
+                        db,
+                        tx,
+                        identity,
+                        2097152,
+                        1000,
+                        4194304,
+                        10000,
+                        Long.MAX_VALUE);
+        var caller = identity.authenticate("other", "Other-password-15");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () ->
+                                noFreeSpace.upload(
+                                        caller,
+                                        "reserve.txt",
+                                        bytes.length,
+                                        new java.io.ByteArrayInputStream(bytes)))
+                .isInstanceOf(io.iwork.identity.ApiFailure.class)
+                .hasMessage("material_storage_unavailable");
+        try (var stored = java.nio.file.Files.list(originals)) {
+            assertThat(stored.count()).isEqualTo(4);
+        }
     }
 
     HttpResponse<String> upload(Browser browser, String name, byte[] bytes) throws Exception {

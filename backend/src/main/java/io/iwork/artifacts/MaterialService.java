@@ -5,6 +5,7 @@ import io.iwork.identity.Caller;
 import io.iwork.identity.IdentityService;
 import java.io.*;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.*;
 import java.time.Instant;
 import java.util.*;
@@ -20,13 +21,34 @@ public class MaterialService {
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final IdentityService identity;
+    private final long ownerMaxBytes;
+    private final long ownerMaxFiles;
+    private final long instanceMaxBytes;
+    private final long instanceMaxFiles;
+    private final long minFreeBytes;
 
     public MaterialService(
             @Value("${iwork.files-directory}") Path root,
             JdbcTemplate db,
             TransactionTemplate tx,
-            IdentityService identity)
+            IdentityService identity,
+            @Value("${iwork.material-owner-max-bytes:104857600}") long ownerMaxBytes,
+            @Value("${iwork.material-owner-max-files:1000}") long ownerMaxFiles,
+            @Value("${iwork.material-instance-max-bytes:10737418240}") long instanceMaxBytes,
+            @Value("${iwork.material-instance-max-files:10000}") long instanceMaxFiles,
+            @Value("${iwork.material-min-free-bytes:536870912}") long minFreeBytes)
             throws IOException {
+        if (ownerMaxBytes <= 0
+                || ownerMaxFiles <= 0
+                || instanceMaxBytes <= 0
+                || instanceMaxFiles <= 0
+                || minFreeBytes <= 0)
+            throw new IllegalArgumentException("Material storage limits must be positive");
+        this.ownerMaxBytes = ownerMaxBytes;
+        this.ownerMaxFiles = ownerMaxFiles;
+        this.instanceMaxBytes = instanceMaxBytes;
+        this.instanceMaxFiles = instanceMaxFiles;
+        this.minFreeBytes = minFreeBytes;
         this.originals = root.resolve("originals").toAbsolutePath().normalize();
         Files.createDirectories(originals);
         this.db = db;
@@ -88,14 +110,83 @@ public class MaterialService {
         if (name.lastIndexOf('.') < 1 || !Set.of("txt", "md").contains(format))
             throw new ApiFailure(415, "unsupported_material");
         if (declaredSize > MAX_BYTES) throw new ApiFailure(413, "material_too_large");
-        Path pending = null;
+        byte[] bytes;
         try {
-            byte[] bytes = stream.readNBytes(MAX_BYTES + 1);
-            if (bytes.length > MAX_BYTES) throw new ApiFailure(413, "material_too_large");
-            if (bytes.length == 0 || declaredSize >= 0 && declaredSize != bytes.length)
-                throw new ApiFailure(400, "incomplete_material");
-            String id = UUID.randomUUID().toString();
-            pending = Files.createTempFile(originals, ".upload-", ".part");
+            bytes = stream.readNBytes(MAX_BYTES + 1);
+        } catch (IOException failure) {
+            throw new ApiFailure(503, "material_storage_unavailable");
+        }
+        if (bytes.length > MAX_BYTES) throw new ApiFailure(413, "material_too_large");
+        if (bytes.length == 0 || declaredSize >= 0 && declaredSize != bytes.length)
+            throw new ApiFailure(400, "incomplete_material");
+        String id = UUID.randomUUID().toString();
+        return tx.execute(
+                status -> {
+                    // Keep admission and the original write serialized until metadata commits.
+                    db.queryForObject(
+                            "SELECT id FROM material_upload_gate WHERE id=1 FOR UPDATE",
+                            Integer.class);
+                    var live = identity.verify(caller, true);
+                    if (live.mustChangePassword())
+                        throw new ApiFailure(403, "password_change_required");
+                    requireCapacity(caller.id(), bytes.length);
+                    try {
+                        writeOriginal(id, bytes);
+                    } catch (IOException failure) {
+                        throw new ApiFailure(503, "material_storage_unavailable");
+                    }
+                    // Keep a complete file after an ambiguous commit. Admission counts it on disk.
+                    db.update(
+                            "INSERT INTO materials(id,owner_id,name,format,byte_size,sha256) VALUES(?,?,?,?,?,?)",
+                            id,
+                            caller.id(),
+                            name,
+                            format,
+                            bytes.length,
+                            checksum(bytes));
+                    return get(caller, id);
+                });
+    }
+
+    private void requireCapacity(String ownerId, int bytes) {
+        var ownerHasCapacity =
+                db.queryForObject(
+                        "SELECT COUNT(*) < ? AND COALESCE(SUM(byte_size), 0) <= ? FROM materials WHERE owner_id=?",
+                        Boolean.class,
+                        ownerMaxFiles,
+                        ownerMaxBytes - bytes,
+                        ownerId);
+        if (!Boolean.TRUE.equals(ownerHasCapacity))
+            throw new ApiFailure(409, "material_quota_exceeded");
+
+        try {
+            var store = Files.getFileStore(originals);
+            if (instanceMaxBytes < bytes
+                    || store.getUsableSpace() - minFreeBytes < bytes + store.getBlockSize())
+                throw new ApiFailure(503, "material_storage_unavailable");
+            long remainingBytes = instanceMaxBytes - bytes;
+            long remainingFiles = instanceMaxFiles - 1;
+            // shortcut: scan up to the file cap to count orphans; index usage for larger stores.
+            try (var originalsOnDisk = Files.newDirectoryStream(originals)) {
+                for (Path original : originalsOnDisk) {
+                    var attributes =
+                            Files.readAttributes(
+                                    original, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                    if (!attributes.isRegularFile()
+                            || remainingFiles-- == 0
+                            || attributes.size() > remainingBytes)
+                        throw new ApiFailure(503, "material_storage_unavailable");
+                    remainingBytes -= attributes.size();
+                }
+            }
+        } catch (IOException | DirectoryIteratorException failure) {
+            throw new ApiFailure(503, "material_storage_unavailable");
+        }
+    }
+
+    void writeOriginal(String id, byte[] bytes) throws IOException {
+        Path pending = Files.createTempFile(originals, ".upload-", ".part");
+        try {
             Files.write(pending, bytes);
             try (var channel =
                     java.nio.channels.FileChannel.open(pending, StandardOpenOption.WRITE)) {
@@ -114,33 +205,13 @@ public class MaterialService {
                 }
                 throw failure;
             }
-            // A commit error can be ambiguous; keep the complete file rather than delete a possibly
-            // indexed original.
-            return tx.execute(
-                    status -> {
-                        var live = identity.verify(caller, true);
-                        if (live.mustChangePassword())
-                            throw new ApiFailure(403, "password_change_required");
-                        db.update(
-                                "INSERT INTO materials(id,owner_id,name,format,byte_size,sha256) VALUES(?,?,?,?,?,?)",
-                                id,
-                                caller.id(),
-                                name,
-                                format,
-                                bytes.length,
-                                checksum(bytes));
-                        return get(caller, id);
-                    });
-        } catch (IOException failure) {
-            throw new ApiFailure(503, "material_storage_unavailable");
         } finally {
-            if (pending != null)
-                try {
-                    Files.deleteIfExists(pending);
-                } catch (IOException failure) {
-                    org.slf4j.LoggerFactory.getLogger(MaterialService.class)
-                            .warn("Material staging cleanup requires retry");
-                }
+            try {
+                Files.deleteIfExists(pending);
+            } catch (IOException failure) {
+                org.slf4j.LoggerFactory.getLogger(MaterialService.class)
+                        .warn("Material staging cleanup requires retry");
+            }
         }
     }
 

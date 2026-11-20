@@ -58,6 +58,8 @@ Flyway 随应用启动运行，V1 保留原基线，V2 新增账号与个人会�
 
 `.env.example` 是空凭据模板，`.env` 只由 Compose 读取，本机 Java 不自动加载它。仅使用合成测试凭据；前端不接受密钥配置，不将任何服务端配置送给浏览器。不要把真实凭据加入 Vite 环境变量。日志默认 INFO，容器日志每个服务最多 3 × 10 MB；HTTP 错误不返回异常、栈或配置。健康检查不公开组件/详情；不要在共享环境开启 DEBUG/TRACE 或输出 `docker compose config`（其中可能展开密码）。
 
+资料上传默认每账号累计 100 MiB、1,000 份，实例原文目录累计 10 GiB、10,000 份，并在写入前为共享文件系统保留 512 MiB 可用空间。实例额度包含目录里的遗留文件。超出账号额度返回 `409 material_quota_exceeded`，实例容量不足返回 `503 material_storage_unavailable`。已有资料仍可下载。Java 环境变量 `IWORK_MATERIAL_OWNER_MAX_BYTES`、`IWORK_MATERIAL_OWNER_MAX_FILES`、`IWORK_MATERIAL_INSTANCE_MAX_BYTES`、`IWORK_MATERIAL_INSTANCE_MAX_FILES` 和 `IWORK_MATERIAL_MIN_FREE_BYTES` 可覆盖默认值。在 Compose 部署中，通过应用服务的 `environment` 传入这些变量。
+
 ## 本机开发
 
 推荐使用根目录的统一 npm 入口，完整操作见 [README 本地开发](../README.md#本地开发推荐)：
