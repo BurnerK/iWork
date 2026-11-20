@@ -63,15 +63,19 @@ public final class SandboxControl {
         return value;
     }
 
-    static void save(Path path, Object value) throws IOException {
+    static void save(Path path, Object value, boolean durable) throws IOException {
         var next = path.resolveSibling(path.getFileName() + ".next");
         Files.write(next, JSON.writeValueAsBytes(value));
-        try (var channel = FileChannel.open(next, StandardOpenOption.WRITE)) {
-            channel.force(true);
+        if (durable) {
+            try (var channel = FileChannel.open(next, StandardOpenOption.WRITE)) {
+                channel.force(true);
+            }
         }
         Files.move(next, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        try (var channel = FileChannel.open(path.getParent(), StandardOpenOption.READ)) {
-            channel.force(true);
+        if (durable) {
+            try (var channel = FileChannel.open(path.getParent(), StandardOpenOption.READ)) {
+                channel.force(true);
+            }
         }
     }
 
@@ -182,9 +186,11 @@ public final class SandboxControl {
                                                 System.currentTimeMillis())));
                     }
                 }
+                // Admission only trusts fresh heartbeats, so they do not need crash durability.
                 save(
                         HEALTH,
-                        Map.of("instance", INSTANCE, "at", System.currentTimeMillis(), "ttl", TTL));
+                        Map.of("instance", INSTANCE, "at", System.currentTimeMillis(), "ttl", TTL),
+                        false);
             } catch (Exception failure) {
                 Files.deleteIfExists(HEALTH);
                 System.err.println("Watchdog supervision unavailable");
@@ -201,7 +207,7 @@ public final class SandboxControl {
         public Job() {}
 
         void save() throws IOException {
-            SandboxControl.save(REGISTRY.resolve(id + ".json"), this);
+            SandboxControl.save(REGISTRY.resolve(id + ".json"), this, true);
         }
 
         Map<String, Object> view() throws IOException {

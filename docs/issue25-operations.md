@@ -50,7 +50,7 @@ iwork_release up -d --no-build --pull never --wait --wait-timeout 180
 
 ## 可执行协调备份与恢复
 
-`scripts/backup.py` 仅接受运行的 mysql 与停止的 app；`--writers-stopped` 表示部署者已核实所有额外写入进程停止。脚本不代替维护窗口，也不自动停止或重启应用。
+`scripts/backup.py` 仅接受运行的 mysql 与停止的 app；`--writers-stopped` 表示部署者已核实所有额外写入进程停止。运行前核对应用实际使用的业务库。若与 MySQL 容器的 `MYSQL_DATABASE` 不同，在 backup、restore、verify 各自通过 `--database` 指明该实例的实际业务库。脚本不代替维护窗口，也不自动停止或重启应用。
 
 ```sh
 # 示例路径必须替换为授权实例；勿复制测试凭据。

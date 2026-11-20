@@ -2,6 +2,8 @@
 import importlib.util
 import io
 from pathlib import Path
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -39,6 +41,15 @@ class ArchiveSafety(unittest.TestCase):
             old = backup.digest(file)
             file.write_bytes(b'new')
             self.assertNotEqual(backup.digest(file), old)
+
+    def test_rejects_invalid_business_schema_before_compose(self):
+        result = subprocess.run(
+            [sys.executable, backup.__file__, 'backup', '--compose', 'compose.yaml',
+             '--env-file', '.env', '--project', 'iwork', '--files', '/unused/files',
+             '--backup', '/unused/backup', '--writers-stopped', '--database=-invalid'],
+            capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('Invalid MySQL database name', result.stderr)
 
 
 if __name__ == '__main__':

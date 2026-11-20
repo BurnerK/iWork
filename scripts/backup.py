@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--compose', action='append', required=True)
     parser.add_argument('--env-file', required=True)
     parser.add_argument('--project', required=True)
+    parser.add_argument('--database', help='Business schema when it differs from MYSQL_DATABASE')
     parser.add_argument('--files', type=Path, required=True)
     parser.add_argument('--backup', type=Path, required=True)
     parser.add_argument('--writers-stopped', action='store_true', help='Operator has stopped every writer, including local Java processes')
@@ -43,6 +44,8 @@ def main():
         parser.error('Stop all application writers before backup, restore, or verification; pass --writers-stopped afterward')
     if not re.fullmatch('[a-z0-9][a-z0-9_-]{0,62}', args.project):
         parser.error('Invalid Compose project name')
+    if args.database is not None and not re.fullmatch('[a-zA-Z0-9_]{1,64}', args.database):
+        parser.error('Invalid MySQL database name')
     os.umask(0o077)
     files = args.files.absolute()
     if files != files.resolve() or not files.is_dir():
@@ -71,7 +74,11 @@ def main():
         mounts = config['services']['app'].get('volumes', [])
         if not any(m.get('target') == '/data/files' and m.get('type') == 'bind' and Path(m['source']).resolve() == files for m in mounts):
             raise ValueError('Files path does not match this Compose app mount')
-    mysql = ['exec', '-T', 'mysql', 'sh', '-c', 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql --default-character-set=utf8mb4 -u "$MYSQL_USER" -D "$MYSQL_DATABASE" --batch --skip-column-names']
+    mysql_exec = ['exec', '-T']
+    if args.database is not None:
+        mysql_exec += ['-e', 'IWORK_BACKUP_DATABASE=' + args.database]
+    mysql_exec += ['mysql', 'sh', '-c']
+    mysql = mysql_exec + ['MYSQL_PWD="$MYSQL_PASSWORD" exec mysql --default-character-set=utf8mb4 -u "$MYSQL_USER" -D "${IWORK_BACKUP_DATABASE:-$MYSQL_DATABASE}" --batch --skip-column-names']
 
     def sql(query):
         return run(mysql, data=query.encode()).decode().strip()
@@ -97,7 +104,7 @@ def main():
         counts, references = inspect()
         backup.mkdir(parents=True, mode=0o700)
         with (backup / 'database.sql').open('xb') as output:
-            run(['exec', '-T', 'mysql', 'sh', '-c', 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump --default-character-set=utf8mb4 -u "$MYSQL_USER" --single-transaction --no-tablespaces --set-gtid-purged=OFF --routines --triggers --events --hex-blob "$MYSQL_DATABASE"'], output=output)
+            run(mysql_exec + ['MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump --default-character-set=utf8mb4 -u "$MYSQL_USER" --single-transaction --no-tablespaces --set-gtid-purged=OFF --routines --triggers --events --hex-blob "${IWORK_BACKUP_DATABASE:-$MYSQL_DATABASE}"'], output=output)
         with tarfile.open(backup / 'files.tar.gz', 'w:gz') as archive:
             for path in sorted(files.rglob('*')):
                 if path.is_symlink() or not (path.is_file() or path.is_dir()):
