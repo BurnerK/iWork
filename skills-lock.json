@@ -14,6 +14,13 @@
       "sourceType": "github",
       "skillPath": "skills/open-code-review-delegate/SKILL.md",
       "computedHash": "0bd41984c6c165f9e4c8065dd6621008e0526d4465dfb0585ee4014c38500baa"
+    },
+    "writing-code-comments": {
+      "source": "abodoma17/claude-skill-writing-code-comments",
+      "commit": "0f22289bd617b22ddfed13c56dbd533b45b98e5a",
+      "sourceType": "github",
+      "skillPath": "writing-code-comments/SKILL.md",
+      "computedHash": "ed02b7acf438289363c312baf1c09004cb4ca42ff74d659fbea7e41559da3a49"
     }
   }
 }
