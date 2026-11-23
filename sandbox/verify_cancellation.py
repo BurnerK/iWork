@@ -8,11 +8,15 @@ import json
 import os
 import pathlib
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'scripts'))
+from ag_ui import submit_run
 
 parser = argparse.ArgumentParser()
 parser.add_argument('url')
@@ -70,7 +74,9 @@ results = []
 paused = False
 try:
     for unavailable in (False, True):
-        task = request('POST', '/api/conversations/' + conversation + '/tasks', {'requestId': str(uuid.uuid4()), 'modelId': args.model, 'message': '整理资料并修改选定版本', 'outputMode': 'DOCUMENT', 'baseVersionId': args.base_version, 'materialIds': [material]})['id']
+        task = submit_run(client, args.url, csrf, conversation, str(uuid.uuid4()),
+                      '整理资料并修改选定版本', modelId=args.model, outputMode='DOCUMENT',
+                      baseVersionId=args.base_version, materialIds=[material])
         parse = until(lambda: next(iter(request('GET', '/api/tasks/' + task + '/parses')), None))
         live = until(lambda: containers(parse['id']))
         info = json.loads(subprocess.check_output(['docker', 'inspect', live[0]]))[0]

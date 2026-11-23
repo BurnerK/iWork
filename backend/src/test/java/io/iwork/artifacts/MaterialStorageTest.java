@@ -68,6 +68,10 @@ class MaterialStorageTest {
         final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
         String csrf;
 
+        ApiTestResponse.RunResponse submitRun(String conversation, String input) throws Exception {
+            return ApiTestResponse.submitRun(client, port, conversation, input, csrf);
+        }
+
         HttpResponse<String> request(String method, String path, String body, boolean token)
                 throws Exception {
             var builder =
@@ -195,14 +199,7 @@ class MaterialStorageTest {
                                 "read",
                                 "materialIds",
                                 List.of(id)));
-        assertThat(
-                        other.request(
-                                        "POST",
-                                        "/api/conversations/" + conversation + "/tasks",
-                                        reference,
-                                        true)
-                                .statusCode())
-                .isEqualTo(404);
+        assertThat(other.submitRun(conversation, reference).statusCode()).isEqualTo(404);
 
         var again = upload(admin, "资料.txt", bytes);
         assertThat(again.statusCode()).isEqualTo(201);

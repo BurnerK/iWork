@@ -56,6 +56,10 @@ class DocumentRevisionTest {
         final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
         String csrf;
 
+        ApiTestResponse.RunResponse submitRun(String conversation, String input) throws Exception {
+            return ApiTestResponse.submitRun(client, port, conversation, input, csrf);
+        }
+
         HttpResponse<String> request(String method, String path, String body, boolean token)
                 throws Exception {
             var builder =
@@ -374,36 +378,20 @@ class DocumentRevisionTest {
                         "baseVersionId",
                         id);
         String retried =
-                json.readTree(
-                                admin.request(
-                                                "POST",
-                                                "/api/conversations/" + other + "/tasks",
-                                                json.writeValueAsString(retryInput),
-                                                true)
-                                        .body())
+                json.readTree(admin.submitRun(other, json.writeValueAsString(retryInput)).body())
                         .path("id")
                         .asString();
         await(admin, retried);
         assertThat(
                         json.readTree(
-                                        admin.request(
-                                                        "POST",
-                                                        "/api/conversations/" + other + "/tasks",
-                                                        json.writeValueAsString(retryInput),
-                                                        true)
+                                        admin.submitRun(other, json.writeValueAsString(retryInput))
                                                 .body())
                                 .path("id")
                                 .asString())
                 .isEqualTo(retried);
         var conflict = new HashMap<String, Object>(retryInput);
         conflict.put("baseVersionId", latest.path("versionId").asString());
-        assertThat(
-                        admin.request(
-                                        "POST",
-                                        "/api/conversations/" + other + "/tasks",
-                                        json.writeValueAsString(conflict),
-                                        true)
-                                .statusCode())
+        assertThat(admin.submitRun(other, json.writeValueAsString(conflict)).statusCode())
                 .isEqualTo(409);
         assertThat(
                         db.queryForObject(
@@ -467,9 +455,8 @@ class DocumentRevisionTest {
                 true);
         String background =
                 json.readTree(
-                                admin.request(
-                                                "POST",
-                                                "/api/conversations/" + first + "/tasks",
+                                admin.submitRun(
+                                                first,
                                                 json.writeValueAsString(
                                                         Map.of(
                                                                 "requestId",
@@ -477,8 +464,7 @@ class DocumentRevisionTest {
                                                                 "modelId",
                                                                 model,
                                                                 "message",
-                                                                "常规背景".repeat(500))),
-                                                true)
+                                                                "常规背景".repeat(500))))
                                         .body())
                         .path("id")
                         .asString();
@@ -532,13 +518,7 @@ class DocumentRevisionTest {
         String own = conversation(ordinary);
         var foreign = new HashMap<String, Object>(retryInput);
         foreign.put("requestId", "foreign-version");
-        assertThat(
-                        ordinary.request(
-                                        "POST",
-                                        "/api/conversations/" + own + "/tasks",
-                                        json.writeValueAsString(foreign),
-                                        true)
-                                .statusCode())
+        assertThat(ordinary.submitRun(own, json.writeValueAsString(foreign)).statusCode())
                 .isEqualTo(404);
         assertThat(
                         ordinary.request("GET", "/api/document-versions/" + id, null, false)
@@ -747,9 +727,8 @@ class DocumentRevisionTest {
         try {
             assertThat(preparedGate.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
             var response =
-                    browser.request(
-                            "POST",
-                            path + "/tasks",
+                    browser.submitRun(
+                            conversation,
                             json.writeValueAsString(
                                     Map.of(
                                             "requestId",
@@ -761,11 +740,8 @@ class DocumentRevisionTest {
                                             "outputMode",
                                             "DOCUMENT",
                                             "baseVersionId",
-                                            source,
-                                            "allowQueue",
-                                            true)),
-                            true);
-            assertThat(response.statusCode()).isEqualTo(202);
+                                            source)));
+            assertThat(response.statusCode()).isEqualTo(200);
             var queued = json.readTree(response.body());
             assertThat(queued.path("status").asString()).isEqualTo("QUEUED");
             assertThat(browser.request("GET", path + "/documents", null, false).body())
@@ -813,13 +789,8 @@ class DocumentRevisionTest {
                                 "outputMode",
                                 "DOCUMENT"));
         if (base != null) input.put("baseVersionId", base);
-        var response =
-                browser.request(
-                        "POST",
-                        "/api/conversations/" + cid + "/tasks",
-                        json.writeValueAsString(input),
-                        true);
-        assertThat(response.statusCode()).describedAs(response.body()).isEqualTo(202);
+        var response = browser.submitRun(cid, json.writeValueAsString(input));
+        assertThat(response.statusCode()).describedAs(response.body()).isEqualTo(200);
         return json.readTree(response.body()).path("id").asString();
     }
 

@@ -156,11 +156,14 @@ class Browser:
         return body
 
 
-def migration_count():
-    return compose("exec", "-T", "mysql", "sh", "-c",
-                   'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u iwork -D iwork -N -e '
-                   "'SELECT COUNT(*) FROM flyway_schema_history WHERE version = 1 AND success = 1'",
-                   capture=True).strip()
+def verify_migrations():
+    migrations = root / "backend/src/main/resources/db/migration"
+    expected = sorted(path.name for path in migrations.glob("V*.sql"))
+    applied = compose("exec", "-T", "mysql", "sh", "-c",
+                      'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u iwork -D iwork -N -e '
+                      "'SELECT script, success FROM flyway_schema_history'",
+                      capture=True).splitlines()
+    assert sorted(applied) == [f"{name}\t1" for name in expected], applied
 
 
 print(f"Isolated project: {work.name}; evidence directory: {work}", flush=True)
@@ -188,7 +191,7 @@ try:
             assert response.status == 200
             assert response.headers.get_content_type() == "image/svg+xml"
     assert request("/api/tasks")[0] == 401
-    assert migration_count() == "1"
+    verify_migrations()
     browser = Browser()
     assert browser.login(env["IWORK_BOOTSTRAP_PASSWORD"])["mustChangePassword"]
     password = secrets.token_urlsafe(24)
@@ -216,7 +219,7 @@ try:
     health("/actuator/health/readiness", 200, "UP")
     sandbox_health()
     verify_release_parser()
-    assert migration_count() == "1"
+    verify_migrations()
     assert compose("exec", "-T", "app", "cat", "/data/files/smoke-marker", capture=True) == "retained"
     assert browser.request("/api/auth/me")[0] == 200
     assert browser.request(conversation_path)[1]["title"] == "新会话"

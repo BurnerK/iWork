@@ -56,6 +56,10 @@ class ModelConfigurationTest {
         final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
         String csrf;
 
+        ApiTestResponse.RunResponse submitRun(String conversation, String input) throws Exception {
+            return ApiTestResponse.submitRun(client, port, conversation, input, csrf);
+        }
+
         HttpResponse<String> request(String method, String path, String body, boolean token)
                 throws Exception {
             var builder =
@@ -286,9 +290,8 @@ class ModelConfigurationTest {
         var conversation = admin.request("POST", "/api/conversations", "{}", true);
         var conversationId = json.readTree(conversation.body()).get("id").asString();
         var noPermission =
-                admin.request(
-                        "POST",
-                        "/api/conversations/" + conversationId + "/tasks",
+                admin.submitRun(
+                        conversationId,
                         json.writeValueAsString(
                                 Map.of(
                                         "requestId",
@@ -296,8 +299,7 @@ class ModelConfigurationTest {
                                         "modelId",
                                         id,
                                         "message",
-                                        "Require explicit model access")),
-                        true);
+                                        "Require explicit model access")));
         assertThat(noPermission.statusCode()).isEqualTo(403);
         assertThat(noPermission.body()).contains("model_not_authorized");
         assertThat(

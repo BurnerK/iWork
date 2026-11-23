@@ -62,6 +62,10 @@ public class PersonalAgentTest {
         final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
         String csrf;
 
+        ApiTestResponse.RunResponse submitRun(String conversation, String input) throws Exception {
+            return ApiTestResponse.submitRun(client, port, conversation, input, csrf);
+        }
+
         HttpResponse<String> request(String method, String path, String body, boolean token)
                 throws Exception {
             var builder =
@@ -270,13 +274,8 @@ public class PersonalAgentTest {
                         "DOCUMENT",
                         "materialIds",
                         List.of(material));
-        var accepted =
-                admin.request(
-                        "POST",
-                        "/api/conversations/" + cid + "/tasks",
-                        json.writeValueAsString(taskBody),
-                        true);
-        assertThat(accepted.statusCode()).isEqualTo(202);
+        var accepted = admin.submitRun(cid, json.writeValueAsString(taskBody));
+        assertThat(accepted.statusCode()).isEqualTo(200);
         String task = json.readTree(accepted.body()).path("id").asString();
         for (int i = 0; i < 200 && !entered.get(); i++) Thread.sleep(25);
         assertThat(entered.get()).isTrue();
@@ -304,25 +303,12 @@ public class PersonalAgentTest {
                                 .body())
                 .contains("行动清单", "蓝鲸项目")
                 .doesNotContain("分工组织");
-        assertThat(
-                        admin.request(
-                                        "POST",
-                                        "/api/conversations/" + cid + "/tasks",
-                                        json.writeValueAsString(taskBody),
-                                        true)
-                                .body())
-                .contains(task);
+        assertThat(admin.submitRun(cid, json.writeValueAsString(taskBody)).body()).contains(task);
         var next = new HashMap<String, Object>(taskBody);
         next.put("requestId", UUID.randomUUID().toString());
         next.put("message", "继续");
         String second =
-                json.readTree(
-                                admin.request(
-                                                "POST",
-                                                "/api/conversations/" + cid + "/tasks",
-                                                json.writeValueAsString(next),
-                                                true)
-                                        .body())
+                json.readTree(admin.submitRun(cid, json.writeValueAsString(next)).body())
                         .path("id")
                         .asString();
         await(admin, second, "COMPLETED");
@@ -353,13 +339,7 @@ public class PersonalAgentTest {
         next.put("requestId", UUID.randomUUID().toString());
         next.put("message", "revoke");
         String revoked =
-                json.readTree(
-                                admin.request(
-                                                "POST",
-                                                "/api/conversations/" + cid + "/tasks",
-                                                json.writeValueAsString(next),
-                                                true)
-                                        .body())
+                json.readTree(admin.submitRun(cid, json.writeValueAsString(next)).body())
                         .path("id")
                         .asString();
         for (int i = 0; i < 200 && !entered.get(); i++) Thread.sleep(25);
@@ -384,14 +364,7 @@ public class PersonalAgentTest {
                                 .size())
                 .isEqualTo(1);
         next.put("requestId", UUID.randomUUID().toString());
-        assertThat(
-                        admin.request(
-                                        "POST",
-                                        "/api/conversations/" + cid + "/tasks",
-                                        json.writeValueAsString(next),
-                                        true)
-                                .statusCode())
-                .isEqualTo(403);
+        assertThat(admin.submitRun(cid, json.writeValueAsString(next)).statusCode()).isEqualTo(403);
         String otherId = issued.path("user").path("id").asString();
         admin.request(
                 "PUT",
@@ -426,14 +399,7 @@ public class PersonalAgentTest {
         next.put("agentId", privateAgent);
         next.put("requestId", UUID.randomUUID().toString());
         next.put("message", "继续");
-        assertThat(
-                        admin.request(
-                                        "POST",
-                                        "/api/conversations/" + cid + "/tasks",
-                                        json.writeValueAsString(next),
-                                        true)
-                                .statusCode())
-                .isEqualTo(404);
+        assertThat(admin.submitRun(cid, json.writeValueAsString(next)).statusCode()).isEqualTo(404);
         String privateCid =
                 json.readTree(
                                 other.request(
@@ -444,13 +410,7 @@ public class PersonalAgentTest {
                                         .body())
                         .path("id")
                         .asString();
-        assertThat(
-                        other.request(
-                                        "POST",
-                                        "/api/conversations/" + privateCid + "/tasks",
-                                        json.writeValueAsString(next),
-                                        true)
-                                .statusCode())
+        assertThat(other.submitRun(privateCid, json.writeValueAsString(next)).statusCode())
                 .isEqualTo(404);
         var ownUpload =
                 other.client.send(
@@ -465,13 +425,7 @@ public class PersonalAgentTest {
         next.put("materialIds", List.of(json.readTree(ownUpload.body()).path("id").asString()));
         String budgetBefore = admin.request("GET", "/api/budget", null, false).body();
         String ownTask =
-                json.readTree(
-                                other.request(
-                                                "POST",
-                                                "/api/conversations/" + privateCid + "/tasks",
-                                                json.writeValueAsString(next),
-                                                true)
-                                        .body())
+                json.readTree(other.submitRun(privateCid, json.writeValueAsString(next)).body())
                         .path("id")
                         .asString();
         await(other, ownTask, "COMPLETED");

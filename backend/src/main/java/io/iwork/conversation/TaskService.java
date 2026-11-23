@@ -7,7 +7,6 @@ import io.iwork.identity.Caller;
 import io.iwork.identity.IdentityService;
 import io.iwork.model.ModelAuthorization;
 import jakarta.annotation.PreDestroy;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
@@ -31,7 +30,7 @@ public class TaskService implements ApplicationRunner {
     private static final int MAX_REPLY_LENGTH = 200000;
 
     private static final int QUEUE_SUMMARY_LENGTH = 160;
-    private static final int QUEUE_PAGE_SIZE = 20;
+    private static final int MAX_CONVERSATION_QUEUE_LIMIT = 20;
 
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
@@ -53,9 +52,7 @@ public class TaskService implements ApplicationRunner {
     private final ConcurrentMap<String, LiveReply> liveReplies = new ConcurrentHashMap<>();
     private volatile boolean stopping;
 
-    record ReplySnapshot(int version, String content) {}
-
-    record LiveUpdate(ReplySnapshot reply, List<ToolProgress> tools) {}
+    record LiveUpdate(String reply, List<ToolProgress> tools) {}
 
     private static final class LiveReply {
         // 每次推送都带完整正文，晚订阅或错过中间更新的客户端也能恢复当前回复。
@@ -64,7 +61,6 @@ public class TaskService implements ApplicationRunner {
         private final StringBuilder content = new StringBuilder();
         private List<ToolProgress> tools = List.of();
         private String replyId;
-        private int version;
         private boolean finished;
 
         LiveReply(String prefix) {
@@ -91,7 +87,6 @@ public class TaskService implements ApplicationRunner {
                     Math.min(delta.length(), MAX_REPLY_LENGTH - prefix.length() - content.length());
             if (length == 0) return;
             content.append(delta, 0, length);
-            version++;
             emit();
         }
 
@@ -104,7 +99,7 @@ public class TaskService implements ApplicationRunner {
         }
 
         private void emit() {
-            updates.tryEmitNext(new LiveUpdate(new ReplySnapshot(version, snapshot()), tools));
+            updates.tryEmitNext(new LiveUpdate(snapshot(), tools));
         }
 
         synchronized void unseal() {
@@ -115,10 +110,6 @@ public class TaskService implements ApplicationRunner {
             finished = true;
             updates.tryEmitComplete();
         }
-    }
-
-    Flux<ReplySnapshot> replyStream(Caller caller, String id) {
-        return liveUpdates(caller, get(caller, id)).map(LiveUpdate::reply).distinctUntilChanged();
     }
 
     Task observedTask(Caller caller, String id) {
@@ -204,7 +195,7 @@ public class TaskService implements ApplicationRunner {
         if (capacity < 1 || capacity > 16)
             throw new IllegalArgumentException("Task capacity must be 1 to 16");
         if (conversationQueueLimit < 1
-                || conversationQueueLimit > QUEUE_PAGE_SIZE
+                || conversationQueueLimit > MAX_CONVERSATION_QUEUE_LIMIT
                 || accountQueueLimit < 1)
             throw new IllegalArgumentException("Invalid task queue limits");
         this.conversationQueueLimit = conversationQueueLimit;
@@ -360,10 +351,8 @@ public class TaskService implements ApplicationRunner {
         if (rows.isEmpty()) throw new ApiFailure(404, "not_found");
     }
 
-    public TaskPage list(
-            Caller caller, String conversationId, int page, int queuePage, String requestId) {
-        if (page < 0 || page > 100000 || queuePage < 0 || queuePage > 100000)
-            throw new ApiFailure(400, "invalid_pagination");
+    public TaskPage list(Caller caller, String conversationId, int page, String requestId) {
+        if (page < 0 || page > 100000) throw new ApiFailure(400, "invalid_pagination");
         return tx.execute(
                 status -> {
                     conversation(caller, conversationId, false);
@@ -374,33 +363,25 @@ public class TaskService implements ApplicationRunner {
                                     caller.id(),
                                     conversationId,
                                     page * 20);
-                    int totalQueued = queuedCount(conversationId);
                     var queuedItems =
                             db.query(
                                     """
-                                    WITH queue_page AS (
-                                        SELECT id,queue_order,queued_message FROM tasks
-                                        WHERE conversation_id=? AND status='QUEUED'
-                                        ORDER BY queue_order LIMIT ? OFFSET ?
-                                    )
                                     SELECT id, CASE WHEN CHAR_LENGTH(preview)>?
                                         THEN CONCAT(LEFT(preview,?),'…')
                                         ELSE preview END AS summary
                                     FROM (
                                         SELECT id,queue_order,
                                             REGEXP_REPLACE(queued_message,'^[[:space:]]+','') AS preview
-                                        FROM queue_page
+                                        FROM tasks WHERE conversation_id=? AND status='QUEUED'
                                     ) queued
                                     ORDER BY queue_order
                                     """,
                                     (row, index) ->
                                             new QueuedItem(
                                                     row.getString("id"), row.getString("summary")),
-                                    conversationId,
-                                    QUEUE_PAGE_SIZE,
-                                    queuePage * QUEUE_PAGE_SIZE,
                                     QUEUE_SUMMARY_LENGTH,
-                                    QUEUE_SUMMARY_LENGTH);
+                                    QUEUE_SUMMARY_LENGTH,
+                                    conversationId);
                     String confirmed = null;
                     if (requestId != null && requestId.matches("[A-Za-z0-9_-]{1,100}")) {
                         confirmed =
@@ -420,8 +401,8 @@ public class TaskService implements ApplicationRunner {
                     return new TaskPage(
                             rows.stream().limit(20).toList(),
                             rows.size() > 20,
-                            totalQueued,
-                            totalQueued > 0 && queuePaused(conversationId),
+                            queuedItems.size(),
+                            !queuedItems.isEmpty() && queuePaused(conversationId),
                             db.queryForObject(
                                     "SELECT queue_pause_version FROM conversations WHERE id=?",
                                     Long.class,
@@ -590,77 +571,10 @@ public class TaskService implements ApplicationRunner {
             String requestId,
             String modelId,
             String message,
-            List<String> materialIds) {
-        return submit(caller, conversationId, requestId, modelId, message, materialIds, "TEXT");
-    }
-
-    public Task submit(
-            Caller caller,
-            String conversationId,
-            String requestId,
-            String modelId,
-            String message,
-            List<String> materialIds,
-            String outputMode) {
-        return submit(
-                caller, conversationId, requestId, modelId, message, materialIds, outputMode, null);
-    }
-
-    public Task submit(
-            Caller caller,
-            String conversationId,
-            String requestId,
-            String modelId,
-            String message,
-            List<String> materialIds,
-            String outputMode,
-            String baseVersionId) {
-        return submit(
-                caller,
-                conversationId,
-                requestId,
-                modelId,
-                message,
-                materialIds,
-                outputMode,
-                baseVersionId,
-                null);
-    }
-
-    public Task submit(
-            Caller caller,
-            String conversationId,
-            String requestId,
-            String modelId,
-            String message,
             List<String> materialIds,
             String outputMode,
             String baseVersionId,
             String agentId) {
-        return submit(
-                caller,
-                conversationId,
-                requestId,
-                modelId,
-                message,
-                materialIds,
-                outputMode,
-                baseVersionId,
-                agentId,
-                false);
-    }
-
-    public Task submit(
-            Caller caller,
-            String conversationId,
-            String requestId,
-            String modelId,
-            String message,
-            List<String> materialIds,
-            String outputMode,
-            String baseVersionId,
-            String agentId,
-            boolean allowQueue) {
         if (agentId != null && (!agentId.matches("[a-f0-9-]{36}") || modelId != null))
             throw new ApiFailure(400, "invalid_task");
         if (baseVersionId != null
@@ -691,39 +605,15 @@ public class TaskService implements ApplicationRunner {
                             .formatHex(
                                     MessageDigest.getInstance("SHA-256")
                                             .digest(
-                                                    ((agentId == null
-                                                                            ? ""
-                                                                            : "agent-v1\n"
-                                                                                    + agentId
-                                                                                    + "\n")
-                                                                    + (baseVersionId == null
-                                                                            ? ""
-                                                                            : "base-version-v1\n"
-                                                                                    + baseVersionId
-                                                                                    + "\n")
-                                                                    + (outputMode.equals("TEXT")
-                                                                            ? ""
-                                                                            : "document-v1\n")
-                                                                    + (materialIds.isEmpty()
-                                                                            ? conversationId
-                                                                                    + "\n"
-                                                                                    + modelId
-                                                                                    + "\n"
-                                                                                    + message
-                                                                            : "materials-v1\n"
-                                                                                    + conversationId
-                                                                                    + "\n"
-                                                                                    + modelId
-                                                                                    + "\n"
-                                                                                    + message
-                                                                                            .length()
-                                                                                    + ":"
-                                                                                    + message
-                                                                                    + "\n"
-                                                                                    + String.join(
-                                                                                            ",",
-                                                                                            materialIds)))
-                                                            .getBytes(StandardCharsets.UTF_8)));
+                                                    json.writeValueAsBytes(
+                                                            Arrays.asList(
+                                                                    conversationId,
+                                                                    modelId,
+                                                                    agentId,
+                                                                    outputMode,
+                                                                    baseVersionId,
+                                                                    message,
+                                                                    materialIds))));
         } catch (java.security.NoSuchAlgorithmException impossible) {
             throw new IllegalStateException(impossible);
         }
@@ -775,10 +665,7 @@ public class TaskService implements ApplicationRunner {
                                                 config == null ? null : config.instructions());
                                 models.require(caller.id(), selectedModel);
                                 int waiting = queuedCount(conversationId);
-                                boolean busy =
-                                        waiting > 0 || hasActiveTask(conversationId, allowQueue);
-                                if (busy && !allowQueue)
-                                    throw new ApiFailure(409, "conversation_busy");
+                                boolean busy = waiting > 0 || hasActiveTask(conversationId);
                                 // The user and conversation locks above also cover queue admission.
                                 if (busy
                                         && (waiting >= conversationQueueLimit
@@ -842,16 +729,14 @@ public class TaskService implements ApplicationRunner {
                 + (agent == null ? "" : "智能体处理方式：\n" + agent);
     }
 
-    private boolean hasActiveTask(String conversationId, boolean includeStopping) {
+    private boolean hasActiveTask(String conversationId) {
         return db.queryForObject(
                 """
                 SELECT EXISTS (SELECT 1 FROM tasks WHERE conversation_id=?
-                    AND (status='RUNNING' OR ((? OR status IN ('PAUSED','FAILED'))
-                        AND execution_state IN ('RUNNING','STOP_REQUESTED'))))
+                    AND (status='RUNNING' OR execution_state IN ('RUNNING','STOP_REQUESTED')))
                 """,
                 Boolean.class,
-                conversationId,
-                includeStopping);
+                conversationId);
     }
 
     private void recordSend(
@@ -955,8 +840,7 @@ public class TaskService implements ApplicationRunner {
         String cid = head.conversationId();
         conversation(head.caller(), cid, true);
         var task = get(head.caller(), head.taskId());
-        if (!task.status().equals("QUEUED") || queuePaused(cid) || hasActiveTask(cid, true))
-            return null;
+        if (!task.status().equals("QUEUED") || queuePaused(cid) || hasActiveTask(cid)) return null;
         var stored =
                 db.queryForMap(
                         """
@@ -1203,7 +1087,7 @@ public class TaskService implements ApplicationRunner {
                                                 cid);
                                 if (!root.equals(original.get("task_id")))
                                     throw new ApiFailure(409, "reply_not_resumable");
-                                if (hasActiveTask(cid, true))
+                                if (hasActiveTask(cid))
                                     throw new ApiFailure(409, "conversation_busy");
                                 if (runners.getIfAvailable() == null || stopping)
                                     throw new ApiFailure(503, "execution_unavailable");

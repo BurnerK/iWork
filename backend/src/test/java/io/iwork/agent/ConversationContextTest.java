@@ -56,6 +56,10 @@ class ConversationContextTest {
         final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
         String csrf;
 
+        ApiTestResponse.RunResponse submitRun(String conversation, String input) throws Exception {
+            return ApiTestResponse.submitRun(client, port, conversation, input, csrf);
+        }
+
         HttpResponse<String> request(String method, String path, String body, boolean token)
                 throws Exception {
             var builder =
@@ -510,9 +514,8 @@ class ConversationContextTest {
                                 .statusCode())
                 .isEqualTo(404);
         assertThat(
-                        ordinary.request(
-                                        "POST",
-                                        "/api/conversations/" + cid + "/tasks",
+                        ordinary.submitRun(
+                                        cid,
                                         json.writeValueAsString(
                                                 Map.of(
                                                         "requestId",
@@ -520,8 +523,7 @@ class ConversationContextTest {
                                                         "modelId",
                                                         modelId,
                                                         "message",
-                                                        "请回忆")),
-                                        true)
+                                                        "请回忆")))
                                 .statusCode())
                 .isEqualTo(404);
         String other = conversation(admin);
@@ -559,9 +561,8 @@ class ConversationContextTest {
 
     String start(Browser browser, String cid, String model, String message) throws Exception {
         var response =
-                browser.request(
-                        "POST",
-                        "/api/conversations/" + cid + "/tasks",
+                browser.submitRun(
+                        cid,
                         json.writeValueAsString(
                                 Map.of(
                                         "requestId",
@@ -569,9 +570,8 @@ class ConversationContextTest {
                                         "modelId",
                                         model,
                                         "message",
-                                        message)),
-                        true);
-        assertThat(response.statusCode()).isEqualTo(202);
+                                        message)));
+        assertThat(response.statusCode()).isEqualTo(200);
         return json.readTree(response.body()).path("id").asString();
     }
 

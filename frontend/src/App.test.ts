@@ -1,4 +1,4 @@
-import { apiResponse } from './testResponse'
+import { apiResponse, emptyTaskPage } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
@@ -100,14 +100,18 @@ it('opens a direct conversation link with its task composer', async () => {
               ? { id: 'one', displayName: 'Alice', role: 'USER', mustChangePassword: false }
               : url.endsWith('/api/models')
                 ? []
-                : url.includes('/tasks') || url.includes('/messages')
-                  ? { items: [], hasMore: false }
-                  : url.includes('?')
-                    ? {
-                        items: [{ id: 'abc', title: '新会话', updatedAt: '2026-11-16T00:00:00Z' }],
-                        hasMore: false,
-                      }
-                    : { id: 'abc', title: '新会话', updatedAt: '2026-11-16T00:00:00Z' }
+                : url.split('?')[0]?.endsWith('/tasks')
+                  ? emptyTaskPage
+                  : url.includes('/messages')
+                    ? { items: [], hasMore: false }
+                    : url.includes('?')
+                      ? {
+                          items: [
+                            { id: 'abc', title: '新会话', updatedAt: '2026-11-16T00:00:00Z' },
+                          ],
+                          hasMore: false,
+                        }
+                      : { id: 'abc', title: '新会话', updatedAt: '2026-11-16T00:00:00Z' }
           )
         )
       )

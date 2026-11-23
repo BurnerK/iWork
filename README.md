@@ -104,7 +104,7 @@ curl --fail http://127.0.0.1:8080/actuator/health/readiness
 
 ```sh
 docker compose stop       # 停止，保留数据
-docker compose start     # 再次启动，Flyway 验证历史且不重复应用 V1
+docker compose start     # 再次启动，Flyway 校验已应用的首发基线与后续迁移
 docker compose down      # 删除本项目容器及网络，仍保留宿主数据目录
 ```
 

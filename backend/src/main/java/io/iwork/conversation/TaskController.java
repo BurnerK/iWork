@@ -9,7 +9,6 @@ import io.iwork.identity.Caller;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -28,8 +27,6 @@ class TaskController {
     private static final AguiEventEncoder AG_UI = new AguiEventEncoder();
     private static final Set<String> TASK_OPTIONS =
             Set.of("modelId", "agentId", "materialIds", "baseVersionId", "outputMode");
-    private static final Set<String> SUBMISSION_FIELDS =
-            Set.of("requestId", "message", "allowQueue");
     private final TaskService tasks;
 
     TaskController(TaskService tasks) {
@@ -56,12 +53,32 @@ class TaskController {
                 || !(input.get("forwardedProps") instanceof Map<?, ?> options)
                 || !TASK_OPTIONS.containsAll(options.keySet()))
             throw new ApiFailure(400, "invalid_task");
-        var submission = new HashMap<String, Object>();
-        options.forEach((key, value) -> submission.put((String) key, value));
-        submission.put("requestId", runId);
-        submission.put("message", content);
-        submission.put("allowQueue", true);
-        return agUi(caller, submitTask(caller, id, submission), response, false);
+        Object rawMaterials =
+                options.containsKey("materialIds") ? options.get("materialIds") : List.of();
+        if (!(rawMaterials instanceof List<?> materials)
+                || materials.stream().anyMatch(value -> !(value instanceof String)))
+            throw new ApiFailure(400, "invalid_task");
+        Object mode = options.containsKey("outputMode") ? options.get("outputMode") : "TEXT";
+        Object base = options.get("baseVersionId");
+        Object agent = options.get("agentId");
+        Object model = options.get("modelId");
+        if (!(mode instanceof String outputMode)
+                || base != null && !(base instanceof String)
+                || agent != null && !(agent instanceof String)
+                || model != null && !(model instanceof String))
+            throw new ApiFailure(400, "invalid_task");
+        var task =
+                tasks.submit(
+                        caller,
+                        id,
+                        runId,
+                        (String) model,
+                        content,
+                        materials.stream().map(String.class::cast).toList(),
+                        outputMode,
+                        (String) base,
+                        (String) agent);
+        return agUi(caller, task, response, false);
     }
 
     @GetMapping(value = "/api/tasks/{id}/ag-ui", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -140,8 +157,8 @@ class TaskController {
                                                             var events =
                                                                     new ArrayList<>(
                                                                             reply.update(
-                                                                                    update.reply()
-                                                                                            .content()));
+                                                                                    update
+                                                                                            .reply()));
                                                             events.addAll(
                                                                     reply.tools(update.tools()));
                                                             return events;
@@ -237,52 +254,6 @@ class TaskController {
         }
     }
 
-    @PostMapping("/api/conversations/{id}/tasks")
-    @ResponseStatus(HttpStatus.ACCEPTED)
-    TaskService.Task submit(
-            @AuthenticationPrincipal Caller caller,
-            @PathVariable String id,
-            @RequestBody Map<String, Object> input) {
-        return submitTask(caller, id, input);
-    }
-
-    private TaskService.Task submitTask(Caller caller, String id, Map<String, Object> input) {
-        if (input.keySet().stream()
-                        .anyMatch(
-                                key ->
-                                        !SUBMISSION_FIELDS.contains(key)
-                                                && !TASK_OPTIONS.contains(key))
-                || !(input.get("requestId") instanceof String requestId)
-                || !(input.get("message") instanceof String message))
-            throw new ApiFailure(400, "invalid_task");
-        Object raw = input.getOrDefault("materialIds", List.of());
-        if (!(raw instanceof List<?> ids)
-                || ids.stream().anyMatch(value -> !(value instanceof String)))
-            throw new ApiFailure(400, "invalid_task");
-        if (!(input.getOrDefault("outputMode", "TEXT") instanceof String outputMode))
-            throw new ApiFailure(400, "invalid_task");
-        if (!(input.getOrDefault("allowQueue", false) instanceof Boolean allowQueue))
-            throw new ApiFailure(400, "invalid_task");
-        Object base = input.get("baseVersionId"),
-                agent = input.get("agentId"),
-                model = input.get("modelId");
-        if (agent != null && !(agent instanceof String)
-                || model != null && !(model instanceof String))
-            throw new ApiFailure(400, "invalid_task");
-        if (base != null && !(base instanceof String)) throw new ApiFailure(400, "invalid_task");
-        return tasks.submit(
-                caller,
-                id,
-                requestId,
-                (String) model,
-                message,
-                ids.stream().map(String.class::cast).toList(),
-                outputMode,
-                (String) base,
-                (String) agent,
-                allowQueue);
-    }
-
     @GetMapping("/api/tasks/{id}/materials")
     List<io.iwork.artifacts.MaterialService.Material> materials(
             @AuthenticationPrincipal Caller caller, @PathVariable String id) {
@@ -292,25 +263,6 @@ class TaskController {
     @GetMapping("/api/tasks/{id}")
     TaskService.Task get(@AuthenticationPrincipal Caller caller, @PathVariable String id) {
         return tasks.get(caller, id);
-    }
-
-    @GetMapping(
-            value = "/api/tasks/{id}/reply-stream",
-            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    Flux<ServerSentEvent<TaskService.ReplySnapshot>> replyStream(
-            @AuthenticationPrincipal Caller caller,
-            @PathVariable String id,
-            HttpServletResponse response) {
-        var snapshots = tasks.replyStream(caller, id);
-        response.setHeader("Cache-Control", "no-store");
-        response.setHeader("X-Accel-Buffering", "no");
-        return snapshots
-                .map(snapshot -> ServerSentEvent.builder(snapshot).event("reply").build())
-                .concatWithValues(
-                        ServerSentEvent.<TaskService.ReplySnapshot>builder()
-                                .event("done")
-                                .data(new TaskService.ReplySnapshot(0, ""))
-                                .build());
     }
 
     @PostMapping("/api/tasks/{id}/cancel")
@@ -341,9 +293,8 @@ class TaskController {
             @AuthenticationPrincipal Caller caller,
             @PathVariable String id,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "0") int queuePage,
             @RequestParam(required = false) String requestId) {
-        return tasks.list(caller, id, page, queuePage, requestId);
+        return tasks.list(caller, id, page, requestId);
     }
 
     @DeleteMapping("/api/conversations/{id}/tasks/queue/{taskId}")

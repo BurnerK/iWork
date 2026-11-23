@@ -1,3 +1,13 @@
+export const emptyTaskPage = {
+  items: [],
+  hasMore: false,
+  queuedCount: 0,
+  queuePaused: false,
+  queuePauseVersion: 0,
+  queuedItems: [],
+  confirmedRequestId: null,
+}
+
 export function apiResponse(body: string | null, init?: ResponseInit): Response {
   if (body === null) return new Response(null, init)
   const data = JSON.parse(body)

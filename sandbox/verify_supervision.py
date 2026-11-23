@@ -6,11 +6,15 @@ import json
 import os
 import pathlib
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'scripts'))
+from ag_ui import submit_run
 
 p = argparse.ArgumentParser()
 for name in ('launcher', 'model', 'base_version', 'compose_file', 'env_file', 'directory'):
@@ -74,7 +78,9 @@ def start():
 
 def submit():
     cid = request('POST', '/api/conversations', {'title': '清理故障与独立监督验收'})['id']
-    task = request('POST', '/api/conversations/' + cid + '/tasks', {'requestId': str(uuid.uuid4()), 'modelId': a.model, 'message': '整理资料并修改原版本', 'materialIds': [material], 'outputMode': 'DOCUMENT', 'baseVersionId': a.base_version})['id']
+    task = submit_run(client, 'http://127.0.0.1:18092', csrf, cid, str(uuid.uuid4()),
+                      '整理资料并修改原版本', modelId=a.model, outputMode='DOCUMENT',
+                      baseVersionId=a.base_version, materialIds=[material])
     return cid, task
 
 def live():
@@ -147,7 +153,7 @@ try:
         cid, task, parse, worker = live()
         created = json.loads(docker('inspect', worker))[0]['Created']
         born = datetime.datetime.fromisoformat(created[:26] + '+00:00').timestamp()
-        docker('exec', worker, 'python', '-c', "from pathlib import Path; Path('/tmp/codex/deadline').write_text('9999999999999')")
+        docker('exec', worker, 'python', '-c', "from pathlib import Path; p = Path('/tmp/codex/deadline'); p.parent.mkdir(exist_ok=True); p.write_text('9999999999999')")
         if supervisor_down:
             docker('update', '--restart=no', watchdog)
             docker('kill', watchdog)

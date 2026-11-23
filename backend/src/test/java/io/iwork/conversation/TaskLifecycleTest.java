@@ -64,6 +64,10 @@ class TaskLifecycleTest {
         final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
         String csrf;
 
+        ApiTestResponse.RunResponse submitRun(String conversation, String input) throws Exception {
+            return ApiTestResponse.submitRun(client, port, conversation, input, csrf);
+        }
+
         HttpResponse<String> request(String method, String path, String body, boolean token)
                 throws Exception {
             var builder =
@@ -229,8 +233,8 @@ class TaskLifecycleTest {
                                 "hold",
                                 "materialIds",
                                 List.of(materialId)));
-        var response = admin.request("POST", "/api/conversations/" + cid + "/tasks", body, true);
-        assertThat(response.statusCode()).isEqualTo(202);
+        var response = admin.submitRun(cid, body);
+        assertThat(response.statusCode()).isEqualTo(200);
         var taskId = json.readTree(response.body()).get("id").asString();
         assertThat(admin.request("GET", "/api/tasks/" + taskId + "/materials", null, false).body())
                 .contains(materialId, "source.txt");
@@ -245,17 +249,9 @@ class TaskLifecycleTest {
                                 "hold",
                                 "materialIds",
                                 List.of()));
-        assertThat(
-                        admin.request(
-                                        "POST",
-                                        "/api/conversations/" + cid + "/tasks",
-                                        changedMaterials,
-                                        true)
-                                .statusCode())
-                .isEqualTo(409);
+        assertThat(admin.submitRun(cid, changedMaterials).statusCode()).isEqualTo(409);
 
-        assertThat(admin.request("POST", "/api/conversations/" + cid + "/tasks", body, true).body())
-                .contains(taskId);
+        assertThat(admin.submitRun(cid, body).body()).contains(taskId);
         assertThat(admin.request("GET", "/api/tasks/" + taskId, null, false).body())
                 .contains("RUNNING");
         assertThat(
@@ -271,44 +267,26 @@ class TaskLifecycleTest {
                                 modelId,
                                 "message",
                                 "changed"));
-        assertThat(
-                        admin.request(
-                                        "POST",
-                                        "/api/conversations/" + cid + "/tasks",
-                                        conflict,
-                                        true)
-                                .statusCode())
-                .isEqualTo(409);
+        assertThat(admin.submitRun(cid, conflict).statusCode()).isEqualTo(409);
         var another =
                 json.writeValueAsString(
                         Map.of("requestId", "request-two", "modelId", modelId, "message", "Hello"));
-        assertThat(
-                        admin.request("POST", "/api/conversations/" + cid + "/tasks", another, true)
-                                .statusCode())
-                .isEqualTo(409);
         assertThat(admin.request("POST", "/api/tasks/" + taskId + "/cancel", "{}", true).body())
                 .contains("CANCELLED");
-        assertThat(admin.request("POST", "/api/conversations/" + cid + "/tasks", body, true).body())
-                .contains("CANCELLED", taskId);
+        assertThat(admin.submitRun(cid, body).body()).contains("CANCELLED", taskId);
         awaitTask(admin, taskId, "executionState", "STOPPED");
         var concurrentBody =
                 json.writeValueAsString(
                         Map.of("requestId", "concurrent", "modelId", modelId, "message", "hold"));
         try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
-            var submissions = new ArrayList<java.util.concurrent.Future<HttpResponse<String>>>();
+            var submissions =
+                    new ArrayList<java.util.concurrent.Future<ApiTestResponse.RunResponse>>();
             for (int i = 0; i < 8; i++)
-                submissions.add(
-                        pool.submit(
-                                () ->
-                                        admin.request(
-                                                "POST",
-                                                "/api/conversations/" + cid + "/tasks",
-                                                concurrentBody,
-                                                true)));
+                submissions.add(pool.submit(() -> admin.submitRun(cid, concurrentBody)));
             var ids = new HashSet<String>();
             for (var submitted : submissions) {
                 var result = submitted.get();
-                assertThat(result.statusCode()).isEqualTo(202);
+                assertThat(result.statusCode()).isEqualTo(200);
                 ids.add(json.readTree(result.body()).get("id").asString());
             }
             assertThat(ids).hasSize(1);
@@ -317,9 +295,8 @@ class TaskLifecycleTest {
         var secondConversation = admin.request("POST", "/api/conversations", "{}", true);
         var cid2 = json.readTree(secondConversation.body()).get("id").asString();
         var running2 =
-                admin.request(
-                        "POST",
-                        "/api/conversations/" + cid2 + "/tasks",
+                admin.submitRun(
+                        cid2,
                         json.writeValueAsString(
                                 Map.of(
                                         "requestId",
@@ -327,16 +304,14 @@ class TaskLifecycleTest {
                                         "modelId",
                                         modelId,
                                         "message",
-                                        "hold")),
-                        true);
-        assertThat(running2.statusCode()).isEqualTo(202);
+                                        "hold")));
+        assertThat(running2.statusCode()).isEqualTo(200);
         var task2 = json.readTree(running2.body()).get("id").asString();
         var thirdConversation = admin.request("POST", "/api/conversations", "{}", true);
         var cid3 = json.readTree(thirdConversation.body()).get("id").asString();
         assertThat(
-                        admin.request(
-                                        "POST",
-                                        "/api/conversations/" + cid3 + "/tasks",
+                        admin.submitRun(
+                                        cid3,
                                         json.writeValueAsString(
                                                 Map.of(
                                                         "requestId",
@@ -344,17 +319,15 @@ class TaskLifecycleTest {
                                                         "modelId",
                                                         modelId,
                                                         "message",
-                                                        "hold")),
-                                        true)
+                                                        "hold")))
                                 .statusCode())
                 .isEqualTo(429);
         admin.request("POST", "/api/tasks/" + taskId + "/cancel", "{}", true);
         admin.request("POST", "/api/tasks/" + task2 + "/cancel", "{}", true);
         awaitTask(admin, taskId, "executionState", "STOPPED");
         awaitTask(admin, task2, "executionState", "STOPPED");
-        var completed =
-                admin.request("POST", "/api/conversations/" + cid + "/tasks", another, true);
-        assertThat(completed.statusCode()).isEqualTo(202);
+        var completed = admin.submitRun(cid, another);
+        assertThat(completed.statusCode()).isEqualTo(200);
         var completedId = json.readTree(completed.body()).get("id").asString();
         awaitTask(admin, completedId, "status", "COMPLETED");
         assertThat(
@@ -366,9 +339,8 @@ class TaskLifecycleTest {
                                 .body())
                 .contains("Fixture reply");
         var failure =
-                admin.request(
-                        "POST",
-                        "/api/conversations/" + cid + "/tasks",
+                admin.submitRun(
+                        cid,
                         json.writeValueAsString(
                                 Map.of(
                                         "requestId",
@@ -376,19 +348,22 @@ class TaskLifecycleTest {
                                         "modelId",
                                         modelId,
                                         "message",
-                                        "fail")),
-                        true);
+                                        "fail")));
         var failedId = json.readTree(failure.body()).get("id").asString();
         awaitTask(admin, failedId, "status", "FAILED");
         assertThat(admin.request("GET", "/api/tasks/" + failedId, null, false).body())
                 .doesNotContain("private-provider-detail");
         var late =
-                admin.request(
-                        "POST",
-                        "/api/conversations/" + cid2 + "/tasks",
+                admin.submitRun(
+                        cid2,
                         json.writeValueAsString(
-                                Map.of("requestId", "late", "modelId", modelId, "message", "late")),
-                        true);
+                                Map.of(
+                                        "requestId",
+                                        "late",
+                                        "modelId",
+                                        modelId,
+                                        "message",
+                                        "late")));
         var lateId = json.readTree(late.body()).get("id").asString();
         admin.request("POST", "/api/tasks/" + lateId + "/cancel", "{}", true);
         awaitTask(admin, lateId, "executionState", "STOPPED");
@@ -440,39 +415,21 @@ class TaskLifecycleTest {
                                         false)
                                 .statusCode())
                 .isEqualTo(404);
-        assertThat(
-                        ordinary.request("POST", "/api/conversations/" + cid + "/tasks", body, true)
-                                .statusCode())
-                .isEqualTo(404);
+        assertThat(ordinary.submitRun(cid, body).statusCode()).isEqualTo(404);
         var ownConversation = ordinary.request("POST", "/api/conversations", "{}", true);
         var ownId = json.readTree(ownConversation.body()).get("id").asString();
-        assertThat(
-                        ordinary.request(
-                                        "POST",
-                                        "/api/conversations/" + ownId + "/tasks",
-                                        body,
-                                        true)
-                                .statusCode())
-                .isEqualTo(404);
+        assertThat(ordinary.submitRun(ownId, body).statusCode()).isEqualTo(404);
         var ownBody =
                 json.writeValueAsString(
                         Map.of("requestId", "request-one", "modelId", modelId, "message", "hold"));
-        assertThat(
-                        ordinary.request(
-                                        "POST",
-                                        "/api/conversations/" + ownId + "/tasks",
-                                        ownBody,
-                                        true)
-                                .statusCode())
-                .isEqualTo(403);
+        assertThat(ordinary.submitRun(ownId, ownBody).statusCode()).isEqualTo(403);
         admin.request(
                 "PUT",
                 "/api/admin/users/" + userId + "/model-access",
                 json.writeValueAsString(Map.of("modelIds", List.of(modelId))),
                 true);
-        var sameKeyOtherOwner =
-                ordinary.request("POST", "/api/conversations/" + ownId + "/tasks", ownBody, true);
-        assertThat(sameKeyOtherOwner.statusCode()).isEqualTo(202);
+        var sameKeyOtherOwner = ordinary.submitRun(ownId, ownBody);
+        assertThat(sameKeyOtherOwner.statusCode()).isEqualTo(200);
         var ownTaskId = json.readTree(sameKeyOtherOwner.body()).get("id").asString();
         assertThat(ownTaskId).isNotEqualTo(taskId);
         assertThat(admin.request("GET", "/api/tasks/" + ownTaskId, null, false).statusCode())
@@ -486,9 +443,8 @@ class TaskLifecycleTest {
         verifyDetachedAgUiDocument(admin, modelId);
 
         var storageFailure =
-                admin.request(
-                        "POST",
-                        "/api/conversations/" + cid3 + "/tasks",
+                admin.submitRun(
+                        cid3,
                         json.writeValueAsString(
                                 Map.of(
                                         "requestId",
@@ -496,8 +452,7 @@ class TaskLifecycleTest {
                                         "modelId",
                                         modelId,
                                         "message",
-                                        "late")),
-                        true);
+                                        "late")));
         var storageId = json.readTree(storageFailure.body()).get("id").asString();
         MYSQL.getDockerClient().pauseContainerCmd(MYSQL.getContainerId()).exec();
         try {
@@ -768,15 +723,15 @@ class TaskLifecycleTest {
 
     private void verifyQueueLimits(Browser browser, String ownerId, String modelId)
             throws Exception {
-        String first = pausedQueue(browser, ownerId, modelId, 1);
+        String first = pausedQueue(browser, ownerId, modelId);
         var conversationRace = queueRace(browser, modelId, first, first, first);
         assertThat(conversationRace)
-                .extracting(HttpResponse::statusCode)
-                .containsExactlyInAnyOrder(202, 202, 429);
+                .extracting(ApiTestResponse.RunResponse::statusCode)
+                .containsExactlyInAnyOrder(200, 200, 429);
         var accepted =
                 json.readTree(
                         conversationRace.stream()
-                                .filter(result -> result.statusCode() == 202)
+                                .filter(result -> result.statusCode() == 200)
                                 .findFirst()
                                 .orElseThrow()
                                 .body());
@@ -795,56 +750,39 @@ class TaskLifecycleTest {
                                 .asInt())
                 .isEqualTo(3);
 
-        String second = pausedQueue(browser, ownerId, modelId, 1);
-        String third = pausedQueue(browser, ownerId, modelId, 1);
+        String second = pausedQueue(browser, ownerId, modelId);
+        String third = pausedQueue(browser, ownerId, modelId);
         assertThat(queueRace(browser, modelId, second, third))
-                .extracting(HttpResponse::statusCode)
-                .containsExactlyInAnyOrder(202, 429);
-
-        String legacy = pausedQueue(browser, ownerId, modelId, 21);
-        for (int page = 0; page < 3; page++) {
-            var response = browser.request("GET", legacy + "?queuePage=" + page, null, false);
-            assertThat(response.statusCode()).isEqualTo(200);
-            var body = json.readTree(response.body());
-            assertThat(body.get("queuedCount").asInt()).isEqualTo(21);
-            assertThat(body.get("queuePaused").asBoolean()).isTrue();
-            assertThat(body.get("queuedItems").size()).isEqualTo(List.of(20, 1, 0).get(page));
-            if (page == 1)
-                assertThat(body.get("queuedItems").get(0).get("summary").asString())
-                        .isEqualTo("legacy 20");
-        }
-        assertThat(browser.request("GET", legacy + "?queuePage=-1", null, false).statusCode())
-                .isEqualTo(400);
+                .extracting(ApiTestResponse.RunResponse::statusCode)
+                .containsExactlyInAnyOrder(200, 429);
     }
 
-    private String pausedQueue(Browser browser, String ownerId, String modelId, int entries)
-            throws Exception {
+    private String pausedQueue(Browser browser, String ownerId, String modelId) throws Exception {
         var conversation = browser.request("POST", "/api/conversations", "{}", true);
         assertThat(conversation.statusCode()).isEqualTo(201);
         var id = json.readTree(conversation.body()).get("id").asString();
         db.update("UPDATE conversations SET queue_paused=TRUE WHERE id=?", id);
-        for (int i = 0; i < entries; i++)
-            db.update(
-                    """
+        db.update(
+                """
                     INSERT INTO tasks(id,owner_id,conversation_id,model_id,request_id,request_hash,
                         status,execution_state,queued_message,queued_auth_version)
                     VALUES(?,?,?,?,?,?,'QUEUED','WAITING',?,1)
                     """,
-                    UUID.randomUUID().toString(),
-                    ownerId,
-                    id,
-                    modelId,
-                    UUID.randomUUID().toString(),
-                    "0".repeat(64),
-                    "legacy " + i);
+                UUID.randomUUID().toString(),
+                ownerId,
+                id,
+                modelId,
+                UUID.randomUUID().toString(),
+                "0".repeat(64),
+                "waiting");
         return "/api/conversations/" + id + "/tasks";
     }
 
-    private List<HttpResponse<String>> queueRace(Browser browser, String modelId, String... paths)
-            throws Exception {
+    private List<ApiTestResponse.RunResponse> queueRace(
+            Browser browser, String modelId, String... paths) throws Exception {
         try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
             var ready = new java.util.concurrent.CountDownLatch(1);
-            var pending = new ArrayList<java.util.concurrent.Future<HttpResponse<String>>>();
+            var pending = new ArrayList<java.util.concurrent.Future<ApiTestResponse.RunResponse>>();
             for (var path : paths)
                 pending.add(
                         pool.submit(
@@ -859,7 +797,7 @@ class TaskLifecycleTest {
                                             List.of());
                                 }));
             ready.countDown();
-            var results = new ArrayList<HttpResponse<String>>();
+            var results = new ArrayList<ApiTestResponse.RunResponse>();
             for (var response : pending)
                 results.add(response.get(10, java.util.concurrent.TimeUnit.SECONDS));
             return results;
@@ -1100,11 +1038,11 @@ class TaskLifecycleTest {
             List<String> materials)
             throws Exception {
         var response = requestFollowUp(browser, path, modelId, requestId, message, materials);
-        assertThat(response.statusCode()).as("response: %s", response.body()).isEqualTo(202);
+        assertThat(response.statusCode()).as("response: %s", response.body()).isEqualTo(200);
         return json.readTree(response.body());
     }
 
-    private HttpResponse<String> requestFollowUp(
+    private ApiTestResponse.RunResponse requestFollowUp(
             Browser browser,
             String path,
             String modelId,
@@ -1112,9 +1050,8 @@ class TaskLifecycleTest {
             String message,
             List<String> materials)
             throws Exception {
-        return browser.request(
-                "POST",
-                path,
+        return browser.submitRun(
+                path.split("/")[3],
                 json.writeValueAsString(
                         Map.of(
                                 "requestId",
@@ -1124,10 +1061,7 @@ class TaskLifecycleTest {
                                 "message",
                                 message,
                                 "materialIds",
-                                materials,
-                                "allowQueue",
-                                true)),
-                true);
+                                materials)));
     }
 
     void awaitTask(Browser browser, String id, String field, String expected) throws Exception {

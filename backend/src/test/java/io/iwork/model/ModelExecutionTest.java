@@ -59,6 +59,10 @@ class ModelExecutionTest {
         final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
         String csrf;
 
+        ApiTestResponse.RunResponse submitRun(String conversation, String input) throws Exception {
+            return ApiTestResponse.submitRun(client, port, conversation, input, csrf);
+        }
+
         HttpResponse<String> request(String method, String path, String body, boolean token)
                 throws Exception {
             var builder =
@@ -282,9 +286,8 @@ class ModelExecutionTest {
                 true);
         admin.request("PUT", "/api/admin/users/" + uid + "/budget", "{\"limit\":\"1\"}", true);
         var submit =
-                admin.request(
-                        "POST",
-                        "/api/conversations/" + cid + "/tasks",
+                admin.submitRun(
+                        cid,
                         json.writeValueAsString(
                                 Map.of(
                                         "requestId",
@@ -292,9 +295,8 @@ class ModelExecutionTest {
                                         "modelId",
                                         modelId,
                                         "message",
-                                        "请完成文字任务")),
-                        true);
-        assertThat(submit.statusCode()).isEqualTo(202);
+                                        "请完成文字任务")));
+        assertThat(submit.statusCode()).isEqualTo(200);
         var tid = json.readTree(submit.body()).get("id").asString();
         awaitStatus(admin, tid, "COMPLETED");
         assertThat(
@@ -311,7 +313,7 @@ class ModelExecutionTest {
         assertThat(json.readTree(budget.body()).get("reserved").asString()).isEqualTo("0.000000");
         var stored = submit(admin, cid, modelId, "storage");
         awaitOpenCall(admin, stored);
-        var replyPath = "/api/tasks/" + stored + "/reply-stream";
+        var replyPath = "/api/tasks/" + stored + "/ag-ui";
         assertThat(new Browser().request("GET", replyPath, null, false).statusCode())
                 .isEqualTo(401);
         try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
@@ -383,8 +385,8 @@ class ModelExecutionTest {
         }
         assertThat(savedReplyCount).isEqualTo(1);
         assertThat(admin.request("GET", replyPath, null, false).body())
-                .contains("event:done")
-                .doesNotContain("模型完成");
+                .contains("MESSAGES_SNAPSHOT", "模型完成", "RUN_FINISHED")
+                .doesNotContain("TEXT_MESSAGE_CONTENT", "private-reasoning-fixture");
         var storedCall =
                 json.readTree(
                                 admin.request("GET", "/api/tasks/" + stored + "/calls", null, false)
@@ -613,7 +615,12 @@ class ModelExecutionTest {
                         cid,
                         identities.authenticate("admin", "Model-password-14"),
                         modelId,
-                        "summary after cancellation");
+                        "summary after cancellation",
+                        "TEXT",
+                        "",
+                        "",
+                        (id, delta) -> {},
+                        progress -> {});
         var summaryMessage =
                 io.agentscope.core.message.Msg.builder()
                         .name("user")
@@ -704,9 +711,8 @@ class ModelExecutionTest {
     String submit(Browser browser, String conversation, String model, String message)
             throws Exception {
         var response =
-                browser.request(
-                        "POST",
-                        "/api/conversations/" + conversation + "/tasks",
+                browser.submitRun(
+                        conversation,
                         json.writeValueAsString(
                                 Map.of(
                                         "requestId",
@@ -714,9 +720,8 @@ class ModelExecutionTest {
                                         "modelId",
                                         model,
                                         "message",
-                                        message)),
-                        true);
-        assertThat(response.statusCode()).isEqualTo(202);
+                                        message)));
+        assertThat(response.statusCode()).isEqualTo(200);
         return json.readTree(response.body()).get("id").asString();
     }
 

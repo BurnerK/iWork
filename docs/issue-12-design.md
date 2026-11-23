@@ -27,4 +27,4 @@
 
 非法配置 400，非法身份/权限 401/403，未知目标 404，已锁定币种变更 409，存储不可用 503。响应不包含密钥、SQL 或异常细节。
 
-V3 追加 model_settings、models、model_access、budgets，不修改 V1/V2。原有账号与会话保持。默认拒绝用户指定 owner 查询他人额度；普通用户没有读取模型连接或凭据引用的 API。
+首发基线包含 model_settings、models、model_access 和 budgets。默认拒绝用户指定 owner 查询他人额度；普通用户没有读取模型连接或凭据引用的 API。

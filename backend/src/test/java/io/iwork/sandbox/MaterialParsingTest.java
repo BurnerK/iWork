@@ -162,6 +162,10 @@ class MaterialParsingTest {
                         .build();
         String csrf;
 
+        ApiTestResponse.RunResponse submitRun(String conversation, String input) throws Exception {
+            return ApiTestResponse.submitRun(client, port, conversation, input, csrf);
+        }
+
         HttpResponse<String> send(String method, String path, String body) throws Exception {
             var builder =
                     HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
@@ -423,9 +427,8 @@ class MaterialParsingTest {
                         .get("id")
                         .asString();
         var response =
-                browser.send(
-                        "POST",
-                        "/api/conversations/" + cid + "/tasks",
+                browser.submitRun(
+                        cid,
                         json.writeValueAsString(
                                 Map.of(
                                         "modelId",
@@ -436,7 +439,7 @@ class MaterialParsingTest {
                                         message,
                                         "materialIds",
                                         materials)));
-        assertThat(response.statusCode()).isEqualTo(202);
+        assertThat(response.statusCode()).isEqualTo(200);
         String id = json.readTree(response.body()).get("id").asString();
         long deadline = System.nanoTime() + java.time.Duration.ofSeconds(60).toNanos();
         while (System.nanoTime() < deadline) {
@@ -475,9 +478,8 @@ class MaterialParsingTest {
             Browser browser, String conversation, String model, String material, String message)
             throws Exception {
         var response =
-                browser.send(
-                        "POST",
-                        "/api/conversations/" + conversation + "/tasks",
+                browser.submitRun(
+                        conversation,
                         json.writeValueAsString(
                                 Map.of(
                                         "requestId",
@@ -490,7 +492,7 @@ class MaterialParsingTest {
                                         List.of(material),
                                         "outputMode",
                                         "DOCUMENT")));
-        assertThat(response.statusCode()).isEqualTo(202);
+        assertThat(response.statusCode()).isEqualTo(200);
         return json.readTree(response.body()).get("id").asString();
     }
 
@@ -598,12 +600,8 @@ class MaterialParsingTest {
                                 "outputMode",
                                 "DOCUMENT"));
         holdAdmission.set(true);
-        var documentSubmit =
-                admin.send(
-                        "POST",
-                        "/api/conversations/" + documentConversation + "/tasks",
-                        documentRequest);
-        assertThat(documentSubmit.statusCode()).isEqualTo(202);
+        var documentSubmit = admin.submitRun(documentConversation, documentRequest);
+        assertThat(documentSubmit.statusCode()).isEqualTo(200);
         var documentTask = json.readTree(documentSubmit.body()).get("id").asString();
         List<tools.jackson.databind.JsonNode> documentEvents = new ArrayList<>();
         try (var stream = agUiEvents(admin, documentTask)) {
@@ -666,13 +664,8 @@ class MaterialParsingTest {
                 .isEqualTo("# 资料整理\n\n原始资料包含标题与一段文字。\n\n<script>不要执行</script>\n");
         assertThat(download.headers().firstValue("Content-Disposition").orElse(""))
                 .contains("attachment");
-        assertThat(
-                        admin.send(
-                                        "POST",
-                                        "/api/conversations/" + documentConversation + "/tasks",
-                                        documentRequest)
-                                .statusCode())
-                .isEqualTo(202);
+        assertThat(admin.submitRun(documentConversation, documentRequest).statusCode())
+                .isEqualTo(200);
         assertThat(
                         json.readTree(
                                         admin.send(
@@ -686,9 +679,8 @@ class MaterialParsingTest {
                                 .size())
                 .isEqualTo(1);
         assertThat(
-                        admin.send(
-                                        "POST",
-                                        "/api/conversations/" + documentConversation + "/tasks",
+                        admin.submitRun(
+                                        documentConversation,
                                         documentRequest.replace("DOCUMENT", "TEXT"))
                                 .statusCode())
                 .isEqualTo(409);
@@ -756,7 +748,7 @@ class MaterialParsingTest {
                                                                 + port
                                                                 + "/api/tasks/"
                                                                 + original
-                                                                + "/reply-stream"))
+                                                                + "/ag-ui"))
                                         .timeout(java.time.Duration.ofSeconds(10))
                                         .GET()
                                         .build(),

@@ -1,3 +1,4 @@
+import { emptyTaskPage } from '../src/testResponse'
 import { expect, test } from '@playwright/test'
 
 for (const width of [390, 1280]) {
@@ -39,6 +40,7 @@ for (const width of [390, 1280]) {
         }
       if (pathname.endsWith('/first/tasks'))
         data = {
+          ...emptyTaskPage,
           items: [
             {
               id: 'running',
@@ -148,7 +150,7 @@ test('pauses, continues and retries within one reply', async ({ page }) => {
     if (pathname === '/api/models') data = []
     if (pathname === '/api/conversations/first')
       data = { id: 'first', title: '工作会话', updatedAt: '2026-11-18T00:00:00Z' }
-    if (pathname.endsWith('/first/tasks')) data = { items: [current()], hasMore: false }
+    if (pathname.endsWith('/first/tasks')) data = { ...emptyTaskPage, items: [current()] }
     if (pathname.endsWith('/first/messages')) {
       data = {
         items: [
@@ -236,7 +238,7 @@ for (const action of ['answer', 'queue', 'both'] as const) {
     }
     await page.route('**/api/**', async (route) => {
       const { pathname, searchParams } = new URL(route.request().url())
-      let data: unknown = { items: [], hasMore: false, queuedItems: [] }
+      let data: unknown = { items: [], hasMore: false }
       if (pathname === '/api/auth/me')
         data = { id: 'alice', displayName: 'Alice', role: 'USER', mustChangePassword: false }
       if (pathname === '/api/auth/csrf') data = { token: 'test-token' }
@@ -249,6 +251,7 @@ for (const action of ['answer', 'queue', 'both'] as const) {
         }
       if (pathname === tasks)
         data = {
+          ...emptyTaskPage,
           items: mailStarted
             ? [
                 {
@@ -261,6 +264,7 @@ for (const action of ['answer', 'queue', 'both'] as const) {
               ]
             : [report],
           hasMore: false,
+          queuedCount: mailStarted ? 0 : 1,
           queuedItems: mailStarted ? [] : [{ id: 'mail', summary: '写封邮件' }],
           queuePaused,
           queuePauseVersion: pauseVersion,
@@ -382,7 +386,7 @@ test('refreshes and reconnects from two tabs to the same running task', async ({
   await context.route('**/api/**', async (route) => {
     expect(route.request().method()).toBe('GET')
     const { pathname, searchParams } = new URL(route.request().url())
-    let data: unknown = { items: [], hasMore: false, queuedItems: [] }
+    let data: unknown = { items: [], hasMore: false }
     if (pathname === '/api/auth/me')
       data = { id: 'alice', displayName: 'Alice', role: 'USER', mustChangePassword: false }
     if (pathname === '/api/models') data = []
@@ -390,6 +394,7 @@ test('refreshes and reconnects from two tabs to the same running task', async ({
       data = { id: 'first', title: '工作会话', updatedAt: '2026-11-20T00:00:00Z' }
     if (pathname.endsWith('/first/tasks'))
       data = {
+        ...emptyTaskPage,
         items: [
           {
             id: taskId,
@@ -501,6 +506,7 @@ for (const saveFailed of [false, true]) {
         data = { id: 'first', title: '工作会话', updatedAt: '2026-11-20T00:00:00Z' }
       if (pathname.endsWith('/first/tasks'))
         data = {
+          ...emptyTaskPage,
           items: [
             {
               id: 'report',

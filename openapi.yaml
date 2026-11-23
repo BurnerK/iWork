@@ -1207,7 +1207,8 @@ paths:
       tags:
       - 会话任务
       summary: 通过 AG-UI 提交消息
-      description: threadId 须与路径中的会话一致。runId 用作幂等标识。提交后可按任务 ID 另行订阅，断开流不会取消任务。
+      description: threadId 须与路径中的会话一致。会话忙时任务进入待发送队列。重试时复用 runId 与相同的任务参数可取得原任务回执。相同
+        runId 搭配不同任务参数返回 409。断开流不会取消任务。
       operationId: post_api_conversations_id_ag_ui
       parameters:
       - name: id
@@ -1235,15 +1236,24 @@ paths:
                   properties:
                     agentId:
                       type: string
+                      description: 与 modelId 二选一
+                      nullable: true
                     baseVersionId:
                       type: string
+                      description: 仅用于 DOCUMENT 模式
+                      format: uuid
+                      nullable: true
                     materialIds:
                       maxItems: 5
+                      uniqueItems: true
                       type: array
                       items:
                         type: string
+                        format: uuid
                     modelId:
                       type: string
+                      description: 与 agentId 二选一
+                      nullable: true
                     outputMode:
                       type: string
                       enum:
@@ -1264,15 +1274,19 @@ paths:
                     properties:
                       content:
                         maxLength: 20000
+                        minLength: 1
                         type: string
+                        description: 非空白消息正文
                       id:
+                        minLength: 1
                         type: string
+                        description: 非空白消息 ID
                       role:
                         type: string
                         enum:
                         - user
                 runId:
-                  maxLength: 100
+                  pattern: "^[A-Za-z0-9_-]{1,100}$"
                   type: string
                 state:
                   type: object
@@ -1285,7 +1299,9 @@ paths:
         required: true
       responses:
         "200":
-          description: AG-UI SSE。CUSTOM iwork.task 回执包含任务 ID、请求标识和业务状态，后续事件与按任务订阅一致。
+          description: "服务端先发送 RUN_STARTED，再发送 type 为 CUSTOM、name 为 iwork.task 的回执\
+            。value.id 是任务 ID，可用于 GET /api/tasks/{id}/ag-ui 订阅。value.requestId 等于提交\
+            时的 runId，value.status 为受理或重试时的任务状态。"
           content:
             text/event-stream:
               schema:
@@ -1431,8 +1447,7 @@ paths:
       tags:
       - 会话任务
       summary: 查看会话任务与待发送队列
-      description: queuedItems 按发送顺序分页，每页 20 条，queuePage 从 0 开始。queuedCount 是整个会话的待发送总数。已移除的项不会出现在任务历史或队列中。恢复暂停的队列时使用
-        queuePauseVersion。
+      description: queuedItems 按发送顺序返回当前会话的全部待发送任务。page 只控制任务历史分页。恢复暂停的队列时使用 queuePauseVersion。
       operationId: get_api_conversations_id_tasks
       parameters:
       - name: id
@@ -1441,13 +1456,6 @@ paths:
         schema:
           type: string
       - name: page
-        in: query
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-      - name: queuePage
         in: query
         required: false
         schema:
@@ -1484,87 +1492,6 @@ paths:
           $ref: "#/components/responses/ApiError"
       security:
       - session: []
-    post:
-      tags:
-      - 会话任务
-      summary: 提交会话任务
-      operationId: post_api_conversations_id_tasks
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              required:
-              - message
-              - requestId
-              type: object
-              properties:
-                agentId:
-                  type: string
-                  description: 与 modelId 二选一
-                  nullable: true
-                allowQueue:
-                  type: boolean
-                  default: false
-                baseVersionId:
-                  type: string
-                  description: 仅用于 DOCUMENT 模式
-                  nullable: true
-                materialIds:
-                  maxItems: 5
-                  uniqueItems: true
-                  type: array
-                  items:
-                    type: string
-                message:
-                  maxLength: 20000
-                  type: string
-                modelId:
-                  type: string
-                  description: 与 agentId 二选一
-                  nullable: true
-                outputMode:
-                  type: string
-                  enum:
-                  - TEXT
-                  - DOCUMENT
-                  default: TEXT
-                requestId:
-                  pattern: "^[A-Za-z0-9_-]{1,100}$"
-                  type: string
-              additionalProperties: false
-        required: true
-      responses:
-        "202":
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                required:
-                - data
-                - error
-                - success
-                type: object
-                properties:
-                  data:
-                    $ref: "#/components/schemas/io.iwork.conversation.TaskService.Task"
-                  error:
-                    type: string
-                    nullable: true
-                  success:
-                    type: boolean
-                    enum:
-                    - true
-        default:
-          $ref: "#/components/responses/ApiError"
-      security:
-      - csrf: []
-        session: []
   /api/conversations/{id}/tasks/queue/resume:
     post:
       tags:
@@ -2672,29 +2599,6 @@ paths:
       security:
       - csrf: []
         session: []
-  /api/tasks/{id}/reply-stream:
-    get:
-      tags:
-      - 会话任务
-      summary: 订阅回复事件
-      operationId: get_api_tasks_id_reply_stream
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          description: SSE 流。reply 事件的 data 包含 version 和 content，done 事件表示流结束。
-          content:
-            text/event-stream:
-              schema:
-                type: string
-        default:
-          $ref: "#/components/responses/ApiError"
-      security:
-      - session: []
   /api/tasks/{task}/parses:
     get:
       tags:
@@ -3236,6 +3140,9 @@ components:
             additionalProperties:
               type: object
     io.iwork.conversation.TaskService.QueuedItem:
+      required:
+      - id
+      - summary
       type: object
       properties:
         id:
@@ -3286,10 +3193,20 @@ components:
           type: string
           format: date-time
     io.iwork.conversation.TaskService.TaskPage:
+      required:
+      - confirmedRequestId
+      - hasMore
+      - items
+      - queuePauseVersion
+      - queuePaused
+      - queuedCount
+      - queuedItems
       type: object
       properties:
         confirmedRequestId:
           type: string
+          description: requestId 匹配本会话已受理任务时返回该值，否则返回 null
+          nullable: true
         hasMore:
           type: boolean
         items:
@@ -3297,11 +3214,13 @@ components:
           items:
             $ref: "#/components/schemas/io.iwork.conversation.TaskService.Task"
         queuePauseVersion:
+          minimum: 0
           type: integer
           format: int64
         queuePaused:
           type: boolean
         queuedCount:
+          minimum: 0
           type: integer
           format: int32
         queuedItems:
@@ -3421,8 +3340,6 @@ components:
           type: string
         locked:
           type: boolean
-    org.springframework.http.codec.ServerSentEventIo.iwork.conversation.TaskService.ReplySnapshot:
-      type: object
     org.springframework.http.codec.ServerSentEventJava.lang.String:
       type: object
     org.springframework.security.web.csrf.CsrfToken:

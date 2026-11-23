@@ -1,4 +1,4 @@
-import { apiResponse, agUiReceipt } from './testResponse'
+import { apiResponse, agUiReceipt, emptyTaskPage } from './testResponse'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import TaskPanel from './TaskPanel.vue'
@@ -9,6 +9,8 @@ afterEach(() => {
 it('retries an uncertain submission with the same request identity and never cancels on unmount', async () => {
   const bodies: string[] = []
   const fetch = vi.fn((url: string, init?: RequestInit) => {
+    if (url.split('?')[0]?.endsWith('/tasks'))
+      return Promise.resolve(apiResponse(JSON.stringify(emptyTaskPage)))
     if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
     if (init?.method === 'POST') {
       bodies.push(String(init.body))
@@ -47,6 +49,8 @@ it('keeps an uncertain request identity after reopening the same conversation', 
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
+      if (url.split('?')[0]?.endsWith('/tasks'))
+        return Promise.resolve(apiResponse(JSON.stringify(emptyTaskPage)))
       if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
       if (init?.method === 'POST') {
         bodies.push(String(init.body))
@@ -85,6 +89,8 @@ it('keeps an uncertain request identity after reopening the same conversation', 
 it('waits for an in-flight upload before accepting the task input', async () => {
   let finish!: (response: Response) => void
   const fetch = vi.fn((url: string, init?: RequestInit) => {
+    if (url.split('?')[0]?.endsWith('/tasks'))
+      return Promise.resolve(apiResponse(JSON.stringify(emptyTaskPage)))
     if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
     if (url === '/api/materials' && init?.method === 'POST')
       return new Promise<Response>((resolve) => {
@@ -130,6 +136,8 @@ it('preserves explicit document output when retrying an uncertain request', asyn
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
+      if (url.split('?')[0]?.endsWith('/tasks'))
+        return Promise.resolve(apiResponse(JSON.stringify(emptyTaskPage)))
       if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
       if (init?.method === 'POST') {
         bodies.push(String(init.body))
@@ -180,6 +188,8 @@ it('selects a personal version and preserves its source across an uncertain retr
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
+      if (url.split('?')[0]?.endsWith('/tasks'))
+        return Promise.resolve(apiResponse(JSON.stringify(emptyTaskPage)))
       if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
       if (init?.method === 'POST') {
         bodies.push(String(init.body))
@@ -236,6 +246,8 @@ it('retains a selected personal agent across uncertain submission and reopening 
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
+      if (url.split('?')[0]?.endsWith('/tasks'))
+        return Promise.resolve(apiResponse(JSON.stringify(emptyTaskPage)))
       if (url.endsWith('/csrf')) return Promise.resolve(apiResponse('{"token":"proof"}'))
       if (init?.method === 'POST') {
         bodies.push(String(init.body))
@@ -279,6 +291,8 @@ it('retains a selected personal agent across uncertain submission and reopening 
 it('creates a draft conversation once and retries its first task with the same request', async () => {
   const submissions: string[] = []
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.split('?')[0]?.endsWith('/tasks'))
+      return Promise.resolve(apiResponse(JSON.stringify(emptyTaskPage)))
     if (url.endsWith('/csrf')) return apiResponse('{"token":"proof"}')
     if (url === '/api/models') return apiResponse('[{"id":"model","name":"模型"}]')
     if (url.includes('/documents')) return apiResponse('{"items":[],"hasMore":false}')

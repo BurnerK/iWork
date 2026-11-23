@@ -64,6 +64,10 @@ public class ProjectSpaceTest {
         final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
         String csrf;
 
+        ApiTestResponse.RunResponse submitRun(String conversation, String input) throws Exception {
+            return ApiTestResponse.submitRun(client, port, conversation, input, csrf);
+        }
+
         HttpResponse<String> request(String method, String path, String body, boolean token)
                 throws Exception {
             var builder =
@@ -284,9 +288,8 @@ public class ProjectSpaceTest {
                                 .statusCode())
                 .isEqualTo(204);
         var revision =
-                admin.request(
-                        "POST",
-                        "/api/conversations/" + cid + "/tasks",
+                admin.submitRun(
+                        cid,
                         json.writeValueAsString(
                                 Map.of(
                                         "requestId",
@@ -298,9 +301,8 @@ public class ProjectSpaceTest {
                                         "baseVersionId",
                                         version,
                                         "outputMode",
-                                        "DOCUMENT")),
-                        true);
-        assertThat(revision.statusCode()).isEqualTo(202);
+                                        "DOCUMENT")));
+        assertThat(revision.statusCode()).isEqualTo(200);
         await(admin, json.readTree(revision.body()).path("id").asString());
         var revisions =
                 json.readTree(
@@ -540,9 +542,8 @@ public class ProjectSpaceTest {
 
     String submit(Browser browser, String cid, String model, String material) throws Exception {
         var response =
-                browser.request(
-                        "POST",
-                        "/api/conversations/" + cid + "/tasks",
+                browser.submitRun(
+                        cid,
                         json.writeValueAsString(
                                 Map.of(
                                         "requestId",
@@ -554,9 +555,8 @@ public class ProjectSpaceTest {
                                         "materialIds",
                                         List.of(material),
                                         "outputMode",
-                                        "DOCUMENT")),
-                        true);
-        assertThat(response.statusCode()).isEqualTo(202);
+                                        "DOCUMENT")));
+        assertThat(response.statusCode()).isEqualTo(200);
         return json.readTree(response.body()).path("id").asString();
     }
 

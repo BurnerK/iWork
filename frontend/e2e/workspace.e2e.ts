@@ -1,3 +1,4 @@
+import { emptyTaskPage } from '../src/testResponse'
 import { expect, test, type Page, type Route } from '@playwright/test'
 
 const emptyPage = { items: [], hasMore: false }
@@ -110,6 +111,7 @@ test('queues consecutive follow-ups and switches between pause and send', async 
         queuedCount: queuedItems.length,
         queuedItems,
         queuePaused: !running,
+        queuePauseVersion: running ? 0 : 1,
         confirmedRequestId:
           submissions.find(({ requestId }) => requestId === searchParams.get('requestId'))
             ?.requestId ?? null,
@@ -219,7 +221,7 @@ for (const confirmByPolling of [false, true]) {
         status = 201
       }
       if (path === '/api/conversations/first/tasks' && request.method() === 'GET')
-        data = { items: showAccepted ? accepted : [], hasMore: false }
+        data = { ...emptyTaskPage, items: showAccepted ? accepted : [], hasMore: false }
       if (path === '/api/conversations/first/messages')
         data = {
           items: showAccepted && searchParams.get('after') === '0' ? replies : [],
@@ -383,6 +385,7 @@ test.describe('touch composer', () => {
       if (path === '/api/auth/me') data = user
       if (path === '/api/auth/csrf') data = { token: 'test-token' }
       if (path === '/api/models') data = [{ id: 'model', name: '很长的模型名称'.repeat(20) }]
+      if (path === '/api/conversations/first/tasks') data = emptyTaskPage
       if (path === '/api/conversations/first') data = projectConversation
       if (path === '/api/document-versions/source-version') data = version
       if (path === '/api/projects/project/materials')
@@ -506,6 +509,7 @@ test('opens and revises a task version outside the current document page', async
             ? [{ id: 'model', name: '测试模型' }]
             : path.endsWith('/tasks')
               ? {
+                  ...emptyTaskPage,
                   items: [
                     {
                       id: 'task',
@@ -594,7 +598,7 @@ for (const width of [390, 1280]) {
         return receipt(route, task.id, task.status)
       }
       if (pathname === '/api/conversations/first/tasks')
-        data = { items: tasks.slice(0, 1), hasMore: tasks.length > 1 }
+        data = { ...emptyTaskPage, items: tasks.slice(0, 1), hasMore: tasks.length > 1 }
       if (pathname === '/api/conversations/first/messages') {
         data = {
           items: replies.filter((reply) => reply.id > Number(searchParams.get('after'))),

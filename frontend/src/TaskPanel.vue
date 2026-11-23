@@ -885,12 +885,7 @@ onUnmounted(() => {
           @uploading="materialBusy = $event"
         />
       </div>
-      <form
-        method="post"
-        :action="conversationId ? `/api/conversations/${conversationId}/tasks` : undefined"
-        aria-label="提交任务"
-        @submit.prevent="submit"
-      >
+      <form method="post" aria-label="提交任务" @submit.prevent="submit">
         <label for="task-message">工作要求（必填）</label
         ><textarea
           id="task-message"

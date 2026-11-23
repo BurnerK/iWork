@@ -12,7 +12,7 @@
 | `io.iwork.artifacts` | 成果与文件：原始资料、执行工作区、正式版本及文件索引。原始资料使用独立存储和所有权索引，解析与正式成果另行接入。 |
 | `io.iwork.model` | 模型与用量：模型授权、额度、逐调用计量；供应商缺失用量保留待核实。 |
 
-各模块通过真实用例需要的包接口协作，不直接访问其他模块内部持久化对象。V2 新增 users 与 conversations；会话写入调用身份模块的事务内校验，SQL 始终限定 owner。沙箱管理服务和独立执行看门狗已在 #16 接入；其高权限信任边界以及有条件的进程停止上限保持不变。
+各模块通过真实用例需要的包接口协作，不直接访问其他模块内部持久化对象。会话写入调用身份模块的事务内校验，SQL 始终限定 owner。沙箱管理服务和独立执行看门狗已在 #16 接入；其高权限信任边界以及有条件的进程停止上限保持不变。
 
 ## Harness 目标方案与当前实现
 
@@ -40,7 +40,7 @@ Boot 4 使用 Web MVC 与 Flyway 专用 starter，健康检查和安全自动配
 
 7 项后端测试、IDEA 构建和隔离 Compose 验收通过（启动、迁移、重建、文件保留及数据库中断恢复）；IDEA/Mend 后端 POM 检查从 7 条降为 0 条，OSV 对最终 152 个依赖构件未检出已知漏洞。这是指定日期和依赖树的扫描结果，不是无漏洞保证。MCP 验证使用本机合成服务，未覆盖外部服务、SSE/stdio、认证或 MCP 服务端。两个历史原型仍保留各自的依赖组合；这里的零告警结论仅针对正式后端。
 
-Flyway 随应用启动运行，V1 保留原基线，V2 新增账号与个人会话表。历史存储在 MySQL `flyway_schema_history`。再次启动验证校验和；迁移失败会阻止主应用启动，不提供忽略失败、自动 clean 或对非空数据库自动 baseline 的入口。后续业务票继续新增迁移，不修改已经应用的文件。
+Flyway 在应用启动时执行迁移。首次部署从空 MySQL 库执行 `V1__baseline.sql`，创建完整业务表、约束、索引和初始配置。再次启动会校验 `flyway_schema_history`，校验失败会阻止启动。后续结构变更从 V2 开始追加迁移。使用过首发前 V1–V20 的开发或验收实例需改用新的空库和独立文件目录，原数据可保留给匹配的旧版本。
 
 `-Pdistribution` 依赖先执行前端构建；开发时只检查 Java 可以不用该 profile。Docker 多阶段构建始终重新构建前端，不将本机 `node_modules`、`target`、`.env` 或数据目录放入构建上下文。最终镜像仅有运行时和 jar。
 
@@ -60,7 +60,7 @@ Flyway 随应用启动运行，V1 保留原基线，V2 新增账号与个人会�
 
 资料上传默认每账号累计 100 MiB、1,000 份，实例原文目录累计 10 GiB、10,000 份，并在写入前为共享文件系统保留 512 MiB 可用空间。实例额度包含目录里的遗留文件。超出账号额度返回 `409 material_quota_exceeded`，实例容量不足返回 `503 material_storage_unavailable`。已有资料仍可下载。Java 环境变量 `IWORK_MATERIAL_OWNER_MAX_BYTES`、`IWORK_MATERIAL_OWNER_MAX_FILES`、`IWORK_MATERIAL_INSTANCE_MAX_BYTES`、`IWORK_MATERIAL_INSTANCE_MAX_FILES` 和 `IWORK_MATERIAL_MIN_FREE_BYTES` 可覆盖默认值。在 Compose 部署中，通过应用服务的 `environment` 传入这些变量。
 
-每个会话默认最多等待 20 条任务，每个账号跨会话合计默认最多等待 100 条。可用 Java 环境变量 `IWORK_TASK_CONVERSATION_QUEUE_LIMIT`（1–20）和 `IWORK_TASK_ACCOUNT_QUEUE_LIMIT`（至少 1）调整。在 Compose 部署中，通过应用服务的 `environment` 传入这些变量。队列达到上限后，新排队请求返回 `429 task_capacity_exceeded`。降额前已有的队列仍可执行、移除或翻页查看，同一请求的重试仍返回原任务。
+每个会话默认最多等待 20 条任务，每个账号跨会话合计默认最多等待 100 条。可用 Java 环境变量 `IWORK_TASK_CONVERSATION_QUEUE_LIMIT`（1–20）和 `IWORK_TASK_ACCOUNT_QUEUE_LIMIT`（至少 1）调整。在 Compose 部署中，通过应用服务的 `environment` 传入这些变量。队列达到上限后，新排队请求返回 `429 task_capacity_exceeded`。待发送项按发送顺序一次返回，调低限额后仍可执行或移除已有项，同一请求的重试仍返回原任务。
 
 ## 本机开发
 
@@ -105,7 +105,7 @@ Java v2 文档中的 `StudioMessageHook` 会通过 HTTP 和 WebSocket 同步完�
 
 ## #11 账号与登录态
 
-正式工程已增加 users/conversations 的 V2 迁移，V1 保持不变。identity 提供可信 Caller 与事务内身份锁定校验，conversation 所有查询限定 owner。仅支持会话创建、分页列表、空详情；消息、任务及模型未接入。
+identity 提供可信 Caller 与事务内身份锁定校验，conversation 所有查询限定 owner。仅支持会话创建、分页列表、空详情；消息、任务及模型未接入。
 
 在独立 MySQL 之外准备 Redis，默认 localhost:6379，可用 `IWORK_REDIS_HOST` / `IWORK_REDIS_PORT` 修改。首次启动必须提供 `IWORK_BOOTSTRAP_PASSWORD`（至少 12 字符，最多 72 UTF-8 字节），可用 `IWORK_BOOTSTRAP_USERNAME` 设置管理员用户名（默认 admin）。只有数据库不存在 ADMIN 才初始化；正常启动和改动配置都不会覆盖现有账号。首次改密完成后移除密码配置。用户名为 3–64 位 ASCII 字母、数字、点、下划线或连字符，以字母/数字开头，不区分大小写；显示名称支持中文。
 
@@ -143,11 +143,11 @@ docker compose run --rm --no-deps \
 
 ## #12 模型配置与个人额度
 
-已增加 V3 模型、授权和预算配置；管理员通过“模型管理”保存模型、服务端凭据引用、输入/输出计价、用户授权和累计预算，用户通过“模型与额度”查看本人可用模型及余额。详细字段、币种锁定与外部凭据注入见 [#12 实施合同](issue-12-design.md)。本票只保存配置，不证明真实模型可连接或已经接入扣费；Harness 执行与计量仍由 #14 承接。
+管理员通过“模型管理”保存模型、服务端凭据引用、输入/输出计价、用户授权和累计预算，用户通过“模型与额度”查看本人可用模型及余额。详细字段、币种锁定与外部凭据注入见 [#12 实施合同](issue-12-design.md)。本票只保存配置，不证明真实模型可连接或已经接入扣费；Harness 执行与计量仍由 #14 承接。
 
 ## #13 后台任务
 
-V4 增加任务、消息与请求身份；会话页面可提交、观察、取消并重开找回，接口和恢复边界见 [#13 实施合同](issue-13-design.md)。未接入 TaskRunner 时正式入口返回 503；不会把测试替身装入交付 JAR。测试替身仅由 `io.iwork.fixtures.TaskFixtureApplication` 在 test classpath 启动，用于浏览器及进程强杀验证。
+会话页面可提交、观察、取消并重开找回，接口和恢复边界见 [#13 实施合同](issue-13-design.md)。未接入 TaskRunner 时正式入口返回 503；不会把测试替身装入交付 JAR。测试替身仅由 `io.iwork.fixtures.TaskFixtureApplication` 在 test classpath 启动，用于浏览器及进程强杀验证。
 
 `iwork.task-capacity` 默认 2，范围 1–16；单实例运行期间保留实际执行许可，取消不提前释放。不要同时启动两个应用实例连接同一业务数据库；此首版不提供多实例调度或滚动升级。主进程启动只归档遗留任务，不重新执行。
 
@@ -166,7 +166,7 @@ V4 增加任务、消息与请求身份；会话页面可提交、观察、取�
 
 ## #17 Markdown 正式文档
 
-任务提交可设置 `outputMode: DOCUMENT`，默认/旧请求仍为 `TEXT`。文档任务开放固定 `prepare_document` 工具，先准备正文，再由 TaskService 在任务状态事务内发布成果/版本并完成任务；没有可保存正文则失败，不把模型回复当作正式成果。V8 为成果、版本、准备记录建立独立索引；同任务最多一个正式版本。
+任务提交可设置 `outputMode: DOCUMENT`，默认值为 `TEXT`。文档任务开放固定 `prepare_document` 工具，先准备正文，再由 TaskService 在任务状态事务内发布成果/版本并完成任务；没有可保存正文则失败，不把模型回复当作正式成果。成果、版本、准备记录各有独立索引；同任务最多一个正式版本。
 
 首版输出 UTF-8 Markdown，正文上限 256 KiB、标题最多 120 字符。会话“正式文档”提供只读原样预览及 `.md` 附件下载，不执行 HTML/代码。版本读取按 owner 查询并检查字节数/SHA-256；修改后的不完整文件返回 503，不静默返回坏内容。正式目录 `documents` 与 `originals`、`document-workspaces` 分开；TaskService 正常终止与启动中断归档后只清理文档工作区。
 
@@ -174,13 +174,13 @@ V4 增加任务、消息与请求身份；会话页面可提交、观察、取�
 
 ## 长会话上下文（#27）
 
-V9 增加 MySQL conversation_contexts 与模型 context_window。升级后已有模型窗口为空，管理员需在模型管理中按供应商确认规格填写 8192–131072；更大模型也只启用首版上限，空值会返回 context_window_not_configured。不要把确定性测试替身的参数复制到真实模型。
+会话上下文保存在 MySQL conversation_contexts 中。模型窗口由 context_window 指定，管理员需在模型管理中按供应商确认规格填写 8192–131072；更大模型也只启用首版上限，空值会返回 context_window_not_configured。不要把确定性测试替身的参数复制到真实模型。
 
 业务历史与可用快照参与协调备份，不属于可清理的临时工作目录。损坏快照可按完整成功业务记录重建；无法确认或超限时明确失败。中断任务不自动续跑，只响应新的显式任务。测试入口 ConversationContextTest 与仅用于本地验收的 ContextFixtureApplication，后者不进入正式 JAR。
 
 ## 来源版本与续改（#18）
 
-DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等指纹。固定 read_document_version 只能读本任务选定来源，12000字符分页；正式完成时锁成果并分配新版本号，各版本保留标题、正文与来源关系。旧版续改与并发续改均追加，不覆盖旧文件。个人版本列表 `/api/document-versions?page=0` 每页20项；会话文档列表包含本会话引用成果的历史版本。V10 迁移保留既有版本标题。详见 [版本契约](issue18-version-contract.md)。
+DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等指纹。固定 read_document_version 只能读本任务选定来源，12000字符分页；正式完成时锁成果并分配新版本号，各版本保留标题、正文与来源关系。旧版续改与并发续改均追加，不覆盖旧文件。个人版本列表 `/api/document-versions?page=0` 每页20项；会话文档列表包含本会话引用成果的历史版本。详见 [版本契约](issue18-version-contract.md)。
 
 ## 取消与迟到结果验证（#19）
 
@@ -196,7 +196,7 @@ DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等
 
 ## 个人智能体（#22）
 
-`/api/agents`保存当前用户的名称、指令、模型；不含凭据或可编辑工具。任务使用agentId或modelId二选一，受理时保存配置快照，之后编辑不影响当前任务；新任务重查实际模型/资料权限和本人额度。V11新增个人配置与任务快照字段。界面“我的智能体”保存后在会话选择，详见 [契约](issue22-agent-contract.md) 和 [验收](validation/issue22-personal-agents.md)。
+`/api/agents`保存当前用户的名称、指令、模型；不含凭据或可编辑工具。任务使用agentId或modelId二选一，受理时保存配置快照，之后编辑不影响当前任务；新任务重查实际模型/资料权限和本人额度。界面“我的智能体”保存后在会话选择，详见 [契约](issue22-agent-contract.md) 和 [验收](validation/issue22-personal-agents.md)。
 
 项目空间见 [#23 契约](issue23-project-contract.md) 与 [验收证据](validation/issue23-project-spaces.md)。删除项目只移除组织引用，个人会话、资料和成果保留；任务资料仍需明确选择。
 
@@ -209,6 +209,6 @@ DOCUMENT 任务可传 baseVersionId，提交时校验所属用户并纳入幂等
 
 `/api/**` 中有正文的业务 JSON 使用统一信封。成功示例为 `{"success":true,"data":{"id":"…"},"error":null}`，失败示例为 `{"success":false,"data":null,"error":"not_found"}`。HTTP 状态和 Cookie、CSRF 机制继续作为协议的一部分。204 无正文，文件下载成功时返回原始字节。
 
-`GET /api/conversations/{id}/documents?page=0` 的 `data` 为 `{items,hasMore}`，每页最多 20 个版本，从第 0 页开始。旧客户端需升级为先解包 `data`，再处理分页。任务对象的 `publishedVersion` 提供已发布版本的 ID、标题和序号。
+`GET /api/conversations/{id}/documents?page=0` 的 `data` 为 `{items,hasMore}`，每页最多 20 个版本，从第 0 页开始。任务对象的 `publishedVersion` 提供已发布版本的 ID、标题和序号。
 
 `mvn verify` 在 `backend/target/site/jacoco/` 生成 JaCoCo 行覆盖率报告，合并测试 JVM 和管理员恢复测试启动的子 JVM。沙箱管理器与看门狗在独立容器运行，其内部执行未计入该报告。

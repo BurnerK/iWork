@@ -40,46 +40,6 @@ public interface TaskRunner {
                     ? message
                     : message + "\n\n请从已生成回复的末尾接着写，只输出新增内容。以下是已生成的回复：\n" + partialReply;
         }
-
-        public Input(
-                String taskId,
-                String conversationId,
-                Caller caller,
-                String modelId,
-                String message,
-                String outputMode,
-                String instructions) {
-            this(
-                    taskId,
-                    conversationId,
-                    caller,
-                    modelId,
-                    message,
-                    outputMode,
-                    instructions,
-                    "",
-                    (replyId, delta) -> {},
-                    progress -> {});
-        }
-
-        public Input(
-                String taskId,
-                String conversationId,
-                Caller caller,
-                String modelId,
-                String message,
-                String outputMode) {
-            this(taskId, conversationId, caller, modelId, message, outputMode, "");
-        }
-
-        public Input(
-                String taskId,
-                String conversationId,
-                Caller caller,
-                String modelId,
-                String message) {
-            this(taskId, conversationId, caller, modelId, message, "TEXT");
-        }
     }
 
     String execute(Input input) throws Exception;

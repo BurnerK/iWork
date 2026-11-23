@@ -2,6 +2,7 @@ package io.iwork.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.iwork.ApiTestResponse;
 import java.net.*;
 import java.net.http.*;
 import java.util.*;
@@ -54,6 +55,10 @@ public class CancellationClosureTest {
         final CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
         final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
         String csrf;
+
+        ApiTestResponse.RunResponse submitRun(String conversation, String input) throws Exception {
+            return ApiTestResponse.submitRun(client, port, conversation, input, csrf);
+        }
 
         HttpResponse<String> request(String method, String path, String body, boolean token)
                 throws Exception {
@@ -560,7 +565,7 @@ public class CancellationClosureTest {
         String conversationPath = "/api/conversations/" + continuedConversation;
         String first = start(admin, continuedConversation, model, null, "prepared");
         awaitPrepared(admin, first);
-        String followUp = start(admin, continuedConversation, model, null, "prepared", true);
+        String followUp = start(admin, continuedConversation, model, null, "prepared");
         assertThat(admin.request("POST", "/api/tasks/" + first + "/pause", null, true).statusCode())
                 .isEqualTo(200);
         await(admin, first, "PAUSED");
@@ -615,7 +620,7 @@ public class CancellationClosureTest {
         String previousPause = queueResumePath(admin, conversationPath);
         resumeQueueTwice(admin, previousPause);
         awaitPrepared(admin, followUp);
-        String next = start(admin, continuedConversation, model, null, "prepared", true);
+        String next = start(admin, continuedConversation, model, null, "prepared");
         assertThat(
                         admin.request("POST", "/api/tasks/" + followUp + "/pause", null, true)
                                 .statusCode())
@@ -645,8 +650,8 @@ public class CancellationClosureTest {
             String cidPath = "/api/conversations/" + cid;
             String original = start(admin, cid, model, null, "prepared");
             awaitPrepared(admin, original);
-            String head = start(admin, cid, model, null, "prepared", true);
-            String tail = start(admin, cid, model, null, "prepared", true);
+            String head = start(admin, cid, model, null, "prepared");
+            String tail = start(admin, cid, model, null, "prepared");
             assertThat(
                             admin.request("POST", "/api/tasks/" + original + "/pause", null, true)
                                     .statusCode())
@@ -745,17 +750,6 @@ public class CancellationClosureTest {
 
     String start(Browser browser, String cid, String model, String base, String message)
             throws Exception {
-        return start(browser, cid, model, base, message, false);
-    }
-
-    String start(
-            Browser browser,
-            String cid,
-            String model,
-            String base,
-            String message,
-            boolean allowQueue)
-            throws Exception {
         var input =
                 new HashMap<String, Object>(
                         Map.of(
@@ -765,18 +759,11 @@ public class CancellationClosureTest {
                                 model,
                                 "message",
                                 message,
-                                "allowQueue",
-                                allowQueue,
                                 "outputMode",
                                 "DOCUMENT"));
         if (base != null) input.put("baseVersionId", base);
-        var response =
-                browser.request(
-                        "POST",
-                        "/api/conversations/" + cid + "/tasks",
-                        json.writeValueAsString(input),
-                        true);
-        assertThat(response.statusCode()).isEqualTo(202);
+        var response = browser.submitRun(cid, json.writeValueAsString(input));
+        assertThat(response.statusCode()).isEqualTo(200);
         return json.readTree(response.body()).path("id").asString();
     }
 

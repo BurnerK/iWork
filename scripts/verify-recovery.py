@@ -14,6 +14,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from ag_ui import submit_run
+
 p = argparse.ArgumentParser()
 p.add_argument('launcher')
 p.add_argument('model')
@@ -65,9 +67,11 @@ def request(method, path, body=None, headers=None):
         raw = response.read()
         if 'json' not in response.headers.get('Content-Type', ''):
             return raw
-        envelope = json.loads(raw)
-        assert envelope['success'] is True and envelope['error'] is None
-        return envelope['data']
+        payload = json.loads(raw)
+        if path.startswith('/api/'):
+            assert payload['success'] is True and payload['error'] is None
+            return payload['data']
+        return payload
 
 def until(check, timeout=40):
     end = time.monotonic() + timeout
@@ -105,9 +109,10 @@ def conversation():
     return request('POST', '/api/conversations', {'title': '重启与中断恢复验收'})['id']
 
 def submit(cid, message, materials=None, mode='DOCUMENT'):
-    body = {'requestId': str(uuid.uuid4()), 'modelId': a.model, 'message': message, 'outputMode': mode, 'baseVersionId': a.base_version if mode == 'DOCUMENT' else None, 'materialIds': materials or []}
-    task = request('POST', '/api/conversations/' + cid + '/tasks', body)
-    return cid, body, task['id']
+    run = dict(request_id=str(uuid.uuid4()), modelId=a.model, message=message, outputMode=mode,
+               baseVersionId=a.base_version if mode == 'DOCUMENT' else None, materialIds=materials or [])
+    task = submit_run(client, 'http://127.0.0.1:18092', csrf, cid, **run)
+    return cid, run, task
 
 def document_versions(cid):
     page = 0
@@ -119,10 +124,10 @@ def document_versions(cid):
         page += 1
 
 def recovered(item):
-    cid, body, task = item
+    cid, run, task = item
     state = request('GET', '/api/tasks/' + task)
     assert state['status'] == 'INTERRUPTED' and state['executionState'] == 'UNKNOWN', state
-    assert request('POST', '/api/conversations/' + cid + '/tasks', body)['id'] == task
+    assert submit_run(client, 'http://127.0.0.1:18092', csrf, cid, **run) == task
     calls = request('GET', '/api/tasks/' + task + '/calls')
     assert all(call['status'] == 'CLOSED' for call in calls)
     assert request('GET', '/api/budget')['reserved'] == '0.000000'

@@ -12,6 +12,8 @@
 
 ## 发布与升级
 
+首发基线在空 MySQL 库上创建全部业务表。首发前 V1–V20 的验收环境请使用新的数据目录、数据库和 Redis 卷独立部署。原有环境及其备份配合相同版本的镜像使用。下列常规升级步骤适用于首发基线之后的版本。
+
 根 `compose.yaml` 运行 app、MySQL、登录 Redis、管理服务、看门狗和构建解析器镜像的初始化任务。仅 app 绑定回环HTTP端口；生产保持Secure Cookie并在前置HTTPS代理发布。管理服务不发布宿主端口，主应用无Docker socket；管理器和看门狗有高权限，须独立保护。
 
 1. 参考 [`.env.example`](../.env.example) 在授权路径准备发布环境文件（0600），配置数据库密码、专用数据目录及沙箱实例名。首次启动空数据库前设置 `IWORK_BOOTSTRAP_PASSWORD`，管理员登录并改密后移除。在同一文件将 `IWORK_APP_IMAGE`、`IWORK_MANAGER_IMAGE`、`IWORK_PARSER_IMAGE` 分别设为已批准的 `仓库/镜像@sha256:摘要`。使用 `compose.release.yaml` 禁用源码构建，管理服务与看门狗共用同一管理镜像，管理服务按同一解析器引用启动工作容器。首次部署用 `node scripts/sandbox-key.mjs /secure/iwork-secrets/sandbox.key` 在 0700 目录生成只读 key，并设置 `IWORK_SANDBOX_KEY_FILE=/secure/iwork-secrets/sandbox.key`。常规升级沿用该实例的 key。确保 app 的 UID 10001 与管理服务可读。所有 Compose 命令使用同一组配置文件、环境文件和项目名。
@@ -106,5 +108,3 @@ iwork_restore -f /secure/iwork-restore-model.compose.yaml up -d --no-build --pul
 ## 目标环境记录
 
 实际完成升级一次、恢复一次，并记录CPU/内存/磁盘、Docker/Compose版本、镜像摘要、并发、材料大小、任务ID与观测时间。重验容器删除拒绝/通信失败、管理器重启、主应用强杀、看门狗健康及过期回收；条件包含Docker/宿主调度和时钟可用。断电和全宿主失效若未实测必须明确未验证。恢复后重新检查授权、预算、历史、快照、原文和新旧版本，不能把readiness或HTTP200代替业务验收。
-
-注意历史测试环境在UTC会话修复前可能写入偏移的 `users.locked_until`。迁移正式旧环境时先核查时间与实际锁定，不能批量改写用户数据。
