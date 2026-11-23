@@ -237,6 +237,7 @@ public class ModelCallLedger implements ApplicationRunner {
                                 (BigDecimal) call.get("output_price"))
                         : BigDecimal.ZERO.setScale(6);
         var previous = (BigDecimal) call.get("charged");
+        // 供应商用量可能晚于首次结算到达。之后只补记差额，预算预留只释放一次。
         if (wasOpen || charge.compareTo(previous) != 0 || !source.equals(call.get("source"))) {
             db.update(
                     "UPDATE budgets SET spent=spent+?,reserved=reserved-? WHERE user_id=?",

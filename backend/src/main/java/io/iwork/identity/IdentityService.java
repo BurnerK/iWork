@@ -109,6 +109,7 @@ public class IdentityService {
 
     public Caller verify(Caller caller, boolean lock) {
         var rows = accounts("id=?" + (lock ? " FOR UPDATE" : ""), caller.id());
+        // 排队任务和长连接可能仍持有旧身份。改密或停用会递增账号版本，使旧身份失效。
         if (rows.isEmpty()
                 || !rows.getFirst().enabled()
                 || rows.getFirst().caller().authVersion() != caller.authVersion())

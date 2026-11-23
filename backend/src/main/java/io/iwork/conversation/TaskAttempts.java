@@ -15,6 +15,7 @@ public class TaskAttempts {
     }
 
     public List<String> through(String taskId) {
+        // 素材和草稿按执行次数归属，查询旧任务时只能看到当时已有的执行记录。
         return db.queryForList(
                 """
                 SELECT t.id FROM tasks requested JOIN tasks t
@@ -43,6 +44,7 @@ public class TaskAttempts {
                             """);
                     query.setString(1, ownerId);
                     query.setString(2, conversationId);
+                    // MySQL Connector/J 用这个值开启逐行读取，避免把完整会话一次载入内存。
                     query.setFetchSize(Integer.MIN_VALUE);
                     return query;
                 },

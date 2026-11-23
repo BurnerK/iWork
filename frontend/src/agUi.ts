@@ -35,6 +35,7 @@ export async function submitRun(
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
+      // 网络分块可能切在事件中间，留到收到空行再解析 JSON。
       pending += value
       for (let boundary; (boundary = /\r?\n\r?\n/.exec(pending));) {
         const frame = pending.slice(0, boundary.index)

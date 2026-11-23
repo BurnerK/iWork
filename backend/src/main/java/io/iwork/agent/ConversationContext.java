@@ -78,6 +78,7 @@ public class ConversationContext {
                         .sessionId(input.conversationId())
                         .build();
         boolean restored = false;
+        // 快照已包含截至该消息的上下文。只有这段历史的校验值一致，才从下一条消息接着读。
         if (snapshot != null
                 && foundMark[0]
                 && hex(prefix.digest()).equals(snapshot.get("history_hash"))) {

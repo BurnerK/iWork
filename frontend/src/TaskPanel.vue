@@ -468,6 +468,7 @@ async function submit() {
         return
       }
     }
+    // 收不到回执时，服务端可能已经接收任务。重试沿用原请求 ID 和原内容，避免重复入队。
     pending.value ||= {
       requestId: crypto.randomUUID(),
       ...(agentId.value ? { agentId: agentId.value } : { modelId: modelId.value }),

@@ -138,6 +138,7 @@ public class HarnessTaskRunner implements TaskRunner {
                             .role(MsgRole.USER)
                             .textContent(input.prompt())
                             .build();
+            // Harness 的文本增量也包含带生成原因的中间输出，回复流只接收未带该标记的正文。
             var reply =
                     agent.streamEvents(message, context)
                             .doOnNext(

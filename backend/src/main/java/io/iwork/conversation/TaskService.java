@@ -58,6 +58,7 @@ public class TaskService implements ApplicationRunner {
     record LiveUpdate(ReplySnapshot reply, List<ToolProgress> tools) {}
 
     private static final class LiveReply {
+        // 每次推送都带完整正文，晚订阅或错过中间更新的客户端也能恢复当前回复。
         private final Sinks.Many<LiveUpdate> updates = Sinks.many().replay().latest();
         private final String prefix;
         private final StringBuilder content = new StringBuilder();
@@ -309,6 +310,7 @@ public class TaskService implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        // 重启会丢失尚未落库的回复。先暂停受影响的队列，避免下一条消息接着不完整的对话运行。
         tx.executeWithoutResult(
                 status -> {
                     db.update(
@@ -529,6 +531,7 @@ public class TaskService implements ApplicationRunner {
     public Page<Message> messages(Caller caller, String conversationId, long after) {
         if (after < 0) throw new ApiFailure(400, "invalid_pagination");
         conversation(caller, conversationId, false);
+        // 继续生成会写入新的消息 ID，但前端仍按原回复的任务 ID 更新同一个气泡。
         var rows =
                 db.query(
                         """
@@ -1037,6 +1040,7 @@ public class TaskService implements ApplicationRunner {
             try {
                 persist(
                         () -> {
+                            // 调度器看到 STOPPED 后就能启动同会话的下一项，文件清理必须先完成。
                             documents.cleanupExecution(
                                     input, get(input.caller(), input.taskId()).status());
                             workers.remove(input.taskId());
@@ -1054,6 +1058,7 @@ public class TaskService implements ApplicationRunner {
     private void savePartial(String taskId, String conversationId) {
         var live = liveReplies.get(taskId);
         if (live == null) return;
+        // 保存部分回复时先冻结正文。如果事务回滚，任务还在运行，需要继续接收增量。
         String snapshot = live.seal();
         org.springframework.transaction.support.TransactionSynchronizationManager
                 .registerSynchronization(
@@ -1084,6 +1089,7 @@ public class TaskService implements ApplicationRunner {
                 status -> {
                     identity.verify(input.caller(), true);
                     conversation(input.caller(), input.conversationId(), true);
+                    // 文件落盘期间用户仍可停止任务。拿锁后再确认状态，避免发布已停止任务的成果。
                     var current = query("id=? FOR UPDATE", input.taskId()).getFirst();
                     if (!current.status().equals("RUNNING")) return;
                     if (draft != null) documents.publish(input, draft);

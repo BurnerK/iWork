@@ -114,6 +114,7 @@ def main():
                 archive.add(path, arcname=path.relative_to(files), recursive=False)
         if inspect() != (counts, references):
             raise ValueError('Data changed during backup; keep writers stopped and retry to a new directory')
+        # 清单最后写入，恢复时才有依据区分完整备份和中途失败留下的目录。
         manifest = {'format': 1, 'project': args.project, 'createdAt': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'counts': counts, 'references': references,
                     'sha256': {name: digest(backup / name) for name in ['database.sql', 'files.tar.gz']}}
         (backup / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

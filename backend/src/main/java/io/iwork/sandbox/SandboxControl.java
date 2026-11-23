@@ -491,6 +491,7 @@ public final class SandboxControl {
                 if (interrupted || !job.cleanup.equals("CONFIRMED")) job.clean();
             }
         }
+        // 容器可能已经创建，但对应登记没有留下可用记录，启动前仍要扫一遍本实例的容器。
         for (var id : containers()) {
             var info = JSON.readTree(docker("inspect", id)).get(0);
             remove(info.path("Name").asText().substring(1));

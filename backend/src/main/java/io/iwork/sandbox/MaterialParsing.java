@@ -280,6 +280,7 @@ public class MaterialParsing implements ApplicationRunner {
             Thread.currentThread().interrupt();
             throw new ApiFailure(409, "task_not_running");
         } finally {
+            // 先清除中断标记，让取消任务也能发出清理请求，清理结束再恢复标记。
             boolean interrupted = Thread.interrupted();
             try {
                 record(id, manager("DELETE", id, token, null), localFailure);
@@ -305,6 +306,7 @@ public class MaterialParsing implements ApplicationRunner {
     }
 
     private static Map<String, Object> textPage(String text, int offset) {
+        // nextOffset 按 UTF-16 码元计数，分页边界不能切开 emoji 等字符的代理对。
         if (offset > text.length()
                 || offset > 0
                         && offset < text.length()

@@ -122,6 +122,7 @@ public class DocumentService {
 
     private void write(Path path, byte[] bytes) throws IOException {
         Files.createDirectories(path.getParent());
+        // 元数据提交前要让文件和目录项都落盘。临时文件放在目标目录，保证可以原子移动。
         Path pending = Files.createTempFile(path.getParent(), ".document-", ".part");
         try {
             Files.write(pending, bytes);
@@ -229,6 +230,7 @@ public class DocumentService {
                         draft.sha256());
         var target = documents.resolve(draft.versionId() + ".md");
         try {
+            // 上一次发布可能已写完文件但未提交数据库事务，重试时先校验已有文件。
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS))
                 read(target, draft.byteSize(), draft.sha256());
             else write(target, bytes);
