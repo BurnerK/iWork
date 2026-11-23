@@ -1,7 +1,9 @@
-package io.iwork;
+package io.iwork.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.iwork.ApiTestResponse;
+import io.iwork.agent.PersonalAgentTest;
 import java.net.*;
 import java.net.http.*;
 import java.util.*;
@@ -81,7 +83,7 @@ public class ProjectSpaceTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    io.iwork.ApiTestResponse.body());
+                    ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -206,7 +208,7 @@ public class ProjectSpaceTest {
                                 .header("Content-Type", "application/octet-stream")
                                 .POST(HttpRequest.BodyPublishers.ofString("蓝鲸项目，周五交付。"))
                                 .build(),
-                        io.iwork.ApiTestResponse.body());
+                        ApiTestResponse.body());
         String material = json.readTree(upload.body()).path("id").asString();
         assertThat(
                         admin.request(

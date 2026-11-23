@@ -68,8 +68,12 @@ try:
         subprocess.run(compose + ["logs", "--no-color", "--tail", "100", "sandbox-manager", "sandbox-watchdog"],
                        cwd=root, env=env, check=False)
         raise
-    for test in ("MaterialParsingTest", "PersonalAgentTest", "ProjectSpaceTest"):
-        report = ET.parse(root / "backend/target/surefire-reports" / f"TEST-io.iwork.{test}.xml").getroot()
+    for test in (
+        "io.iwork.sandbox.MaterialParsingTest",
+        "io.iwork.agent.PersonalAgentTest",
+        "io.iwork.conversation.ProjectSpaceTest",
+    ):
+        report = ET.parse(root / "backend/target/surefire-reports" / f"TEST-{test}.xml").getroot()
         if int(report.get("tests", "0")) == 0 or int(report.get("skipped", "0")) != 0:
             raise RuntimeError(f"{test} did not run fully")
     registry_stats = compose + [

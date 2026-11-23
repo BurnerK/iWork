@@ -1,7 +1,8 @@
-package io.iwork;
+package io.iwork.sandbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.iwork.ApiTestResponse;
 import java.net.*;
 import java.net.http.*;
 import java.util.*;
@@ -178,7 +179,7 @@ class MaterialParsingTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    io.iwork.ApiTestResponse.body());
+                    ApiTestResponse.body());
         }
 
         void login(String user, String pass) throws Exception {
@@ -210,7 +211,7 @@ class MaterialParsingTest {
                                     .header("X-File-Name", "source.md")
                                     .POST(HttpRequest.BodyPublishers.ofByteArray(bytes))
                                     .build(),
-                            io.iwork.ApiTestResponse.body());
+                            ApiTestResponse.body());
             assertThat(response.statusCode()).isEqualTo(201);
             return json.readTree(response.body()).get("id").asString();
         }

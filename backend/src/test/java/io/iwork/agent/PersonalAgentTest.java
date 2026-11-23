@@ -1,7 +1,8 @@
-package io.iwork;
+package io.iwork.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.iwork.ApiTestResponse;
 import java.net.*;
 import java.net.http.*;
 import java.util.*;
@@ -80,7 +81,7 @@ public class PersonalAgentTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    io.iwork.ApiTestResponse.body());
+                    ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -254,7 +255,7 @@ public class PersonalAgentTest {
                                 .header("Content-Type", "application/octet-stream")
                                 .POST(HttpRequest.BodyPublishers.ofString("蓝鲸项目，周五交付。"))
                                 .build(),
-                        io.iwork.ApiTestResponse.body());
+                        ApiTestResponse.body());
         assertThat(upload.statusCode()).isEqualTo(201);
         String material = json.readTree(upload.body()).path("id").asString();
         var taskBody =
@@ -460,7 +461,7 @@ public class PersonalAgentTest {
                                 .header("Content-Type", "application/octet-stream")
                                 .POST(HttpRequest.BodyPublishers.ofString("蓝鲸项目，周五交付。"))
                                 .build(),
-                        io.iwork.ApiTestResponse.body());
+                        ApiTestResponse.body());
         next.put("materialIds", List.of(json.readTree(ownUpload.body()).path("id").asString()));
         String budgetBefore = admin.request("GET", "/api/budget", null, false).body();
         String ownTask =

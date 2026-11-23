@@ -1,4 +1,6 @@
-package io.iwork;
+package io.iwork.artifacts;
+
+import io.iwork.IWorkApplication;
 
 /** Local acceptance fixture; production artifacts never include this transport. */
 public class RevisionFixtureApplication {

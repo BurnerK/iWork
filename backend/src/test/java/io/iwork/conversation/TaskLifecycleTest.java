@@ -1,7 +1,8 @@
-package io.iwork;
+package io.iwork.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.iwork.ApiTestResponse;
 import java.net.*;
 import java.net.http.*;
 import java.util.*;
@@ -82,7 +83,7 @@ class TaskLifecycleTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    io.iwork.ApiTestResponse.body());
+                    ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -214,7 +215,7 @@ class TaskLifecycleTest {
                                 .header("Content-Type", "application/octet-stream")
                                 .POST(HttpRequest.BodyPublishers.ofString("source material"))
                                 .build(),
-                        io.iwork.ApiTestResponse.body());
+                        ApiTestResponse.body());
         assertThat(uploaded.statusCode()).isEqualTo(201);
         var materialId = json.readTree(uploaded.body()).get("id").asString();
         String body =

@@ -1,7 +1,8 @@
-package io.iwork;
+package io.iwork.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.iwork.ApiTestResponse;
 import java.net.*;
 import java.net.http.*;
 import java.util.*;
@@ -77,7 +78,7 @@ class ModelExecutionTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    io.iwork.ApiTestResponse.body());
+                    ApiTestResponse.body());
         }
 
         void csrf() throws Exception {

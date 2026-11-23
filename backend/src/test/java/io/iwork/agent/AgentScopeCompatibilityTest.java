@@ -1,4 +1,4 @@
-package io.iwork;
+package io.iwork.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

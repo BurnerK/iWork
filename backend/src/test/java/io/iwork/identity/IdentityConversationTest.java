@@ -1,7 +1,8 @@
-package io.iwork;
+package io.iwork.identity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.iwork.ApiTestResponse;
 import java.net.*;
 import java.net.http.*;
 import java.util.*;

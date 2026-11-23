@@ -1,4 +1,6 @@
-package io.iwork;
+package io.iwork.agent;
+
+import io.iwork.IWorkApplication;
 
 /** Actual Harness and persistent business services; only the provider transport is synthetic. */
 public class ContextFixtureApplication {

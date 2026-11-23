@@ -1,7 +1,8 @@
-package io.iwork;
+package io.iwork.artifacts;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.iwork.ApiTestResponse;
 import java.net.*;
 import java.net.http.*;
 import java.util.*;
@@ -86,7 +87,7 @@ class MaterialStorageTest {
                                             ? HttpRequest.BodyPublishers.noBody()
                                             : HttpRequest.BodyPublishers.ofString(body))
                             .build(),
-                    io.iwork.ApiTestResponse.body());
+                    ApiTestResponse.body());
         }
 
         void csrf() throws Exception {
@@ -302,6 +303,6 @@ class MaterialStorageTest {
                         .header("Content-Type", "application/octet-stream")
                         .POST(HttpRequest.BodyPublishers.ofByteArray(bytes))
                         .build();
-        return browser.client.send(request, io.iwork.ApiTestResponse.body());
+        return browser.client.send(request, ApiTestResponse.body());
     }
 }
