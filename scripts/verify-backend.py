@@ -54,6 +54,13 @@ def wait_for_sandbox(request):
         time.sleep(1)
 
 
+def verify_fork_shutdown(reports):
+    for dump in reports.glob("*.dump"):
+        with dump.open(encoding="utf-8", errors="replace") as stream:
+            if any("seconds shutdown timeout:" in line for line in stream):
+                raise RuntimeError(f"Test JVM failed to shut down cleanly; see {dump}")
+
+
 try:
     subprocess.run(compose + ["build", "sandbox-manager", "text-parser-image"], cwd=root, env=env, check=True)
     subprocess.run(compose + ["up", "-d", "sandbox-manager", "sandbox-watchdog"], cwd=root, env=env, check=True)
@@ -68,6 +75,7 @@ try:
         subprocess.run(compose + ["logs", "--no-color", "--tail", "100", "sandbox-manager", "sandbox-watchdog"],
                        cwd=root, env=env, check=False)
         raise
+    verify_fork_shutdown(root / "backend/target/surefire-reports")
     for test in (
         "io.iwork.sandbox.MaterialParsingTest",
         "io.iwork.agent.PersonalAgentTest",
