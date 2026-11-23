@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -174,8 +175,7 @@ public class TaskService implements ApplicationRunner {
 
     private List<ToolProgress> toolProgress(String stored) {
         if (stored == null) return List.of();
-        return json.readValue(
-                stored, new tools.jackson.core.type.TypeReference<List<ToolProgress>>() {});
+        return json.readValue(stored, new tools.jackson.core.type.TypeReference<>() {});
     }
 
     public TaskService(
@@ -300,7 +300,7 @@ public class TaskService implements ApplicationRunner {
     }
 
     @Override
-    public void run(ApplicationArguments args) {
+    public void run(@NonNull ApplicationArguments args) {
         // 重启会丢失尚未落库的回复。先暂停受影响的队列，避免下一条消息接着不完整的对话运行。
         tx.executeWithoutResult(
                 status -> {
@@ -403,10 +403,11 @@ public class TaskService implements ApplicationRunner {
                             rows.size() > 20,
                             queuedItems.size(),
                             !queuedItems.isEmpty() && queuePaused(conversationId),
-                            db.queryForObject(
-                                    "SELECT queue_pause_version FROM conversations WHERE id=?",
-                                    Long.class,
-                                    conversationId),
+                            Objects.requireNonNull(
+                                    db.queryForObject(
+                                            "SELECT queue_pause_version FROM conversations WHERE id=?",
+                                            Long.class,
+                                            conversationId)),
                             queuedItems,
                             confirmed);
                 });
@@ -475,27 +476,32 @@ public class TaskService implements ApplicationRunner {
     }
 
     private int queuedCount(String conversationId) {
-        return db.queryForObject(
-                "SELECT COUNT(*) FROM tasks WHERE conversation_id=? AND status='QUEUED'",
-                Integer.class,
-                conversationId);
+        return Objects.requireNonNull(
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM tasks WHERE conversation_id=? AND status='QUEUED'",
+                        Integer.class,
+                        conversationId));
     }
 
     private int queuedForOwner(String ownerId) {
-        return db.queryForObject(
-                """
+        return Objects.requireNonNull(
+                db.queryForObject(
+                        """
                 SELECT COUNT(*) FROM (
                     SELECT 1 FROM tasks WHERE owner_id=? AND status='QUEUED' LIMIT ?
                 ) waiting
                 """,
-                Integer.class,
-                ownerId,
-                accountQueueLimit);
+                        Integer.class,
+                        ownerId,
+                        accountQueueLimit));
     }
 
     private boolean queuePaused(String conversationId) {
-        return db.queryForObject(
-                "SELECT queue_paused FROM conversations WHERE id=?", Boolean.class, conversationId);
+        return Objects.requireNonNull(
+                db.queryForObject(
+                        "SELECT queue_paused FROM conversations WHERE id=?",
+                        Boolean.class,
+                        conversationId));
     }
 
     private void pauseQueue(String conversationId) {
@@ -730,13 +736,14 @@ public class TaskService implements ApplicationRunner {
     }
 
     private boolean hasActiveTask(String conversationId) {
-        return db.queryForObject(
-                """
+        return Objects.requireNonNull(
+                db.queryForObject(
+                        """
                 SELECT EXISTS (SELECT 1 FROM tasks WHERE conversation_id=?
                     AND (status='RUNNING' OR execution_state IN ('RUNNING','STOP_REQUESTED')))
                 """,
-                Boolean.class,
-                conversationId);
+                        Boolean.class,
+                        conversationId));
     }
 
     private void recordSend(
@@ -849,7 +856,7 @@ public class TaskService implements ApplicationRunner {
                         """,
                         task.id());
         String message = (String) stored.get("queued_message");
-        if (error == null) {
+        if (live != null) {
             try {
                 models.require(live.id(), task.modelId());
                 if (task.agentId() != null) agents.get(live, task.agentId());
@@ -901,7 +908,6 @@ public class TaskService implements ApplicationRunner {
             String reply = runners.getObject().execute(input);
             acceptResult(input, reply);
         } catch (Exception failure) {
-            Thread.interrupted();
             String errorCode = executionError(failure);
             persist(
                     () ->
@@ -919,7 +925,6 @@ public class TaskService implements ApplicationRunner {
                                         }
                                     }));
         } finally {
-            Thread.interrupted();
             finishReply(input.taskId());
             try {
                 persist(
@@ -994,6 +999,9 @@ public class TaskService implements ApplicationRunner {
     }
 
     private void persist(Runnable write) {
+        // 停止任务会中断工作线程，写入终态和清理文件前需要清除中断标记。
+        //noinspection ResultOfMethodCallIgnored
+        Thread.interrupted();
         while (true) {
             try {
                 write.run();
@@ -1002,6 +1010,8 @@ public class TaskService implements ApplicationRunner {
                     | org.springframework.transaction.TransactionException unavailable) {
                 if (stopping) return;
                 try {
+                    // 数据库恢复前限制重试频率，关闭服务时允许中断等待。
+                    //noinspection BusyWait
                     Thread.sleep(1000);
                 } catch (InterruptedException interrupted) {
                     if (stopping) return;
