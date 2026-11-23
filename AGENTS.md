@@ -1,3 +1,5 @@
+# 项目协作与开发约定
+
 ## Agent skills
 
 ### Issue tracker
@@ -12,21 +14,10 @@
 
 采用单一领域文档结构。见 `docs/agents/domain.md`。
 
-## Design System
+## 界面开发
 
-本项目使用 DESIGN.md 格式来定义视觉规范。根目录下的 DESIGN.md 文件是所有 UI 决策的唯一依据。
+生成或修改视觉组件前，完整阅读 [DESIGN.md](DESIGN.md)并遵守其中的实现约束。组件接口、交互状态和无障碍检查遵循 [组件开发规范](docs/COMPONENT-GUIDELINES.md)。
 
-### Mandatory instructions for UI
+## 测试
 
-1. BEFORE generating any visual component, read DESIGN.md completely
-2. Use EXCLUSIVELY the tokens defined in the YAML front matter
-3. Follow the typographic scale without inventing intermediate sizes
-4. Use the spacing tokens and documented alignment exceptions in DESIGN.md
-5. Every interactive element needs: hover, focus, disabled
-6. The "Do's and Don'ts" section of DESIGN.md is inviolable
-
-## TypeScript/JavaScript 测试
-
-## E2E 测试
-
-使用 **Playwright** 作为关键用户流程的 E2E 测试框架。
+关键用户流程使用 Playwright。开发检查命令见 [开发指南](docs/DEVELOPMENT.md#提交前检查)。

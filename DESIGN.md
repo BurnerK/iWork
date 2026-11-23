@@ -163,6 +163,8 @@ components:
 
 # Design System: Cohere
 
+Use only the tokens in the YAML front matter. Follow the documented type scale, spacing and alignment exceptions. Define hover, focus and disabled states for interactive elements. Apply the Do’s and Don’ts in section 7 to every component.
+
 ## 1. Visual Theme & Atmosphere
 
 Cohere's interface is a polished enterprise command deck — confident, clean, and designed to make AI feel like serious infrastructure rather than a consumer toy. The experience lives on a bright white canvas where content is organized into generously rounded cards (22px radius) that create an organic, cloud-like containment language. This is a site that speaks to CTOs and enterprise architects: professional without being cold, sophisticated without being intimidating.
@@ -429,3 +431,7 @@ Color is used with extreme restraint — the interface is almost entirely black-
 4. Use Lightest Gray (#f2f2f2) for button and navigation hover. Use Interaction Blue (#1863dc) for keyboard focus and link accents
 5. Keep surfaces white with cool gray borders — no warm tones
 6. Purple is for full-width sections, never card backgrounds
+
+## iWork 品牌素材
+
+横版标志使用 `docs/brand/iwork-lockup*.svg`，空间有限时使用独立图标 `iwork-icon*.svg`。浅底用炭黑版（`-black.svg`），深底用白色版（`-white.svg`）。无颜色后缀的 SVG 使用 `currentColor`，内联时继承文字颜色。[明暗背景预览](docs/brand/preview.png)
