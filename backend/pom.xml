@@ -51,7 +51,7 @@
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-resttestclient</artifactId><scope>test</scope></dependency>
     <dependency><groupId>org.springdoc</groupId><artifactId>springdoc-openapi-starter-webmvc-api</artifactId><version>3.0.3</version><scope>test</scope></dependency>
     <dependency>
-      <groupId>io.swagger.parser.v3</groupId><artifactId>swagger-parser-v3</artifactId><version>2.1.48</version><scope>test</scope>
+      <groupId>io.swagger.parser.v3</groupId><artifactId>swagger-parser-v3</artifactId><version>2.1.49</version><scope>test</scope>
       <exclusions>
         <!-- Use the Jakarta variants already supplied by springdoc. -->
         <exclusion><groupId>io.swagger.core.v3</groupId><artifactId>swagger-core</artifactId></exclusion>
